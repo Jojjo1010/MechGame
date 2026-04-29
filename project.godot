@@ -14,9 +14,13 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="MechGame"
-run/main_scene="res://scenes/Main.tscn"
+config/name="CongaMechs"
+run/main_scene="res://scenes/game/Game.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+
+[autoload]
+
+RunManager="*res://src/RunManager.gd"
 
 [display]
 

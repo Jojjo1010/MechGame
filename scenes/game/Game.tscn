@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/game/Game.gd" id="1"]
+[ext_resource type="Script" path="res://scenes/game/WaveSpawner.gd" id="2"]
+
+[node name="Game" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+
+[node name="CameraRig" type="Node3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+
+[node name="Floor" type="StaticBody3D" parent="."]
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+
+[node name="Collision" type="CollisionShape3D" parent="Floor"]
+shape = WorldBoundaryShape3D.new()
+
+[node name="Mechs" type="Node3D" parent="."]
+
+[node name="Drones" type="Node3D" parent="."]
+
+[node name="Enemies" type="Node3D" parent="."]
+
+[node name="WaveSpawner" type="Node" parent="."]
+script = ExtResource("2")
