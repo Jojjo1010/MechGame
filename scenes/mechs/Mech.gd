@@ -16,6 +16,33 @@ signal mech_died()
 func _ready() -> void:
 	add_to_group("mechs")
 	health = max_health
+	_scale_model()
+
+func _scale_model() -> void:
+	var model := get_node_or_null("Model")
+	if model == null:
+		return
+	var aabb := _get_aabb(model)
+	if aabb.size.y > 0.0:
+		var s := 2.0 / aabb.size.y
+		model.scale = Vector3.ONE * s
+		aabb = _get_aabb(model)
+		model.position.y = -aabb.position.y
+
+func _get_aabb(node: Node) -> AABB:
+	var result := AABB()
+	var first := true
+	for child in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := child as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var a := mi.transform * mi.get_aabb()
+		if first:
+			result = a
+			first = false
+		else:
+			result = result.merge(a)
+	return result
 
 func _process(delta: float) -> void:
 	if not ability_active:

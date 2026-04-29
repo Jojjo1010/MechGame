@@ -1,34 +1,11 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scenes/mechs/Mech.gd" id="1"]
-
-[sub_resource type="CapsuleMesh" id="body_mesh"]
-radius = 0.45
-height = 1.8
-
-[sub_resource type="StandardMaterial3D" id="body_mat"]
-albedo_color = Color(0.55, 0.65, 0.85, 1)
-roughness = 0.4
-metallic = 0.6
-
-[sub_resource type="CylinderMesh" id="base_mesh"]
-top_radius = 0.5
-bottom_radius = 0.5
-height = 0.15
-
-[sub_resource type="StandardMaterial3D" id="base_mat"]
-albedo_color = Color(0.3, 0.35, 0.5, 1)
-roughness = 0.8
+[ext_resource type="PackedScene" uid="uid://2nqhx3on46vo" path="res://assets/CongaGoober.fbx" id="2"]
 
 [node name="Mech" type="Node3D"]
 script = ExtResource("1")
 
-[node name="Body" type="MeshInstance3D" parent="."]
-mesh = SubResource("body_mesh")
-material_override = SubResource("body_mat")
-position = Vector3(0, 0.9, 0)
+[node name="Model" type="Node3D" parent="."]
 
-[node name="Base" type="MeshInstance3D" parent="."]
-mesh = SubResource("base_mesh")
-material_override = SubResource("base_mat")
-position = Vector3(0, 0.075, 0)
+[node name="CongaGoober" parent="Model" instance=ExtResource("2")]

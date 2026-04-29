@@ -22,13 +22,13 @@ func _process(delta: float) -> void:
 		return
 
 	var input := Vector3.ZERO
-	if Input.is_action_pressed("ui_up"):
+	if Input.is_key_pressed(KEY_W):
 		input += DIR_FORWARD
-	if Input.is_action_pressed("ui_down"):
+	if Input.is_key_pressed(KEY_S):
 		input += DIR_BACK
-	if Input.is_action_pressed("ui_left"):
+	if Input.is_key_pressed(KEY_A):
 		input += DIR_LEFT
-	if Input.is_action_pressed("ui_right"):
+	if Input.is_key_pressed(KEY_D):
 		input += DIR_RIGHT
 
 	if input.length() > 0.0:
