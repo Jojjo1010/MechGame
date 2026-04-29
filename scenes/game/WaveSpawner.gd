@@ -29,8 +29,8 @@ func _spawn_wave() -> void:
 		var angle := randf() * TAU
 		var offset := Vector3(cos(angle), 0.0, sin(angle)) * SPAWN_RADIUS
 		var enemy: Node3D = ENEMY_SCENE.instantiate()
-		enemy.global_position = center + offset
 		enemies_container.add_child(enemy)
+		enemy.global_position = center + offset
 
 func _get_line_center() -> Vector3:
 	var mechs := get_tree().get_nodes_in_group("mechs")
