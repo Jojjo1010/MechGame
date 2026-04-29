@@ -15,7 +15,9 @@ const CAM_SIZE    := 14.0
 @onready var wave_spawner:     Node = $WaveSpawner
 @onready var world_env:        WorldEnvironment = $WorldEnvironment
 @onready var sun:              DirectionalLight3D = $Sun
-@onready var floor_mesh: MeshInstance3D = $Floor/Mesh
+@onready var mech_options:     CanvasLayer = $MechOptionsPanel
+
+const DRONE_INTERACT_RADIUS := 5.0
 
 var mechs:  Array[Node3D] = []
 var drones: Array[Node3D] = []
@@ -23,13 +25,15 @@ var drones: Array[Node3D] = []
 func _ready() -> void:
 	_setup_camera()
 	_setup_environment()
-	_setup_floor()
 	_spawn_mech_line(3)
 	_spawn_drone()
 	wave_spawner.setup(enemies_root)
+	mech_options.setup(camera)
+	mech_options.option_selected.connect(_on_mech_option)
 
 func _process(delta: float) -> void:
 	_follow_camera(delta)
+	_check_drone_proximity()
 
 # --- Camera ---
 
@@ -47,6 +51,8 @@ func _follow_camera(delta: float) -> void:
 		center += m.global_position
 	center /= mechs.size()
 	center.y = 0.0
+	center.x -= 1.0
+	center.z -= 3.0
 	camera_rig.global_position = camera_rig.global_position.lerp(center, CAM_SMOOTH * delta)
 
 # --- Environment ---
@@ -75,20 +81,42 @@ func _setup_environment() -> void:
 	sun.light_color = Color(1.0, 0.94, 0.78)
 	sun.light_energy = 2.2
 	sun.shadow_enabled = true
+	sun.shadow_bias = 0.05
+	sun.shadow_normal_bias = 3.5
+	sun.shadow_blur = 1.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 60.0
+	sun.directional_shadow_split_1 = 0.3
+	sun.directional_shadow_blend_splits = true
 	sun.rotation_degrees = Vector3(-52.0, 42.0, 0.0)
 
-# --- Floor ---
+# --- Drone proximity ---
 
-func _setup_floor() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(300.0, 300.0)
-	floor_mesh.mesh = plane
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.22, 0.46, 0.16)
-	mat.roughness = 0.95
-	floor_mesh.material_override = mat
+func _check_drone_proximity() -> void:
+	if drones.is_empty():
+		return
+	var drone := drones[0]
+	var closest: Node3D = null
+	var closest_dist := DRONE_INTERACT_RADIUS
+	for mech in mechs:
+		var diff := drone.global_position - mech.global_position
+		diff.y = 0.0
+		var dist := diff.length()
+		if dist < closest_dist:
+			closest_dist = dist
+			closest = mech
+	mech_options.notify_proximity(closest)
+
+func _on_mech_option(mech: Node3D, index: int) -> void:
+	print("Option %d selected for mech %s" % [index, mech.name])
 
 # --- Spawning ---
+
+const MECH_COLORS := [
+	Color(0.25, 0.55, 0.95),  # blue
+	Color(0.85, 0.35, 0.20),  # orange-red
+	Color(0.72, 0.20, 0.85),  # purple
+]
 
 func _spawn_mech_line(count: int) -> void:
 	for i in count:
@@ -98,6 +126,7 @@ func _spawn_mech_line(count: int) -> void:
 		if i > 0:
 			mech.leader = mechs[i - 1]
 		mechs_root.add_child(mech)
+		mech.set_color(MECH_COLORS[i % MECH_COLORS.size()])
 		mechs.append(mech)
 
 func _spawn_drone() -> void:
