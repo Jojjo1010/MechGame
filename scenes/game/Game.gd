@@ -15,7 +15,7 @@ const CAM_SIZE    := 14.0
 @onready var wave_spawner:     Node = $WaveSpawner
 @onready var world_env:        WorldEnvironment = $WorldEnvironment
 @onready var sun:              DirectionalLight3D = $Sun
-@onready var floor_mesh:       MeshInstance3D = $Floor/Mesh
+@onready var floor_mesh: MeshInstance3D = $Floor/Mesh
 
 var mechs:  Array[Node3D] = []
 var drones: Array[Node3D] = []
