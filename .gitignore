@@ -1,0 +1,12 @@
+# Godot-specific ignores
+.godot/
+
+# Import metadata is generated — don't commit it
+*.import
+
+# Exported projects
+/export/
+
+# OS junk
+.DS_Store
+Thumbs.db
