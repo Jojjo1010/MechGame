@@ -1,0 +1,1127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conga Mechs — Game Design Documentation</title>
+<style>
+  :root {
+    --bg: #2a2a2a;
+    --panel: #1f1f1f;
+    --panel-2: #262626;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e8e8;
+    --muted: #a0a0a0;
+    --faint: #737373;
+
+    --gun: #ff8c1a;
+    --garlic: #4dd933;
+    --beam: #40b3ff;
+
+    --c-blue: #408cf2;
+    --c-orange: #d95933;
+    --c-purple: #b833d9;
+    --c-teal: #33d98c;
+    --c-yellow: #f2d933;
+    --c-magenta: #f266b3;
+    --c-gray: #b3b3b3;
+
+    --gap: 24px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+  }
+  pre, code, .mono {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 12px;
+  }
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+    color: var(--text);
+  }
+
+  /* TITLE STRIP */
+  .title-strip {
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 24px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+  }
+  .title-strip h1 {
+    margin: 0;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .title-strip .subtitle {
+    margin: 4px 0 8px;
+    color: var(--muted);
+    font-size: 18px;
+  }
+  .title-strip .source {
+    margin: 0;
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .title-strip .version {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding-top: 6px;
+  }
+
+  /* PANEL */
+  .panel {
+    background: var(--panel);
+    border-radius: 8px;
+    border-left: 4px solid var(--accent, var(--c-gray));
+    padding: 18px 24px 24px;
+  }
+  .panel h2 {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: var(--accent, var(--c-gray));
+    text-transform: uppercase;
+  }
+  .panel .src {
+    margin: 0 0 16px;
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .panel h3 {
+    margin: 16px 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .panel h3:first-child { margin-top: 0; }
+
+  /* COLUMNS */
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) {
+    .cols-2, .cols-3 { grid-template-columns: 1fr; gap: 16px; }
+  }
+
+  /* SECTION HEADER (between panel groups) */
+  .group-header {
+    margin-top: 8px;
+  }
+  .group-header h2 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #d9d9d9;
+    letter-spacing: 0.5px;
+  }
+  .group-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  /* WEAPON / UPGRADE CARD (top header band) */
+  .card {
+    background: var(--panel);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card .band {
+    padding: 12px 20px;
+  }
+  .card .band h3 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: rgba(0,0,0,0.85);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .card .band .role {
+    margin: 2px 0 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(0,0,0,0.7);
+  }
+  .card .body {
+    padding: 18px 20px 22px;
+    flex: 1;
+  }
+  .card .body h4 {
+    margin: 14px 0 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .card .body h4:first-child { margin-top: 0; }
+  .card .footer-src {
+    color: var(--faint);
+    font-size: 10px;
+    padding: 0 20px 14px;
+  }
+
+  .band-gun     { background: var(--gun); }
+  .band-garlic  { background: var(--garlic); }
+  .band-beam    { background: var(--beam); }
+
+  /* TABLE-LIKE STAT LIST */
+  dl.stats { margin: 0; }
+  dl.stats > div {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 8px;
+    padding: 2px 0;
+    align-items: baseline;
+  }
+  dl.stats dt {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  dl.stats dd {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  /* MODIFIERS TABLE */
+  table.mod {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+  }
+  table.mod th, table.mod td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.mod th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 10.5px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  table.mod td.code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    color: #ffd699;
+  }
+  table.mod td.def {
+    color: var(--muted);
+    width: 70px;
+  }
+  table.mod td.tag {
+    color: var(--c-magenta);
+    font-size: 10.5px;
+    width: 110px;
+    white-space: nowrap;
+  }
+
+  /* UPGRADE ENTRY */
+  .upg {
+    margin: 0 0 14px;
+    padding-left: 0;
+  }
+  .upg .name {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .upg .id {
+    margin-left: 10px;
+    color: var(--faint);
+    font-size: 11px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+  }
+  .upg .desc { color: var(--muted); font-size: 12px; margin: 1px 0 0; }
+  .upg .apply { color: #ffd699; font-size: 11px; font-family: "SFMono-Regular", Consolas, monospace; margin: 2px 0 0; }
+
+  .rarity-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 16px 0 8px;
+  }
+  .rarity-label.common   { color: #b3b3b3; }
+  .rarity-label.uncommon { color: #4db8ff; }
+  .rarity-label.rare     { color: #ffb84d; }
+  .rarity-label.empty    { color: var(--faint); font-weight: 500; font-style: italic; letter-spacing: 0.2px; }
+
+  /* CALLOUT */
+  .gap-callout {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(242, 102, 179, 0.08);
+    border-left: 2px solid var(--c-magenta);
+    color: #f5c4dd;
+    font-size: 11.5px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* FOOTER */
+  .footer {
+    margin-top: 24px;
+    padding: 16px 24px 8px;
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .footer hr {
+    border: none;
+    border-top: 1px dashed rgba(255,255,255,0.15);
+    margin: 0 0 12px;
+  }
+
+  /* TOC */
+  nav.toc {
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 18px 24px;
+    columns: 3;
+    column-gap: 24px;
+    font-size: 12px;
+  }
+  nav.toc a {
+    color: var(--muted);
+    text-decoration: none;
+    display: block;
+    padding: 2px 0;
+  }
+  nav.toc a:hover { color: var(--text); }
+  @media (max-width: 700px) { nav.toc { columns: 1; } }
+
+  /* COLOR SWATCHES (mech palette) */
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .swatches > div {
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 10.5px;
+    color: rgba(0,0,0,0.85);
+    font-family: "SFMono-Regular", Consolas, monospace;
+    line-height: 1.3;
+  }
+</style>
+</head>
+<body>
+
+<main class="doc">
+
+  <header class="title-strip">
+    <div>
+      <h1>Conga Mechs</h1>
+      <p class="subtitle">Game Design Documentation</p>
+      <p class="source">Generated from Godot 4.6 source at <code>C:\Users\Johanna\Desktop\MechGame</code> — every value below is read directly from .gd files</p>
+    </div>
+    <div class="version">v1 · 2026-04-30</div>
+  </header>
+
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#concept">High Concept</a>
+    <a href="#loop">Core Loop</a>
+    <a href="#controls">Controls</a>
+    <a href="#drone">Drone</a>
+    <a href="#mechs">Mechs</a>
+    <a href="#enemies">Enemies</a>
+    <a href="#weapons">Weapons (Gun / Garlic / Beam)</a>
+    <a href="#modifiers">Combat Modifiers</a>
+    <a href="#progression">In-Run Progression</a>
+    <a href="#catalog">Upgrade Catalog</a>
+    <a href="#combo">Combo</a>
+    <a href="#meta">Meta-Progression</a>
+    <a href="#world">World &amp; Camera</a>
+    <a href="#pickups">Pickups &amp; Economy</a>
+    <a href="#ui">UI Inventory</a>
+    <a href="#audio">Audio</a>
+    <a href="#vfx">VFX</a>
+    <a href="#tech">Tech &amp; Source Index</a>
+  </nav>
+
+  <!-- HIGH CONCEPT -->
+  <section id="concept" class="panel" style="--accent: var(--c-blue);">
+    <h2>High Concept</h2>
+    <p>A 3D roguelite where the player pilots a flying drone shepherding a forward-marching conga line of 3–5 auto-firing mechs through endless enemy waves. The drone collects pickups, triggers ultimates, and runs a 4-key WASD minigame to repair burning mechs. Each level-up offers 3 weighted boons (Hades-style) for one rolled mech. Between runs, scrap earned from waves and gold unlocks additional mech slots in the Garage.</p>
+  </section>
+
+  <!-- CORE LOOP -->
+  <section id="loop" class="panel" style="--accent: var(--c-orange);">
+    <h2>Core Loop</h2>
+    <div class="cols-2">
+      <div>
+        <h3>Inner Loop</h3>
+        <ol style="margin:0; padding-left:18px;">
+          <li>Wave fires every <code>12.0 s</code>. WaveSpawner emits <code>5 + (wave − 1) × 2</code> enemies on a <code>4.0 s</code> spread, <code>20 u</code> from the line.</li>
+          <li>Mechs march forward at <code>3.0 u/s</code> in a conga (<code>2.5 u</code> spacing) and auto-fire their assigned weapon.</li>
+          <li>Enemies (<code>40 HP</code>, <code>4.5 u/s</code>, <code>8</code> melee dmg) chase the nearest alive mech and attack on contact (<code>1.0 s</code> interval).</li>
+          <li>Killed enemies drop <code>2 — 4</code> XP pickups + <code>~35%</code> chance gold (1 each).</li>
+          <li>Drone (<code>14 u/s</code>) flies the field; pickups within <code>5.5 u</code> home onto it, collected at <code>≤ 0.9 u</code>.</li>
+          <li>XP fills the bar → time pauses → slot-machine rolls a target mech → 3 boons drawn weighted (70/25/5) → player picks one. <strong>No skip, no reroll.</strong> Resume.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>Branches</h3>
+        <ul style="margin:0; padding-left:18px;">
+          <li><strong>Burn</strong> — Mech HP <code>≤ 45%</code> ignites, ticks <code>2 dps</code>. Drone within <code>5 u</code> + Repair button → 4-key WASD minigame → success fully heals + clears burn; fail flashes red and resets sequence.</li>
+          <li><strong>Death</strong> — A mech at 0 HP is lost for the rest of the run. Enemies retarget the nearest alive mech.</li>
+          <li><strong>Run end</strong> — All mechs dead → DeathScreen → return to Garage with <code>wave + floor(gold / 3)</code> scrap. Slot 4 = 50 scrap, slot 5 = 120 scrap (must own 4 first). Save lives in <code>user://save.json</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTROLS -->
+  <section id="controls" class="panel" style="--accent: var(--c-purple);">
+    <h2>Controls</h2>
+    <div class="cols-2">
+      <div>
+        <h3>Keyboard</h3>
+        <dl class="stats">
+          <div><dt>WASD</dt><dd>Move drone (camera-relative)</dd></div>
+          <div><dt>Space</dt><dd>Dash (1.5 s cd, force 32, 0.18 s, breaks daze)</dd></div>
+          <div><dt>E</dt><dd>Trigger ult on nearest mech in range</dd></div>
+          <div><dt>F</dt><dd>Start repair minigame on damaged mech</dd></div>
+          <div><dt>Q</dt><dd>Toggle camera angle (front-right ↔ front-left)</dd></div>
+          <div><dt>Scroll</dt><dd>Zoom (CAM_ZOOM_MIN 6.0 → MAX 24.0)</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Mouse &amp; UI</h3>
+        <dl class="stats">
+          <div><dt>Mouse Move</dt><dd>Aim Gun ult cone (during aim mode)</dd></div>
+          <div><dt>LMB</dt><dd>Confirm Gun ult; fires both waves (0.1 s gap)</dd></div>
+          <div><dt>RMB</dt><dd>Cancel Gun ult aim</dd></div>
+          <div><dt>UI: Repair</dt><dd>MechOptionsPanel — appears within 5 u of mech</dd></div>
+          <div><dt>UI: Ult</dt><dd>UltBar — shows charge per weapon, fires on E</dd></div>
+        </dl>
+        <p style="color:var(--muted); font-size:12px; margin-top:12px;"><strong>Repair minigame</strong> — 4 random WASD keys (no repeat). Wrong key flashes red and resets to step 0; correct sequence fully heals the mech and clears burn.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DRONE -->
+  <section id="drone" class="panel" style="--accent: var(--c-teal);">
+    <h2>Drone — Player Avatar</h2>
+    <p class="src"><code>scenes/drones/Drone.gd</code></p>
+    <div class="cols-3">
+      <div>
+        <h3>Movement</h3>
+        <dl class="stats">
+          <div><dt>Speed</dt><dd>14.0 u/s (camera-relative)</dd></div>
+          <div><dt>Hover height</dt><dd>2.2 u (fixed Y)</dd></div>
+          <div><dt>Forward march</dt><dd>3.0 u/s with line, except in repair-lock</dd></div>
+          <div><dt>Screen clamp</dt><dd>40 px from edges</dd></div>
+          <div><dt>Drone radius</dt><dd>0.5 u (collision)</dd></div>
+          <div><dt>Mech radius</dt><dd>1.4 u (collision)</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Dash</h3>
+        <dl class="stats">
+          <div><dt>Force impulse</dt><dd>32.0</dd></div>
+          <div><dt>Duration</dt><dd>0.18 s</dd></div>
+          <div><dt>Cooldown</dt><dd>1.5 s</dd></div>
+          <div><dt>Effect</dt><dd>Breaks daze on use</dd></div>
+        </dl>
+        <h3>Daze (on enemy contact)</h3>
+        <dl class="stats">
+          <div><dt>Daze radius</dt><dd>1.3 u</dd></div>
+          <div><dt>Duration</dt><dd>1.0 s</dd></div>
+          <div><dt>Speed mult</dt><dd>0.5 → 7.0 u/s</dd></div>
+          <div><dt>Visual</dt><dd>Red overlay (0.55 α)</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Visuals &amp; Audio</h3>
+        <dl class="stats">
+          <div><dt>Outline</dt><dd>Inverted hull, CULL_FRONT, grow 0.18</dd></div>
+          <div><dt>Blob shadow</dt><dd>Radius 0.52, fades w/ height</dd></div>
+          <div><dt>Hum loop</dt><dd>drone_hum_loop @ −22 dB</dd></div>
+          <div><dt>Daze sfx</dt><dd>drone_daze @ −4 dB</dd></div>
+          <div><dt>Dash sfx</dt><dd>drone_daze @ −10 dB</dd></div>
+        </dl>
+        <h3>Interactions</h3>
+        <dl class="stats">
+          <div><dt>Pickup attract</dt><dd>≤ 5.5 u → homes to drone</dd></div>
+          <div><dt>Pickup collect</dt><dd>≤ 0.9 u</dd></div>
+          <div><dt>Repair trigger</dt><dd>≤ 5.0 u of burning mech, F</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- MECHS -->
+  <section id="mechs" class="panel" style="--accent: var(--c-yellow);">
+    <h2>Mechs — Conga Line Combat Units</h2>
+    <p class="src"><code>scenes/mechs/Mech.gd · scenes/game/Game.gd</code></p>
+    <div class="cols-3">
+      <div>
+        <h3>Stats</h3>
+        <dl class="stats">
+          <div><dt>Max health</dt><dd>100.0</dd></div>
+          <div><dt>Forward speed</dt><dd>3.0 u/s</dd></div>
+          <div><dt>Line spacing</dt><dd>2.5 u between members</dd></div>
+          <div><dt>Run size</dt><dd>3 — 5 mechs (slot-gated)</dd></div>
+          <div><dt>Model scale</dt><dd>rescaled to 4.0 u tall</dd></div>
+          <div><dt>HP-bar offset</dt><dd>(0, 4.9, 0) above mech</dd></div>
+          <div><dt>Walk bob</dt><dd>freq 9.0 rad/s, amp 0.38 u</dd></div>
+          <div><dt>Lean amp</dt><dd>0.12 rad (~7°)</dd></div>
+          <div><dt>Hit flash</dt><dd>0.12 s</dd></div>
+          <div><dt>Ult flash</dt><dd>0.35 s</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Line behavior &amp; weapon assign</h3>
+        <p style="color:var(--text); font-size:12px;">Lead mech (idx 0) anchors to the camera path; followers target <code>leader.position + leader.basis.z * 2.5</code> each frame, producing a tight conga that snakes diagonally as the lead turns.</p>
+        <p style="color:var(--text); font-size:12px;">Weapons are attached round-robin in <code>Game.gd</code>:</p>
+        <pre>Mech 0 → Gun
+Mech 1 → Garlic
+Mech 2 → Beam
+Mech 3 → Gun
+Mech 4 → Garlic</pre>
+        <p style="color:var(--muted); font-size:11px;"><code>mech.attach_weapon(w) → w.setup(mech)</code>. Each weapon's <code>weapon_name</code> ("GUN" / "GARLIC" / "BEAM") is the join key for the upgrade picker.</p>
+      </div>
+      <div>
+        <h3>Burn state</h3>
+        <dl class="stats">
+          <div><dt>Trigger</dt><dd>health ≤ 45% of max → ignites</dd></div>
+          <div><dt>Burn dmg</dt><dd>2.0 dps (2.0 s grace, then 1.0 s ticks)</dd></div>
+          <div><dt>Visuals</dt><dd>32 GPU particles, omni light range 6.0 (energy 2.5–5.5 flicker), audio loop</dd></div>
+          <div><dt>Repair</dt><dd>Fully heals; clears burn; <code>ability_active = true</code></dd></div>
+          <div><dt>ability_active</dt><dd>Gates ult use; blocks during repair</dd></div>
+        </dl>
+        <h3>Line palette (Game.gd)</h3>
+        <div class="swatches">
+          <div style="background:#408cf2;">[0] Blue<br>(.25 .55 .95)</div>
+          <div style="background:#d95933;">[1] Red-Orange<br>(.85 .35 .20)</div>
+          <div style="background:#b833d9;">[2] Purple<br>(.72 .20 .85)</div>
+          <div style="background:#33d98c;">[3] Teal<br>(.20 .85 .55)</div>
+          <div style="background:#f2d933;">[4] Yellow<br>(.95 .85 .20)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ENEMIES -->
+  <section id="enemies" class="panel" style="--accent: var(--c-orange);">
+    <h2>Enemies</h2>
+    <p class="src"><code>scenes/enemies/Enemy.gd · scenes/game/WaveSpawner.gd</code></p>
+    <div class="cols-3">
+      <div>
+        <h3>Stats (single enemy type)</h3>
+        <dl class="stats">
+          <div><dt>Max health</dt><dd>40.0</dd></div>
+          <div><dt>Move speed</dt><dd>4.5 u/s</dd></div>
+          <div><dt>Attack range</dt><dd>1.4 u (melee)</dd></div>
+          <div><dt>Attack damage</dt><dd>8.0 per hit</dd></div>
+          <div><dt>Attack interval</dt><dd>1.0 s</dd></div>
+          <div><dt>Hit flash</dt><dd>0.10 s white</dd></div>
+          <div><dt>Model scale</dt><dd>0.6 (≈ 2.5 u tall)</dd></div>
+          <div><dt>DOT tick</dt><dd>0.5 s interval</dd></div>
+          <div><dt>Knockback decay</dt><dd>lerp 10.0 × delta to zero</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>AI &amp; targeting</h3>
+        <ul style="margin:0; padding-left:18px;">
+          <li>Targets the nearest mech with <code>is_alive == true</code></li>
+          <li>Dead mechs are skipped → enemies retarget instantly on each kill</li>
+          <li>Crowding avoidance: separates from neighbors within 1.3 u, strength 3.0×</li>
+          <li>Without a live target, an enemy still separates from peers but does not move</li>
+        </ul>
+        <h3>Status effects</h3>
+        <dl class="stats">
+          <div><dt>apply_dot</dt><dd>keeps max DPS, refreshes duration</dd></div>
+          <div><dt>apply_slow</dt><dd>keeps strongest slow (smallest mult)</dd></div>
+          <div><dt>apply_knockback</dt><dd>world impulse, lerps back to zero</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Spawning (WaveSpawner.gd)</h3>
+        <dl class="stats">
+          <div><dt>Wave interval</dt><dd>12.0 s</dd></div>
+          <div><dt>Base count</dt><dd>5</dd></div>
+          <div><dt>Per-wave growth</dt><dd>+2 / wave → 5 + (w−1)·2</dd></div>
+          <div><dt>Spawn spread</dt><dd>4.0 s window</dd></div>
+          <div><dt>Spawn distance</dt><dd>20.0 u (safe ring)</dd></div>
+          <div><dt>Wave start signal</dt><dd><code>RunManager.start_wave(n)</code></dd></div>
+        </dl>
+        <h3>Drops on death</h3>
+        <dl class="stats">
+          <div><dt>XP pickups</dt><dd>2 — 4 (value 1 each)</dd></div>
+          <div><dt>Gold pickup</dt><dd>~35% chance, value 1</dd></div>
+          <div><dt>Signal</dt><dd><code>enemy_died()</code></dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- WEAPONS -->
+  <div id="weapons" class="group-header">
+    <h2>Combat — Weapons</h2>
+    <p>Three weapons attached round-robin to mechs in <code>Game.gd</code>. Each has a passive auto-attack and a charged ult; both share the weapon-instance modifiers (see Modifiers below).</p>
+  </div>
+
+  <div class="cols-3">
+    <article class="card">
+      <header class="band band-gun">
+        <h3>GUN</h3>
+        <p class="role">single-target precision</p>
+      </header>
+      <div class="body">
+        <h4>Passive</h4>
+        <dl class="stats">
+          <div><dt>Fire rate</dt><dd>0.8 s</dd></div>
+          <div><dt>Bullet damage</dt><dd>20.0 (× damage_mult × combo)</dd></div>
+          <div><dt>Bullets / shot</dt><dd>1 + projectile_count_bonus</dd></div>
+          <div><dt>Search range</dt><dd>22.0 u (× range_mult)</dd></div>
+          <div><dt>Target</dt><dd>nearest enemy</dd></div>
+          <div><dt>Spread per gap</dt><dd>4° (14° w/ Cone Burst)</dd></div>
+          <div><dt>Bullet</dt><dd>24.0 u/s, lifetime 3.5 s</dd></div>
+          <div><dt>Visual</dt><dd>yellow muzzle flash + omni light</dd></div>
+        </dl>
+        <h4>Ult — Cone Burst</h4>
+        <dl class="stats">
+          <div><dt>Cooldown</dt><dd>10.0 s</dd></div>
+          <div><dt>Bullets</dt><dd>9 + projectile_count_bonus</dd></div>
+          <div><dt>Spread</dt><dd>50° cone</dd></div>
+          <div><dt>Damage mult</dt><dd>3.0× per bullet</dd></div>
+          <div><dt>Second wave</dt><dd>+0.1 s, same direction</dd></div>
+          <div><dt>Aim mode</dt><dd>Mouse picks dir; LMB confirm, RMB cancel. Passive pauses.</dd></div>
+        </dl>
+      </div>
+      <p class="footer-src"><code>scenes/mechs/weapons/GunWeapon.gd · scenes/projectiles/Bullet.gd</code></p>
+    </article>
+
+    <article class="card">
+      <header class="band band-garlic">
+        <h3>GARLIC</h3>
+        <p class="role">AOE damage, crowd-control</p>
+      </header>
+      <div class="body">
+        <h4>Passive</h4>
+        <dl class="stats">
+          <div><dt>Pulse rate</dt><dd>0.65 s</dd></div>
+          <div><dt>Aura radius</dt><dd>4.5 u (× range_mult)</dd></div>
+          <div><dt>Damage / pulse</dt><dd>10.0 to every enemy in aura</dd></div>
+          <div><dt>Hit pipeline</dt><dd>via _apply_hit() — DOT/slow/knockback/splash apply</dd></div>
+          <div><dt>Visual</dt><dd>green ground torus, scales w/ range_mult</dd></div>
+        </dl>
+        <h4>Ult — Shockwave</h4>
+        <dl class="stats">
+          <div><dt>Cooldown</dt><dd>14.0 s</dd></div>
+          <div><dt>Radius</dt><dd>12.0 u (× range_mult)</dd></div>
+          <div><dt>Damage</dt><dd>110.0 (× damage_mult × combo)</dd></div>
+          <div><dt>Knockback</dt><dd>38.0 base + knockback_force from upgrades</dd></div>
+          <div><dt>DOT / slow</dt><dd>both apply if configured</dd></div>
+          <div><dt>Visual</dt><dd>expanding green torus shockwave (0.42 s)</dd></div>
+        </dl>
+      </div>
+      <p class="footer-src"><code>scenes/mechs/weapons/GarlicWeapon.gd</code></p>
+    </article>
+
+    <article class="card">
+      <header class="band band-beam">
+        <h3>BEAM (Bouncy)</h3>
+        <p class="role">chain damage, multi-target</p>
+      </header>
+      <div class="body">
+        <h4>Passive</h4>
+        <dl class="stats">
+          <div><dt>Fire rate</dt><dd>1.3 s</dd></div>
+          <div><dt>Damage / bounce</dt><dd>18.0 (× damage_mult × combo)</dd></div>
+          <div><dt>Bounces</dt><dd>3 + projectile_count_bonus</dd></div>
+          <div><dt>Bounce range</dt><dd>8.0 u (× range_mult)</dd></div>
+          <div><dt>First target</dt><dd>nearest enemy from mech</dd></div>
+          <div><dt>Chain rule</dt><dd>each bounce → nearest un-hit enemy in range</dd></div>
+          <div><dt>Beam speed</dt><dd>42.0 u/s (visual head)</dd></div>
+        </dl>
+        <h4>Ult — Static Storm</h4>
+        <dl class="stats">
+          <div><dt>Cooldown</dt><dd>12.0 s</dd></div>
+          <div><dt>Bounces</dt><dd>16 + projectile_count_bonus</dd></div>
+          <div><dt>Damage mult</dt><dd>2.2× per bounce</dd></div>
+          <div><dt>Behavior</dt><dd>same chaining, longer chain at higher dmg</dd></div>
+        </dl>
+      </div>
+      <p class="footer-src"><code>scenes/mechs/weapons/BouncyBeamWeapon.gd</code></p>
+    </article>
+  </div>
+
+  <!-- COMBAT MODIFIERS -->
+  <section id="modifiers" class="panel" style="--accent: var(--c-magenta);">
+    <h2>Combat Modifiers</h2>
+    <p class="src">Per-weapon vars on <code>BaseWeapon.gd</code>. Modified by upgrades; folded into every hit by <code>_apply_hit()</code>.</p>
+    <div class="cols-2">
+      <div>
+        <h3>Variables</h3>
+        <table class="mod">
+          <thead>
+            <tr><th>variable</th><th>default</th><th>effect</th><th>used by</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="code">damage_mult</td><td class="def">1.0</td><td>scales every hit (final = base × mult × combo)</td><td class="tag">all</td></tr>
+            <tr><td class="code">fire_rate_mult</td><td class="def">1.0</td><td>passive period = get_fire_rate() / max(mult, 0.01)</td><td class="tag">all (passive)</td></tr>
+            <tr><td class="code">range_mult</td><td class="def">1.0</td><td>SHOOT_RANGE (22), aura radius, bounce range</td><td class="tag">all</td></tr>
+            <tr><td class="code">projectile_count_bonus</td><td class="def">0</td><td>+bullets (Gun) / +bounces (Beam)</td><td class="tag">Gun, Beam</td></tr>
+            <tr><td class="code">dot_dps</td><td class="def">0.0</td><td>damage/sec over DOT_DURATION = 3.0 s after hit</td><td class="tag">all</td></tr>
+            <tr><td class="code">knockback_force</td><td class="def">0.0</td><td>impulse magnitude on hit (Garlic ult adds 38 base)</td><td class="tag">all</td></tr>
+            <tr><td class="code">splash_radius</td><td class="def">0.0</td><td>secondary AOE; SPLASH_DAMAGE_FRAC = 0.5</td><td class="tag">all</td></tr>
+            <tr><td class="code">slow_mult</td><td class="def">1.0</td><td>speed mult on slowed enemy (0.5 = half-speed)</td><td class="tag">Garlic only</td></tr>
+            <tr><td class="code">slow_duration</td><td class="def">0.0</td><td>seconds the slow lasts (needs mult &lt; 1.0)</td><td class="tag">Garlic only</td></tr>
+          </tbody>
+        </table>
+        <p style="color:var(--muted); font-size:11px; margin-top:14px;">
+          Constants on BaseWeapon: <code>SHOOT_RANGE 22.0</code>, <code>DOT_DURATION 3.0 s</code>, <code>SPLASH_DAMAGE_FRAC 0.5</code>.
+        </p>
+      </div>
+      <div>
+        <h3>Hit pipeline — _apply_hit(enemy, base, pos, dir)</h3>
+<pre>combo  = RunManager.combo_mult()
+dmg    = base × damage_mult × combo
+enemy.take_damage(dmg)
+
+if dot_dps &gt; 0
+    enemy.apply_dot(dot_dps, 3.0)
+
+if slow_mult &lt; 1.0 and slow_duration &gt; 0
+    enemy.apply_slow(slow_mult, slow_duration)
+
+if knockback_force &gt; 0
+    enemy.apply_knockback(dir.normalized() × knockback_force)
+
+if splash_radius &gt; 0
+    for other in enemies within splash_radius:
+        other.take_damage(dmg × 0.5)
+        if dot_dps &gt; 0:  other.apply_dot(dot_dps, 3.0)</pre>
+        <p class="gap-callout"><strong>Note —</strong> Garlic ult does NOT use <code>_apply_hit</code>; it applies damage, dot, slow, and knockback inline (always punches; stacks <code>knockback_force</code> on top of the 38 base).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- IN-RUN PROGRESSION -->
+  <section id="progression" class="panel" style="--accent: var(--c-blue);">
+    <h2>In-Run Progression</h2>
+    <p class="src"><code>src/RunManager.gd · src/Upgrades.gd · scenes/ui/UpgradePicker.gd</code></p>
+    <div class="cols-3">
+      <div>
+        <h3>XP &amp; leveling</h3>
+        <p style="color:var(--muted); font-size:12px;">Curve: <code>xp_to_next = round(10 × 1.45^(level − 1))</code></p>
+        <table class="mod">
+          <tbody>
+            <tr><td class="def">level 1</td><td>10</td><td class="def">level 6</td><td>64</td></tr>
+            <tr><td class="def">level 2</td><td>15</td><td class="def">level 7</td><td>92</td></tr>
+            <tr><td class="def">level 3</td><td>21</td><td class="def">level 8</td><td>134</td></tr>
+            <tr><td class="def">level 4</td><td>30</td><td class="def">level 9</td><td>195</td></tr>
+            <tr><td class="def">level 5</td><td>44</td><td class="def">level 10</td><td>282</td></tr>
+          </tbody>
+        </table>
+        <p style="color:var(--muted); font-size:11.5px; margin-top:12px;">
+          XP source: 2 — 4 pickups per enemy kill (value 1).<br>
+          On level: <code>add_xp()</code> loops while <code>xp ≥ next</code> — multiple level-ups in one frame are valid.
+        </p>
+      </div>
+      <div>
+        <h3>Caps &amp; rules</h3>
+        <dl class="stats">
+          <div><dt>MAX_TYPES_PER_TARGET</dt><dd>2</dd></div>
+          <div><dt>MAX_STACKS_COMMON</dt><dd>3</dd></div>
+        </dl>
+        <p style="color:var(--muted); font-size:12px;">Each mech (target) carries at most 2 distinct upgrade types. New types are blocked once at cap; existing stackable types remain available.</p>
+        <p style="color:var(--muted); font-size:12px;">A common upgrade stacks up to 3× per slot, then drops from that target's pool.</p>
+        <p style="color:var(--muted); font-size:12px;"><strong>Unique upgrades</strong> — once taken, the id is added to <code>taken_unique_upgrades</code> and never offered again.</p>
+        <p style="color:var(--muted); font-size:12px;"><strong>Rarity weights</strong> [Common 70, Uncommon 25, Rare 5] — pool entries are weighted at draw time (<code>Upgrades.RARITY_WEIGHTS</code>).</p>
+      </div>
+      <div>
+        <h3>Level-up flow (Hades-style)</h3>
+        <ol style="margin:0; padding-left:18px; color:var(--text); font-size:12px;">
+          <li><code>level_up</code> fires → time pauses, UpgradePicker instances over the canvas.</li>
+          <li>Slot-machine animation cycles mech portraits, lands on a random target whose pool is non-empty after <code>available_for_target()</code> filtering.</li>
+          <li><code>Upgrades.pick_weighted(pool, 3)</code> draws 3 distinct boons weighted by RARITY_WEIGHTS.</li>
+          <li>Player picks one card. <strong>NO SKIP, NO REROLL.</strong></li>
+          <li><code>Upgrades.apply()</code> runs the matching <code>match upgrade.id</code> branch (mutates weapon vars). <code>RunManager.record_upgrade()</code> increments stack count, emits <code>upgrade_taken</code>.</li>
+          <li>Time resumes.</li>
+        </ol>
+        <h3>Pool filtering</h3>
+        <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:11.5px;">
+          <li>target weapon must exist in the run</li>
+          <li>unique already taken → excluded</li>
+          <li>common at MAX_STACKS_COMMON → excluded</li>
+          <li>new type when at type-cap → excluded</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- UPGRADE CATALOG -->
+  <div id="catalog" class="group-header">
+    <h2>Upgrade Catalog</h2>
+    <p>17 entries in <code>src/Upgrades.gd ALL</code> — 12 Common + 5 Uncommon + <strong>0 Rare</strong>. Each entry has <code>id / title / description / rarity / target</code>; uncommons have <code>unique=true</code>.</p>
+  </div>
+
+  <div class="cols-3">
+    <article class="card">
+      <header class="band band-gun"><h3>GUN UPGRADES</h3></header>
+      <div class="body">
+        <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
+        <div class="upg"><span class="name">Rapid Gun</span><span class="id">gun_firerate</span><p class="desc">Gun: +25% fire rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
+        <div class="upg"><span class="name">Heavy Slugs</span><span class="id">gun_damage</span><p class="desc">Gun: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
+        <div class="upg"><span class="name">Twin Shot</span><span class="id">gun_projectile</span><p class="desc">Gun: +1 bullet per shot</p><p class="apply">projectile_count_bonus += 1</p></div>
+        <div class="upg"><span class="name">Incendiary</span><span class="id">gun_dot</span><p class="desc">Gun: bullets burn for 6 dps over 3s</p><p class="apply">dot_dps += 6.0</p></div>
+
+        <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
+        <div class="upg"><span class="name">Punchy Rounds</span><span class="id">gun_knockback</span><p class="desc">Gun: bullets knock enemies back</p><p class="apply">knockback_force = 14.0</p></div>
+        <div class="upg"><span class="name">Cone Burst</span><span class="id">gun_spread</span><p class="desc">Gun: passive becomes a wide 3-bullet cone</p><p class="apply">passive_spread_per_bullet = 14.0; projectile_count_bonus += 2</p></div>
+        <div class="upg"><span class="name">Explosive Rounds</span><span class="id">gun_splash</span><p class="desc">Gun: bullets do AOE on impact</p><p class="apply">splash_radius = 2.5  (50% dmg to splash)</p></div>
+
+        <p class="rarity-label rare">Rare — rarity 2</p>
+        <p class="rarity-label empty">— none defined. Upgrades.gd ALL has 0 entries with rarity = 2.</p>
+      </div>
+    </article>
+
+    <article class="card">
+      <header class="band band-garlic"><h3>GARLIC UPGRADES</h3></header>
+      <div class="body">
+        <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
+        <div class="upg"><span class="name">Quick Pulse</span><span class="id">garlic_firerate</span><p class="desc">Garlic: +25% pulse rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
+        <div class="upg"><span class="name">Toxic Aura</span><span class="id">garlic_damage</span><p class="desc">Garlic: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
+        <div class="upg"><span class="name">Wide Aura</span><span class="id">garlic_range</span><p class="desc">Garlic: +20% radius</p><p class="apply">range_mult ×= 1.20</p></div>
+        <div class="upg"><span class="name">Spore Cloud</span><span class="id">garlic_dot</span><p class="desc">Garlic: pulses poison for 5 dps over 3s</p><p class="apply">dot_dps += 5.0</p></div>
+
+        <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
+        <div class="upg"><span class="name">Crippling Spores</span><span class="id">garlic_slow</span><p class="desc">Garlic: aura slows enemies 50% for 1.5s</p><p class="apply">slow_mult = 0.5; slow_duration = 1.5</p></div>
+
+        <p class="rarity-label rare">Rare — rarity 2</p>
+        <p class="rarity-label empty">— none defined. Upgrades.gd ALL has 0 entries with rarity = 2.</p>
+      </div>
+    </article>
+
+    <article class="card">
+      <header class="band band-beam"><h3>BEAM UPGRADES</h3></header>
+      <div class="body">
+        <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
+        <div class="upg"><span class="name">Rapid Beam</span><span class="id">beam_firerate</span><p class="desc">Beam: +25% fire rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
+        <div class="upg"><span class="name">Hot Beam</span><span class="id">beam_damage</span><p class="desc">Beam: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
+        <div class="upg"><span class="name">Long Chain</span><span class="id">beam_bounces</span><p class="desc">Beam: +1 bounce</p><p class="apply">projectile_count_bonus += 1</p></div>
+        <div class="upg"><span class="name">Far Reach</span><span class="id">beam_range</span><p class="desc">Beam: +25% bounce range</p><p class="apply">range_mult ×= 1.25</p></div>
+
+        <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
+        <div class="upg"><span class="name">Static Discharge</span><span class="id">beam_splash</span><p class="desc">Beam: bounces splash damage to nearby enemies</p><p class="apply">splash_radius = 2.0  (50% dmg to splash)</p></div>
+
+        <p class="rarity-label rare">Rare — rarity 2</p>
+        <p class="rarity-label empty">— none defined. Upgrades.gd ALL has 0 entries with rarity = 2.</p>
+      </div>
+    </article>
+  </div>
+
+  <!-- COMBO -->
+  <section id="combo" class="panel" style="--accent: var(--c-yellow);">
+    <h2>Combo — Line-Wide Kill Chain</h2>
+    <p class="src"><code>src/RunManager.gd · combo_mult() folded into every _apply_hit()</code></p>
+    <div class="cols-2">
+      <div>
+        <h3>Constants</h3>
+        <dl class="stats">
+          <div><dt>COMBO_MAX_STACKS</dt><dd>3</dd></div>
+          <div><dt>COMBO_DURATION</dt><dd>2.0 s (per-stack timer)</dd></div>
+          <div><dt>COMBO_PER_STACK</dt><dd>0.30 (+30% damage per stack)</dd></div>
+          <div><dt>combo_enabled</dt><dd>bool, default <code>false</code> — gates the system</dd></div>
+        </dl>
+        <h3>Multiplier</h3>
+<pre>combo_mult() = 1.0 + COMBO_PER_STACK × stacks
+            →  1.0 / 1.30 / 1.60 / 1.90  (at 0/1/2/3 stacks)</pre>
+      </div>
+      <div>
+        <h3>Behavior</h3>
+        <ul style="margin:0; padding-left:18px; color:var(--text); font-size:12px;">
+          <li><code>notify_kill()</code> appends a stack with <code>COMBO_DURATION</code>; oldest is popped if size exceeds MAX_STACKS.</li>
+          <li>Per-stack timers tick down each frame; expired stacks are removed individually (rolling decay, not all-or-nothing).</li>
+          <li>Audio chime <code>xp_collect</code> plays per kill at pitch <code>1.0 + 0.18 × stack_count</code> → audible buildup.</li>
+          <li><code>reset_run()</code> clears stacks and disables the system.</li>
+        </ul>
+        <p class="gap-callout"><strong>Gap —</strong> <code>combo_enabled</code> is never set to <code>true</code> by any current upgrade in <code>Upgrades.ALL</code>. The system is wired but inert in-game.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- META-PROGRESSION -->
+  <section id="meta" class="panel" style="--accent: var(--c-purple);">
+    <h2>Meta-Progression — Garage</h2>
+    <p class="src"><code>scenes/garage/Garage.gd · src/SaveData.gd · scenes/ui/DeathScreen.gd</code></p>
+    <div class="cols-2">
+      <div>
+        <h3>Scrap economy</h3>
+        <dl class="stats">
+          <div><dt>Earned per run</dt><dd><code>scrap = wave + floor(gold / 3)</code></dd></div>
+          <div><dt>Spent on</dt><dd>mech-slot unlocks in the Garage</dd></div>
+          <div><dt>Persisted at</dt><dd><code>user://save.json</code> (JSON dict)</dd></div>
+        </dl>
+        <h3>Mech slots</h3>
+        <dl class="stats">
+          <div><dt>Starting slots</dt><dd>3 (slots 0 — 2)</dd></div>
+          <div><dt>Max slots</dt><dd>5</dd></div>
+          <div><dt>Slot costs</dt><dd><code>[0, 0, 0, 50, 120]</code></dd></div>
+          <div><dt>Unlock rule</dt><dd>Only the next-up slot is purchasable. Cannot buy slot 4 without owning slot 3.</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Flow</h3>
+        <ol style="margin:0; padding-left:18px; color:var(--text); font-size:12px;">
+          <li>Run ends → DeathScreen shows wave reached, gold collected, scrap earned.</li>
+          <li>Player returns to Garage; SaveData adds the scrap delta and persists.</li>
+          <li>Garage UI lists slots; the next-up slot shows its cost. Owned slots are check-marked.</li>
+          <li>Buying deducts scrap and increments <code>unlocked_slot_count</code>. Garage emits <code>scrap_changed</code> and <code>unlocks_changed</code>.</li>
+          <li>"Start Run" launches <code>Game.tscn</code> with the unlocked slot count, which determines line size (3 — 5 mechs).</li>
+        </ol>
+        <h3>Save format (user://save.json)</h3>
+<pre>{ "scrap": int, "unlocked_slots": int }</pre>
+        <p style="color:var(--muted); font-size:11.5px; margin-top:6px;">Loaded once on autoload (SaveData), saved on each mutation. No cloud / no migration logic; a missing file resets to defaults.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- WORLD & CAMERA -->
+  <section id="world" class="panel" style="--accent: var(--c-teal);">
+    <h2>World &amp; Camera</h2>
+    <p class="src"><code>scenes/terrain/TerrainManager.gd · scenes/terrain/TerrainChunk.gd · scenes/game/Game.gd (camera)</code></p>
+    <div class="cols-2">
+      <div>
+        <h3>Chunked terrain</h3>
+        <dl class="stats">
+          <div><dt>Chunk size</dt><dd>24 × 24 u</dd></div>
+          <div><dt>View radius</dt><dd>3 chunks → 7 × 7 = 49 loaded</dd></div>
+          <div><dt>Cull radius</dt><dd>4+ chunks away are freed</dd></div>
+          <div><dt>Generation</dt><dd>Procedural per chunk in TerrainChunk.gd (no shared seed / save state — purely positional)</dd></div>
+        </dl>
+        <p style="color:var(--muted); font-size:12px; margin-top:8px;">Effective view distance ≈ 84 u from line center (3 × 24 + half). Streaming is purely geometry; pickups and enemies live on the canvas independent of chunk lifecycle.</p>
+      </div>
+      <div>
+        <h3>Camera</h3>
+        <dl class="stats">
+          <div><dt>Anchor</dt><dd>Conga-line center (lerps with leader mech)</dd></div>
+          <div><dt>Offset</dt><dd>CAM_OFFSET = (16, 16, 16) — isometric</dd></div>
+          <div><dt>Zoom range</dt><dd>CAM_ZOOM_MIN 6.0 → MAX 24.0 (Scroll)</dd></div>
+          <div><dt>Smoothing</dt><dd>CAM_SMOOTH 4.0 (per-frame lerp factor)</dd></div>
+          <div><dt>Toggle (Q)</dt><dd>Switches between two iso angles (front-right ↔ front-left)</dd></div>
+        </dl>
+        <h3>Occlusion hint (DroneHiddenHint)</h3>
+        <dl class="stats">
+          <div><dt>Threshold</dt><dd>70 px screen-space + mech closer to camera</dd></div>
+          <div><dt>Reveal delay</dt><dd>0.4 s before hint appears</dd></div>
+          <div><dt>Dismiss delay</dt><dd>0.25 s after clear</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- PICKUPS -->
+  <section id="pickups" class="panel" style="--accent: var(--c-yellow);">
+    <h2>Pickups &amp; Economy</h2>
+    <p class="src"><code>scenes/pickups/Pickup.gd · RunManager.add_xp / add_gold · drop logic in Enemy.gd</code></p>
+    <div class="cols-2">
+      <div>
+        <h3>Pickup types</h3>
+        <dl class="stats">
+          <div><dt>XP</dt><dd>purple diamond, value 1<br>on collect → <code>RunManager.add_xp(1)</code><br>sfx <code>xp_collect</code> @ −8 dB</dd></div>
+          <div><dt>Gold</dt><dd>yellow sphere, value 1<br>on collect → <code>RunManager.add_gold(1)</code><br>sfx <code>gold_collect</code> @ −6 dB</dd></div>
+        </dl>
+        <h3>Drop table (Enemy.gd on death)</h3>
+        <dl class="stats">
+          <div><dt>XP</dt><dd>2 — 4 pickups (random)</dd></div>
+          <div><dt>Gold</dt><dd>~35% chance, 1 pickup</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Behavior</h3>
+        <dl class="stats">
+          <div><dt>Idle bob</dt><dd>amplitude 0.18 u, speed 2.2 rad/s</dd></div>
+          <div><dt>Attract radius</dt><dd>5.5 u — homes onto drone</dd></div>
+          <div><dt>Collect radius</dt><dd>≤ 0.9 u — auto-collected</dd></div>
+          <div><dt>Homing accel</dt><dd><code>FLY_SPEED × (1 + (5.5 − dist) / 5.5)</code> — closer pickups accelerate harder</dd></div>
+        </dl>
+        <p style="color:var(--muted); font-size:12px; margin-top:10px;">Pickups exist independently of terrain chunks; they persist in the world until collected or the run ends.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- UI INVENTORY -->
+  <section id="ui" class="panel" style="--accent: var(--c-blue);">
+    <h2>UI Inventory</h2>
+    <p class="src"><code>scenes/ui/*.gd</code> — hand-built scripts (no .tscn). Spawned dynamically as CanvasLayer children of Game.</p>
+    <div class="cols-2">
+      <div>
+        <h3>Full-screen overlays</h3>
+        <dl class="stats">
+          <div><dt>UpgradePicker</dt><dd>Level-up boon selector. Slot-machine portrait carousel + 3 offer cards. Pauses time. No skip.</dd></div>
+          <div><dt>RepairMinigame</dt><dd>4-key WASD sequence overlay. Locks drone in place beside mech; retries on wrong key.</dd></div>
+          <div><dt>DeathScreen</dt><dd>Run-end summary: wave reached, gold collected, scrap earned. Routes to Garage.</dd></div>
+        </dl>
+        <h3>Contextual panels</h3>
+        <dl class="stats">
+          <div><dt>MechOptionsPanel</dt><dd>Repair / ult buttons; appears within 5 u of mech.</dd></div>
+          <div><dt>ControlsLegend</dt><dd>Static keybind reference (toggleable).</dd></div>
+          <div><dt>DroneHiddenHint</dt><dd>On-screen indicator when a mech occludes the drone.</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>HUD elements</h3>
+        <dl class="stats">
+          <div><dt>XPBar</dt><dd>Bottom XP progress toward next level.</dd></div>
+          <div><dt>GoldCounter</dt><dd>Running gold total.</dd></div>
+          <div><dt>UltBar</dt><dd>Per-mech ult charge + upgrade-icon inventory grid; listens to <code>upgrade_taken</code>.</dd></div>
+        </dl>
+        <h3>Worldspace widgets</h3>
+        <dl class="stats">
+          <div><dt>HealthBar3D</dt><dd>Floating HP bars above mechs (and enemies). Mech bar offset (0, 4.9, 0).</dd></div>
+          <div><dt>DamageNumber</dt><dd>Floating "+N" labels on hit; color-coded.</dd></div>
+          <div><dt>IconDiamond</dt><dd>Hexagon upgrade icon, rarity-colored. Used in UpgradePicker offer cards and UltBar inventory.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- AUDIO -->
+  <section id="audio" class="panel" style="--accent: var(--c-magenta);">
+    <h2>Audio</h2>
+    <p class="src"><code>src/AudioManager.gd</code> · autoload · <code>res://assets/sounds/{category}/{id}.ogg</code></p>
+    <div class="cols-2">
+      <div>
+        <h3>Player pools</h3>
+        <dl class="stats">
+          <div><dt>3D pool</dt><dd>24 spatial players (unit_size 14.0, max_distance 60.0)</dd></div>
+          <div><dt>2D pool</dt><dd>8 non-spatial players (UI / global)</dd></div>
+          <div><dt>Music pool</dt><dd>1 dedicated, loops on end</dd></div>
+        </dl>
+<pre>play(id, pos = Vector3.INF, db = 0, pitch = 1.0)
+  Vector3.INF position routes to the 2D pool;
+  finite positions allocate from the 3D pool.</pre>
+      </div>
+      <div>
+        <h3>Sound catalog</h3>
+        <dl class="stats">
+          <div><dt>mech</dt><dd>step · hit · burn_ignite · burn_loop · death · repair_complete · ult_ready · ult_fired</dd></div>
+          <div><dt>weapons</dt><dd>gun_fire · gun_ult · beam_fire · beam_bounce · garlic_pulse · garlic_ult · bullet_impact</dd></div>
+          <div><dt>enemies</dt><dd>death · hit</dd></div>
+          <div><dt>drone</dt><dd>hum_loop · daze · repair_spark</dd></div>
+          <div><dt>pickups</dt><dd>xp_collect · gold_collect · level_up</dd></div>
+          <div><dt>ui</dt><dd>repair_correct_1..4 · repair_wrong · ui_hover · ui_click · wave_start</dd></div>
+          <div><dt>ambient</dt><dd>wind_loop</dd></div>
+          <div><dt>music</dt><dd>bgm_main (looping)</dd></div>
+        </dl>
+        <p style="color:var(--muted); font-size:11.5px; margin-top:8px;">Variants are handled by suffix (e.g. <code>_01</code>, <code>_02</code>) and chosen randomly per call site.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- VFX -->
+  <section id="vfx" class="panel" style="--accent: var(--c-orange);">
+    <h2>VFX</h2>
+    <p class="src"><code>scenes/vfx/BurstVFX.gd</code> · inline VFX in weapon and mech scripts</p>
+    <div class="cols-2">
+      <div>
+        <h3>Burst VFX</h3>
+        <p style="color:var(--text); font-size:12px;">One-shot GPU particle burst at a world position.</p>
+        <dl class="stats">
+          <div><dt>Params</dt><dd>color, count, speed, lifetime</dd></div>
+          <div><dt>Gravity</dt><dd>−6.0 (slight upward drift)</dd></div>
+          <div><dt>Used for</dt><dd>enemy death (orange), damage events, generic shockwaves</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h3>Inline VFX (per-feature, not via shared library)</h3>
+        <dl class="stats">
+          <div><dt>Mech ult-ready ring</dt><dd>pulsing torus (1.30 / 1.75 inner/outer), emission 4.0×, alpha tween 0.15 ↔ 0.70 / 0.5 s</dd></div>
+          <div><dt>Burning mech</dt><dd>32 GPU particles (0.5 s lifetime), flickering omni light (range 6.0, energy 2.5–5.5)</dd></div>
+          <div><dt>Gun aim cone</dt><dd>ImmediateMesh fan + capsule edge lines</dd></div>
+          <div><dt>Gun muzzle flash</dt><dd>sphere + omni light, 0.10 s alpha tween</dd></div>
+          <div><dt>Garlic aura ring</dt><dd>torus on ground, scales w/ range_mult, 0.06 / 0.20 s pulse</dd></div>
+          <div><dt>Garlic shockwave</dt><dd>expanding torus (radius × 2.2), 0.42 s</dd></div>
+          <div><dt>Beam head + segments</dt><dd>traveling sphere @ 42 u/s, capsule core (0.07) + halo (0.22), 0.38 s fadeout</dd></div>
+          <div><dt>Beam impact</dt><dd>sphere scaled to 2.2× over 0.08 s, fade 0.28 s</dd></div>
+          <div><dt>Repair sparks</dt><dd>random colored spheres @ 0.055 — 0.11 s spawn rate</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH -->
+  <section id="tech" class="panel" style="--accent: var(--c-gray);">
+    <h2>Tech &amp; Source Index</h2>
+    <p class="src"><code>project.godot · every .gd file under MechGame/</code></p>
+    <div class="cols-2">
+      <div>
+        <h3>Engine &amp; project</h3>
+        <dl class="stats">
+          <div><dt>Engine</dt><dd>Godot 4.6</dd></div>
+          <div><dt>Renderer</dt><dd>Forward Plus</dd></div>
+          <div><dt>Main scene</dt><dd><code>res://scenes/game/Game.tscn</code></dd></div>
+          <div><dt>Save file</dt><dd><code>user://save.json</code></dd></div>
+        </dl>
+        <h3>Autoloads (singletons)</h3>
+        <dl class="stats">
+          <div><dt>RunManager</dt><dd>per-run state — wave, gold, xp, level, combo, owned upgrades, taken uniques</dd></div>
+          <div><dt>AudioManager</dt><dd>sound pools (24 / 8 / 1) and music</dd></div>
+          <div><dt>SaveData</dt><dd>meta progression — scrap, slot count</dd></div>
+        </dl>
+        <p style="color:var(--muted); font-size:11.5px;">UI scripts in <code>scenes/ui/</code> are hand-built <code>.gd</code> (no <code>.tscn</code>). Each is added to the canvas at runtime by Game.gd.</p>
+      </div>
+      <div>
+        <h3>Source-file index</h3>
+        <dl class="stats">
+          <div><dt>src/</dt><dd>RunManager.gd · Upgrades.gd · AudioManager.gd · SaveData.gd</dd></div>
+          <div><dt>scenes/</dt><dd>Main.gd</dd></div>
+          <div><dt>scenes/game/</dt><dd>Game.gd · WaveSpawner.gd</dd></div>
+          <div><dt>scenes/mechs/</dt><dd>Mech.gd</dd></div>
+          <div><dt>scenes/mechs/weapons/</dt><dd>BaseWeapon.gd · GunWeapon.gd · GarlicWeapon.gd · BouncyBeamWeapon.gd</dd></div>
+          <div><dt>scenes/enemies/</dt><dd>Enemy.gd</dd></div>
+          <div><dt>scenes/drones/</dt><dd>Drone.gd</dd></div>
+          <div><dt>scenes/projectiles/</dt><dd>Bullet.gd</dd></div>
+          <div><dt>scenes/pickups/</dt><dd>Pickup.gd</dd></div>
+          <div><dt>scenes/garage/</dt><dd>Garage.gd</dd></div>
+          <div><dt>scenes/terrain/</dt><dd>TerrainManager.gd · TerrainChunk.gd</dd></div>
+          <div><dt>scenes/vfx/</dt><dd>BurstVFX.gd</dd></div>
+          <div><dt>scenes/ui/</dt><dd>UpgradePicker · RepairMinigame · MechOptionsPanel · UltBar · XPBar · GoldCounter · DeathScreen · ControlsLegend · HealthBar3D · DamageNumber · IconDiamond · DroneHiddenHint</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <hr>
+    Generated by reading every <code>.gd</code> file in <code>C:\Users\Johanna\Desktop\MechGame</code> on 2026-04-30. Numbers, formulas, and signal names are taken verbatim from source — if anything here drifts from the code, the code is the truth. Update this doc by re-running the documentation pass after meaningful gameplay changes (especially: <code>Upgrades.gd ALL</code>, weapon constants, <code>RunManager</code> caps/curves, <code>SaveData</code> slot costs).
+  </footer>
+</main>
+
+</body>
+</html>
