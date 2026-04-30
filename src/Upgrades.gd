@@ -15,44 +15,32 @@ const RARITY_RARE     := 2
 const RARITY_WEIGHTS  := [70.0, 25.0, 5.0]
 
 const ALL := [
-	# ── Gun (commons) ─────────────────────────────────────────────────────────
+	# Each weapon has the same shape: 3 stat commons + 1 unique uncommon mechanic.
+	# ── Gun ───────────────────────────────────────────────────────────────────
 	{id="gun_firerate",   title="Rapid Gun",      description="Gun: +25% fire rate",
 	 rarity=0, target="GUN"},
 	{id="gun_damage",     title="Heavy Slugs",    description="Gun: +20% damage",
 	 rarity=0, target="GUN"},
 	{id="gun_projectile", title="Twin Shot",      description="Gun: +1 bullet per shot",
 	 rarity=0, target="GUN"},
-	{id="gun_dot",        title="Incendiary",     description="Gun: bullets burn for 6 dps over 3s",
-	 rarity=0, target="GUN"},
-	# ── Gun (uncommons) ───────────────────────────────────────────────────────
-	{id="gun_knockback",  title="Punchy Rounds",  description="Gun: bullets knock enemies back",
-	 rarity=1, target="GUN", unique=true},
-	{id="gun_spread",     title="Cone Burst",     description="Gun: passive fire becomes a wide 3-bullet cone",
-	 rarity=1, target="GUN", unique=true},
 	{id="gun_splash",     title="Explosive Rounds", description="Gun: bullets do AOE on impact",
 	 rarity=1, target="GUN", unique=true},
-	# ── Garlic (commons) ──────────────────────────────────────────────────────
+	# ── Garlic ────────────────────────────────────────────────────────────────
 	{id="garlic_firerate", title="Quick Pulse",   description="Garlic: +25% pulse rate",
 	 rarity=0, target="GARLIC"},
 	{id="garlic_damage",   title="Toxic Aura",    description="Garlic: +20% damage",
 	 rarity=0, target="GARLIC"},
 	{id="garlic_range",    title="Wide Aura",     description="Garlic: +20% radius",
 	 rarity=0, target="GARLIC"},
-	{id="garlic_dot",      title="Spore Cloud",   description="Garlic: pulses poison for 5 dps over 3s",
-	 rarity=0, target="GARLIC"},
-	# ── Garlic (uncommons) ────────────────────────────────────────────────────
 	{id="garlic_slow",     title="Crippling Spores", description="Garlic: aura slows enemies 50% for 1.5s",
 	 rarity=1, target="GARLIC", unique=true},
-	# ── Beam (commons) ────────────────────────────────────────────────────────
+	# ── Beam ──────────────────────────────────────────────────────────────────
 	{id="beam_firerate",   title="Rapid Beam",    description="Beam: +25% fire rate",
 	 rarity=0, target="BEAM"},
 	{id="beam_damage",     title="Hot Beam",      description="Beam: +20% damage",
 	 rarity=0, target="BEAM"},
 	{id="beam_bounces",    title="Long Chain",    description="Beam: +1 bounce",
 	 rarity=0, target="BEAM"},
-	{id="beam_range",      title="Far Reach",     description="Beam: +25% bounce range",
-	 rarity=0, target="BEAM"},
-	# ── Beam (uncommons) ──────────────────────────────────────────────────────
 	{id="beam_splash",     title="Static Discharge", description="Beam: bounces splash damage to nearby enemies",
 	 rarity=1, target="BEAM", unique=true},
 ]
@@ -121,19 +109,14 @@ static func apply(upgrade: Dictionary, weapons: Array) -> void:
 		"gun_firerate":     _scale(weapons, "GUN",    "fire_rate_mult", 1.25)
 		"gun_damage":       _scale(weapons, "GUN",    "damage_mult",    1.20)
 		"gun_projectile":   _add  (weapons, "GUN",    "projectile_count_bonus", 1)
-		"gun_dot":          _add  (weapons, "GUN",    "dot_dps", 6.0)
-		"gun_knockback":    _set_prop(weapons, "GUN",    "knockback_force", 14.0)
-		"gun_spread":       _gun_cone_burst(weapons)
 		"gun_splash":       _set_prop(weapons, "GUN",    "splash_radius", 2.5)
 		"garlic_firerate":  _scale(weapons, "GARLIC", "fire_rate_mult", 1.25)
 		"garlic_damage":    _scale(weapons, "GARLIC", "damage_mult",    1.20)
 		"garlic_range":     _scale(weapons, "GARLIC", "range_mult",     1.20)
-		"garlic_dot":       _add  (weapons, "GARLIC", "dot_dps", 5.0)
 		"garlic_slow":      _garlic_slow(weapons)
 		"beam_firerate":    _scale(weapons, "BEAM",   "fire_rate_mult", 1.25)
 		"beam_damage":      _scale(weapons, "BEAM",   "damage_mult",    1.20)
 		"beam_bounces":     _add  (weapons, "BEAM",   "projectile_count_bonus", 1)
-		"beam_range":       _scale(weapons, "BEAM",   "range_mult",     1.25)
 		"beam_splash":      _set_prop(weapons, "BEAM",   "splash_radius", 2.0)
 		_:                  push_warning("Unknown upgrade id: %s" % upgrade.id)
 
@@ -151,12 +134,6 @@ static func _set_prop(weapons: Array, target: String, prop: String, value: Varia
 	for w in weapons:
 		if w != null and w.weapon_name == target:
 			w.set(prop, value)
-
-static func _gun_cone_burst(weapons: Array) -> void:
-	for w in weapons:
-		if w != null and w.weapon_name == "GUN":
-			w.passive_spread_per_bullet = 14.0
-			w.projectile_count_bonus += 2
 
 static func _garlic_slow(weapons: Array) -> void:
 	for w in weapons:

@@ -57,17 +57,17 @@ each block into its own node.
 
 ---
 
+Every weapon has the same shape: 3 stat commons + 1 unique uncommon mechanic.
+Every regular hit also applies a small base knockback (no upgrade required).
+
 ## Gun Upgrades
 
 ### Common
 - **Rapid Gun** — +25% fire rate (stacks 3×)
 - **Heavy Slugs** — +20% damage (stacks 3×)
 - **Twin Shot** — +1 bullet per shot (stacks 3×)
-- **Incendiary** — bullets burn for 6 dps over 3s (stacks 3×)
 
 ### Uncommon (unique)
-- **Punchy Rounds** — bullets knock enemies back (force 14)
-- **Cone Burst** — passive fire becomes a wide 3-bullet cone (+2 bullets, 14° per gap)
 - **Explosive Rounds** — bullets do AOE on impact (2.5 unit splash, 50% dmg)
 
 ---
@@ -78,7 +78,6 @@ each block into its own node.
 - **Quick Pulse** — +25% pulse rate (stacks 3×)
 - **Toxic Aura** — +20% damage (stacks 3×)
 - **Wide Aura** — +20% radius (stacks 3×)
-- **Spore Cloud** — pulses poison for 5 dps over 3s (stacks 3×)
 
 ### Uncommon (unique)
 - **Crippling Spores** — aura slows enemies 50% for 1.5s
@@ -91,7 +90,6 @@ each block into its own node.
 - **Rapid Beam** — +25% fire rate (stacks 3×)
 - **Hot Beam** — +20% damage (stacks 3×)
 - **Long Chain** — +1 bounce (stacks 3×)
-- **Far Reach** — +25% bounce range (stacks 3×)
 
 ### Uncommon (unique)
 - **Static Discharge** — bounces splash damage to nearby enemies (2 unit radius)

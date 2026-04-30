@@ -607,7 +607,7 @@ Mech 4 → Garlic</pre>
           <div><dt>Bullets / shot</dt><dd>1 + projectile_count_bonus</dd></div>
           <div><dt>Search range</dt><dd>22.0 u (× range_mult)</dd></div>
           <div><dt>Target</dt><dd>nearest enemy</dd></div>
-          <div><dt>Spread per gap</dt><dd>4° (14° w/ Cone Burst)</dd></div>
+          <div><dt>Spread per gap</dt><dd>4°</dd></div>
           <div><dt>Bullet</dt><dd>24.0 u/s, lifetime 3.5 s</dd></div>
           <div><dt>Visual</dt><dd>yellow muzzle flash + omni light</dd></div>
         </dl>
@@ -798,11 +798,8 @@ if splash_radius &gt; 0
         <div class="upg"><span class="name">Rapid Gun</span><span class="id">gun_firerate</span><p class="desc">Gun: +25% fire rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
         <div class="upg"><span class="name">Heavy Slugs</span><span class="id">gun_damage</span><p class="desc">Gun: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
         <div class="upg"><span class="name">Twin Shot</span><span class="id">gun_projectile</span><p class="desc">Gun: +1 bullet per shot</p><p class="apply">projectile_count_bonus += 1</p></div>
-        <div class="upg"><span class="name">Incendiary</span><span class="id">gun_dot</span><p class="desc">Gun: bullets burn for 6 dps over 3s</p><p class="apply">dot_dps += 6.0</p></div>
 
         <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
-        <div class="upg"><span class="name">Punchy Rounds</span><span class="id">gun_knockback</span><p class="desc">Gun: bullets knock enemies back</p><p class="apply">knockback_force = 14.0</p></div>
-        <div class="upg"><span class="name">Cone Burst</span><span class="id">gun_spread</span><p class="desc">Gun: passive becomes a wide 3-bullet cone</p><p class="apply">passive_spread_per_bullet = 14.0; projectile_count_bonus += 2</p></div>
         <div class="upg"><span class="name">Explosive Rounds</span><span class="id">gun_splash</span><p class="desc">Gun: bullets do AOE on impact</p><p class="apply">splash_radius = 2.5  (50% dmg to splash)</p></div>
 
         <p class="rarity-label rare">Rare — rarity 2</p>
@@ -817,7 +814,6 @@ if splash_radius &gt; 0
         <div class="upg"><span class="name">Quick Pulse</span><span class="id">garlic_firerate</span><p class="desc">Garlic: +25% pulse rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
         <div class="upg"><span class="name">Toxic Aura</span><span class="id">garlic_damage</span><p class="desc">Garlic: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
         <div class="upg"><span class="name">Wide Aura</span><span class="id">garlic_range</span><p class="desc">Garlic: +20% radius</p><p class="apply">range_mult ×= 1.20</p></div>
-        <div class="upg"><span class="name">Spore Cloud</span><span class="id">garlic_dot</span><p class="desc">Garlic: pulses poison for 5 dps over 3s</p><p class="apply">dot_dps += 5.0</p></div>
 
         <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
         <div class="upg"><span class="name">Crippling Spores</span><span class="id">garlic_slow</span><p class="desc">Garlic: aura slows enemies 50% for 1.5s</p><p class="apply">slow_mult = 0.5; slow_duration = 1.5</p></div>
@@ -834,7 +830,6 @@ if splash_radius &gt; 0
         <div class="upg"><span class="name">Rapid Beam</span><span class="id">beam_firerate</span><p class="desc">Beam: +25% fire rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
         <div class="upg"><span class="name">Hot Beam</span><span class="id">beam_damage</span><p class="desc">Beam: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
         <div class="upg"><span class="name">Long Chain</span><span class="id">beam_bounces</span><p class="desc">Beam: +1 bounce</p><p class="apply">projectile_count_bonus += 1</p></div>
-        <div class="upg"><span class="name">Far Reach</span><span class="id">beam_range</span><p class="desc">Beam: +25% bounce range</p><p class="apply">range_mult ×= 1.25</p></div>
 
         <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
         <div class="upg"><span class="name">Static Discharge</span><span class="id">beam_splash</span><p class="desc">Beam: bounces splash damage to nearby enemies</p><p class="apply">splash_radius = 2.0  (50% dmg to splash)</p></div>
