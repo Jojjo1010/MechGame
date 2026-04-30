@@ -23,6 +23,7 @@ var slow_mult:              float = 1.0   # 1.0 = no slow, 0.5 = half speed
 var slow_duration:          float = 0.0   # seconds the slow lasts
 const DOT_DURATION:         float = 3.0
 const SPLASH_DAMAGE_FRAC:   float = 0.5   # splash deals 50% of base damage
+const BASE_KNOCKBACK:       float = 4.0   # small baseline kick every weapon hit applies
 
 # Ready-state ring (floating [E] label removed — panel button handles that)
 var _ready_ring: MeshInstance3D     = null
@@ -221,11 +222,11 @@ func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Ve
 		enemy.apply_dot(dot_dps, DOT_DURATION)
 	if slow_duration > 0.0 and slow_mult < 1.0 and enemy.has_method("apply_slow"):
 		enemy.apply_slow(slow_mult, slow_duration)
-	if knockback_force > 0.0 and enemy.has_method("apply_knockback"):
+	if enemy.has_method("apply_knockback"):
 		var dir := hit_dir
 		dir.y = 0.0
 		if dir.length_squared() > 0.001:
-			enemy.apply_knockback(dir.normalized() * knockback_force)
+			enemy.apply_knockback(dir.normalized() * (BASE_KNOCKBACK + knockback_force))
 	if splash_radius > 0.0:
 		var splash_dmg := dmg * SPLASH_DAMAGE_FRAC
 		for other in _enemies_in_radius(hit_pos, splash_radius):
