@@ -3,9 +3,30 @@ extends Node3D
 const MECH_SCENE  := preload("res://scenes/mechs/Mech.tscn")
 const DRONE_SCENE := preload("res://scenes/drones/Drone.tscn")
 
+const GUN_WEAPON_SCRIPT     := preload("res://scenes/mechs/weapons/GunWeapon.gd")
+const GARLIC_WEAPON_SCRIPT  := preload("res://scenes/mechs/weapons/GarlicWeapon.gd")
+const BEAM_WEAPON_SCRIPT    := preload("res://scenes/mechs/weapons/BouncyBeamWeapon.gd")
+const ULT_BAR_SCRIPT        := preload("res://scenes/ui/UltBar.gd")
+const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
+
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
 const CAM_SIZE    := 14.0
+
+const CAM_ZOOM_MIN  := 6.0
+const CAM_ZOOM_MAX  := 24.0
+const CAM_ZOOM_STEP := 1.5
+
+# Available isometric views (toggle with Q)
+const CAM_VIEWS: Array[Vector3] = [
+	Vector3( 16.0, 16.0,  16.0),   # default  (front-right)
+	Vector3(-16.0, 16.0,  16.0),   # left side (front-left)
+]
+
+var _cam_zoom:           float   = CAM_ZOOM_MAX
+var _cam_view_idx:       int     = 0
+var _cam_offset_current: Vector3 = CAM_VIEWS[0]
+var _cam_offset_target:  Vector3 = CAM_VIEWS[0]
 
 @onready var camera_rig:       Node3D = $CameraRig
 @onready var camera:           Camera3D = $CameraRig/Camera3D
@@ -19,8 +40,11 @@ const CAM_SIZE    := 14.0
 
 const DRONE_INTERACT_RADIUS := 5.0
 
-var mechs:  Array[Node3D] = []
-var drones: Array[Node3D] = []
+var mechs:    Array[Node3D] = []
+var drones:   Array[Node3D] = []
+var _weapons: Array[Node3D] = []
+var _ult_bar: CanvasLayer = null
+var _repair_active: bool = false
 
 func _ready() -> void:
 	_setup_camera()
@@ -29,7 +53,46 @@ func _ready() -> void:
 	_spawn_drone()
 	wave_spawner.setup(enemies_root)
 	mech_options.setup(camera)
-	mech_options.option_selected.connect(_on_mech_option)
+	mech_options.repair_pressed.connect(_on_mech_repair_pressed)
+	_spawn_controls_legend()
+	_spawn_xp_bar()
+	_spawn_gold_counter()
+	_spawn_ult_bar()
+	AudioManager.play_music("bgm_main", -12.0)
+
+func _spawn_controls_legend() -> void:
+	var legend := CanvasLayer.new()
+	legend.set_script(preload("res://scenes/ui/ControlsLegend.gd"))
+	add_child(legend)
+
+func _spawn_xp_bar() -> void:
+	var bar := CanvasLayer.new()
+	bar.set_script(preload("res://scenes/ui/XPBar.gd"))
+	add_child(bar)
+
+func _spawn_gold_counter() -> void:
+	var counter := CanvasLayer.new()
+	counter.set_script(preload("res://scenes/ui/GoldCounter.gd"))
+	add_child(counter)
+
+func _spawn_ult_bar() -> void:
+	_ult_bar = CanvasLayer.new()
+	_ult_bar.set_script(ULT_BAR_SCRIPT)
+	add_child(_ult_bar)
+	_ult_bar.setup(_weapons, MECH_COLORS)
+
+func _input(event: InputEvent) -> void:
+	# Zoom with scroll wheel
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_cam_zoom = clampf(_cam_zoom - CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_cam_zoom = clampf(_cam_zoom + CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
+	# Toggle camera angle with Q
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_Q:
+			_cam_view_idx = (_cam_view_idx + 1) % CAM_VIEWS.size()
+			_cam_offset_target = CAM_VIEWS[_cam_view_idx]
 
 func _process(delta: float) -> void:
 	_follow_camera(delta)
@@ -39,7 +102,7 @@ func _process(delta: float) -> void:
 
 func _setup_camera() -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = CAM_SIZE
+	camera.size = CAM_ZOOM_MAX
 	camera.position = CAM_OFFSET
 	camera.look_at(Vector3.ZERO, Vector3.UP)
 
@@ -54,6 +117,14 @@ func _follow_camera(delta: float) -> void:
 	center.x -= 1.0
 	center.z -= 3.0
 	camera_rig.global_position = camera_rig.global_position.lerp(center, CAM_SMOOTH * delta)
+
+	# Smooth zoom
+	camera.size = lerpf(camera.size, _cam_zoom, CAM_SMOOTH * delta)
+
+	# Smooth angle transition — interpolate offset then re-orient
+	_cam_offset_current = _cam_offset_current.lerp(_cam_offset_target, CAM_SMOOTH * delta)
+	camera.position = _cam_offset_current
+	camera.look_at(camera_rig.global_position, Vector3.UP)
 
 # --- Environment ---
 
@@ -70,7 +141,7 @@ func _setup_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.7
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.fog_enabled = true
 	env.fog_density = 0.005
@@ -79,15 +150,8 @@ func _setup_environment() -> void:
 	world_env.environment = env
 
 	sun.light_color = Color(1.0, 0.94, 0.78)
-	sun.light_energy = 2.2
-	sun.shadow_enabled = true
-	sun.shadow_bias = 0.05
-	sun.shadow_normal_bias = 3.5
-	sun.shadow_blur = 1.0
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 60.0
-	sun.directional_shadow_split_1 = 0.3
-	sun.directional_shadow_blend_splits = true
+	sun.light_energy = 1.3
+	sun.shadow_enabled = false
 	sun.rotation_degrees = Vector3(-52.0, 42.0, 0.0)
 
 # --- Drone proximity ---
@@ -107,8 +171,40 @@ func _check_drone_proximity() -> void:
 			closest = mech
 	mech_options.notify_proximity(closest)
 
-func _on_mech_option(mech: Node3D, index: int) -> void:
-	print("Option %d selected for mech %s" % [index, mech.name])
+	# Notify each mech's weapon whether the drone is nearby
+	for mech in mechs:
+		var w := mech.get("weapon") as Node3D
+		if w != null and w.has_method("notify_drone_nearby"):
+			w.notify_drone_nearby(mech == closest)
+
+func _on_mech_repair_pressed(_mech: Node3D) -> void:
+	_try_start_repair()
+
+func _try_start_repair() -> void:
+	if _repair_active or drones.is_empty():
+		return
+	var drone := drones[0]
+	for mech in mechs:
+		if not mech.has_method("needs_repair"):
+			continue
+		if not mech.needs_repair():
+			continue
+		var diff := drone.global_position - mech.global_position
+		diff.y = 0.0
+		if diff.length() > DRONE_INTERACT_RADIUS:
+			continue
+		# Start repair minigame
+		_repair_active = true
+		var mg := CanvasLayer.new()
+		mg.set_script(REPAIR_MINIGAME_SCRIPT)
+		add_child(mg)
+		mg.start(mech, drone)
+		mg.repair_completed.connect(_on_repair_completed)
+		mg.tree_exited.connect(func() -> void: _repair_active = false)
+		return
+
+func _on_repair_completed(_mech: Node3D) -> void:
+	_repair_active = false
 
 # --- Spawning ---
 
@@ -128,6 +224,11 @@ func _spawn_mech_line(count: int) -> void:
 		mechs_root.add_child(mech)
 		mech.set_color(MECH_COLORS[i % MECH_COLORS.size()])
 		mechs.append(mech)
+		var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT]
+		var w := Node3D.new()
+		w.set_script(weapon_scripts[i % weapon_scripts.size()])
+		mech.attach_weapon(w)
+		_weapons.append(w)
 
 func _spawn_drone() -> void:
 	var drone: Node3D = DRONE_SCENE.instantiate()

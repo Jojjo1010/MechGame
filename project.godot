@@ -21,10 +21,10 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 [autoload]
 
 RunManager="*res://src/RunManager.gd"
+AudioManager="*res://src/AudioManager.gd"
 
 [display]
 
 window/size/mode=2
-window/size/mode.editor=0
-window/stretch/mode="disabled"
 window/stretch/aspect="expand"
+window/size/mode.editor=0

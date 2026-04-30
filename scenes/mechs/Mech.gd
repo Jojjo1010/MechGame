@@ -2,10 +2,12 @@ extends Node3D
 
 const SPEED         := 3.0
 const MECH_SPACING  := 2.5
-const SHOOT_RANGE   := 20.0
-const SHOOT_INTERVAL := 1.2
 
-const BULLET_SCRIPT := preload("res://scenes/projectiles/Bullet.gd")
+const BURN_THRESHOLD      := 0.45   # fraction at which mech starts burning
+const BURN_DAMAGE_PER_SEC := 2.0
+
+const HealthBar3D   := preload("res://scenes/ui/HealthBar3D.gd")
+const DamageNumber  := preload("res://scenes/ui/DamageNumber.gd")
 
 @export var max_health: float = 100.0
 @export var is_lead: bool = false
@@ -14,12 +16,27 @@ var health: float = max_health
 var leader: Node3D = null
 var ability_active: bool = true
 var is_alive: bool = true
-var _shoot_timer: float = 0.0
+var weapon: Node3D = null
+var _is_burning:        bool          = false
+var _burn_light:        OmniLight3D   = null
+var _fire_particles:    GPUParticles3D = null
+var _burn_audio:        AudioStreamPlayer3D = null
+var _burn_damage_timer: float         = 1.0
 var _flash_timer: float = 0.0
+var _ult_flash_timer: float = 0.0
+var _ult_flash_color: Color = Color.WHITE
+const ULT_FLASH_DURATION := 0.35
 var _base_color: Color = Color.WHITE
 var _mesh_instances: Array[MeshInstance3D] = []
+var _health_bar: Node3D = null
+var _model_base_y: float = 0.0
+var _bob_time: float = 0.0
+var _step_pitch_base: float = 1.0   # randomized per mech so the conga line has variety
 
 const FLASH_DURATION := 0.12
+const BOB_FREQ  := 9.0   # rad/s  (~1.4 steps/sec)
+const BOB_AMP   := 0.38  # world units vertical travel
+const LEAN_AMP  := 0.12  # radians (~7°) forward/back tilt
 
 signal health_changed(current: float, maximum: float)
 signal mech_died()
@@ -28,8 +45,18 @@ func _ready() -> void:
 	add_to_group("mechs")
 	health = max_health
 	_scale_model()
-	_add_shadow_decal(2.2, 3.2, 4.0)
-	_shoot_timer = randf_range(0.0, SHOOT_INTERVAL)
+	_add_blob_shadow(0.75, 4.0)
+	# Stagger bob phase by line position so mechs don't all bounce in sync
+	_bob_time = position.z * 0.55
+	# Each mech in the line gets its own pitch so steps form a chord, not a unison
+	_step_pitch_base = randf_range(0.85, 1.15)
+	# HP bar
+	_health_bar = Node3D.new()
+	_health_bar.set_script(HealthBar3D)
+	_health_bar.position = Vector3(0.0, 4.9, 0.0)
+	add_child(_health_bar)
+
+
 
 func _scale_model() -> void:
 	var model := get_node_or_null("Model")
@@ -42,6 +69,7 @@ func _scale_model() -> void:
 		aabb = _get_aabb(model)
 		model.position.y = -aabb.position.y
 	model.rotation_degrees.y = -90.0
+	_model_base_y = model.position.y
 
 func _get_aabb(node: Node) -> AABB:
 	var result := AABB()
@@ -73,15 +101,39 @@ func _process(delta: float) -> void:
 		if diff.length() > 0.05:
 			global_position += diff.normalized() * SPEED * delta
 
-	# Only shoot while alive
+	# Walk bob — runs while alive only
+	if is_alive:
+		var prev_bob := _bob_time
+		_bob_time += delta * BOB_FREQ
+		# Foot-strike happens when abs(sin) crosses zero, i.e. _bob_time crosses
+		# a multiple of PI. Detect by floor() bucket change.
+		if floor(_bob_time / PI) > floor(prev_bob / PI):
+			AudioManager.play("mech_step", global_position,
+				-4.0, _step_pitch_base * randf_range(0.97, 1.03))
+		var model := get_node_or_null("Model")
+		if model:
+			# abs(sin) gives a sharp bounce-off-ground feel
+			var bounce: float = abs(sin(_bob_time)) * BOB_AMP
+			model.position.y = _model_base_y + bounce
+			# Lean forward on downstroke, back on upstroke
+			model.rotation.x = -cos(_bob_time) * LEAN_AMP
+
+	# Only process flash while alive
 	if not is_alive:
 		return
 
-	_shoot_timer -= delta
-	if _shoot_timer <= 0.0:
-		_try_shoot()
-
-	if _flash_timer > 0.0:
+	if _ult_flash_timer > 0.0:
+		_ult_flash_timer -= delta
+		var t := _ult_flash_timer / ULT_FLASH_DURATION
+		var c := _base_color.lerp(_ult_flash_color, t)
+		for mi in _mesh_instances:
+			if is_instance_valid(mi) and mi.material_override:
+				(mi.material_override as StandardMaterial3D).albedo_color = c
+		if _ult_flash_timer <= 0.0:
+			for mi in _mesh_instances:
+				if is_instance_valid(mi) and mi.material_override:
+					(mi.material_override as StandardMaterial3D).albedo_color = _base_color
+	elif _flash_timer > 0.0:
 		_flash_timer -= delta
 		var t := _flash_timer / FLASH_DURATION
 		var c := _base_color.lerp(Color.WHITE, t * 0.85)
@@ -93,85 +145,180 @@ func _process(delta: float) -> void:
 				if is_instance_valid(mi) and mi.material_override:
 					(mi.material_override as StandardMaterial3D).albedo_color = _base_color
 
-func _try_shoot() -> void:
-	var nearest := _nearest_enemy()
-	if nearest == null:
-		return
-	_shoot_timer = SHOOT_INTERVAL
+	# Burning tick
+	if _is_burning and is_alive:
+		if is_instance_valid(_burn_light):
+			_burn_light.light_energy = randf_range(2.5, 5.5)
+		_burn_damage_timer -= delta
+		if _burn_damage_timer <= 0.0:
+			_burn_damage_timer = 1.0
+			take_damage(BURN_DAMAGE_PER_SEC)
 
-	var muzzle := global_position + Vector3(0.0, 2.0, 0.0)
-	var target_pos := nearest.global_position + Vector3(0.0, 0.8, 0.0)
-	var dir := (target_pos - muzzle).normalized()
+func attach_weapon(w: Node3D) -> void:
+	weapon = w
+	add_child(w)
+	w.setup(self)
 
-	# Body flash
+func trigger_flash() -> void:
 	_flash_timer = FLASH_DURATION
 
-	# Muzzle flash
-	_spawn_muzzle_flash(muzzle)
+func start_burning() -> void:
+	if _is_burning:
+		return
+	_is_burning = true
+	_burn_damage_timer = 2.0   # short grace before first burn tick
+	AudioManager.play("mech_burn_ignite", global_position, -4.0)
+	_burn_audio = AudioManager.play_loop_on("mech_burn_loop", self, -10.0)
 
-	var bullet := Node3D.new()
-	bullet.set_script(BULLET_SCRIPT)
-	get_tree().current_scene.add_child(bullet)
-	bullet.launch(muzzle, dir)
+	# Flickering fire light
+	_burn_light = OmniLight3D.new()
+	_burn_light.light_color    = Color(1.0, 0.45, 0.05)
+	_burn_light.light_energy   = 4.0
+	_burn_light.omni_range     = 6.0
+	_burn_light.shadow_enabled = false
+	_burn_light.position       = Vector3(0.0, 2.0, 0.0)
+	add_child(_burn_light)
 
-func _spawn_muzzle_flash(pos: Vector3) -> void:
-	var flash := MeshInstance3D.new()
-	var sph := SphereMesh.new()
-	sph.radius = 0.45
-	sph.height = 0.9
-	flash.mesh = sph
+	# GPU fire particles
+	var pp := ParticleProcessMaterial.new()
+	pp.direction              = Vector3(0.0, 1.0, 0.0)
+	pp.spread                 = 22.0
+	pp.initial_velocity_min   = 3.0
+	pp.initial_velocity_max   = 6.0
+	pp.gravity                = Vector3(0.0, 0.8, 0.0)   # slight upward drift
+	pp.scale_min              = 0.6
+	pp.scale_max              = 1.4
+	pp.emission_shape         = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pp.emission_sphere_radius = 0.25
+
+	# deep red → orange → bright yellow → transparent
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.9, 0.15, 0.0,  1.0))
+	grad.set_color(1, Color(0.6, 0.05, 0.0,  0.0))
+	grad.add_point(0.30, Color(1.0, 0.55, 0.05, 0.95))
+	grad.add_point(0.65, Color(1.0, 0.88, 0.20, 0.70))
+	var gtex := GradientTexture1D.new()
+	gtex.gradient = grad
+	pp.color_ramp = gtex
+
+	# Tall billboard quad — camera-facing so it always looks like a flame tongue
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.55, 0.85)
+	var p_mat := StandardMaterial3D.new()
+	p_mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p_mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	p_mat.vertex_color_use_as_albedo = true
+	p_mat.billboard_mode             = BaseMaterial3D.BILLBOARD_ENABLED
+	p_mat.billboard_keep_scale       = true
+	p_mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	quad.material = p_mat
+
+	_fire_particles = GPUParticles3D.new()
+	_fire_particles.amount           = 32
+	_fire_particles.lifetime         = 0.50
+	_fire_particles.explosiveness    = 0.0
+	_fire_particles.randomness       = 0.5
+	_fire_particles.emitting         = true
+	_fire_particles.process_material = pp
+	_fire_particles.draw_pass_1      = quad
+	_fire_particles.cast_shadow      = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_fire_particles.position         = Vector3(0.0, 1.2, 0.0)
+	add_child(_fire_particles)
+
+func stop_burning() -> void:
+	_is_burning = false
+	if is_instance_valid(_burn_light):
+		_burn_light.queue_free()
+		_burn_light = null
+	if is_instance_valid(_fire_particles):
+		_fire_particles.emitting = false
+		# Let existing particles finish, then free
+		var tw := create_tween()
+		tw.tween_interval(0.6)
+		tw.tween_callback(_fire_particles.queue_free)
+		_fire_particles = null
+	if is_instance_valid(_burn_audio):
+		_burn_audio.queue_free()
+		_burn_audio = null
+
+func repair() -> void:
+	health = max_health
+	health_changed.emit(health, max_health)
+	if is_instance_valid(_health_bar):
+		_health_bar.set_fraction(1.0)
+	stop_burning()
+	AudioManager.play("mech_repair_complete", global_position, -2.0)
+
+func needs_repair() -> bool:
+	return _is_burning
+
+
+
+func ult_fired(color: Color) -> void:
+	# Bright color flash using mech's own color
+	_ult_flash_color = Color(
+		minf(1.0, color.r * 1.5 + 0.4),
+		minf(1.0, color.g * 1.5 + 0.4),
+		minf(1.0, color.b * 1.5 + 0.4), 1.0)
+	_ult_flash_timer = ULT_FLASH_DURATION
+	AudioManager.play("ult_fired", global_position, -2.0)
+
+	# Scale pop on the model
+	var model := get_node_or_null("Model")
+	if model:
+		var base_scale: Vector3 = model.scale
+		var tw := create_tween()
+		tw.tween_property(model, "scale", base_scale * 1.22, 0.07).set_ease(Tween.EASE_OUT)
+		tw.tween_property(model, "scale", base_scale,         0.18).set_ease(Tween.EASE_IN)
+
+	# Burst ring expanding from mech base
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius  = 0.1
+	torus.outer_radius  = 0.55
+	torus.rings         = 48
+	torus.ring_segments = 12
+	ring.mesh = torus
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.9, 0.4)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.7, 0.1)
-	mat.emission_energy_multiplier = 6.0
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	flash.material_override = mat
-	get_tree().current_scene.add_child(flash)
-	flash.global_position = pos
-
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.65, 0.1)
-	light.light_energy = 8.0
-	light.omni_range = 5.0
-	light.shadow_enabled = false
-	flash.add_child(light)
-
-	# Fade out and free after a short time using a tween
-	var tween := flash.create_tween()
-	tween.tween_property(mat, "albedo_color:a", 0.0, 0.10)
-	tween.tween_callback(flash.queue_free)
-
-func _nearest_enemy() -> Node3D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
-	var nearest: Node3D = null
-	var min_dist := SHOOT_RANGE
-	for e in enemies:
-		if not is_instance_valid(e):
-			continue
-		var d := global_position.distance_to(e.global_position)
-		if d < min_dist:
-			min_dist = d
-			nearest = e
-	return nearest
+	mat.albedo_color              = Color(color.r, color.g, color.b, 0.9)
+	mat.emission_enabled          = true
+	mat.emission                  = color
+	mat.emission_energy_multiplier = 8.0
+	mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring.material_override = mat
+	get_tree().current_scene.add_child(ring)
+	ring.global_position = global_position + Vector3(0.0, 0.3, 0.0)
+	var rtw := ring.create_tween()
+	rtw.tween_property(ring, "scale", Vector3(5.0, 1.0, 5.0), 0.40).set_ease(Tween.EASE_OUT)
+	rtw.parallel().tween_property(mat, "albedo_color:a", 0.0, 0.40)
+	rtw.tween_callback(ring.queue_free)
 
 func take_damage(amount: float) -> void:
 	health = maxf(0.0, health - amount)
 	health_changed.emit(health, max_health)
+	if is_instance_valid(_health_bar):
+		_health_bar.set_fraction(health / max_health)
+	DamageNumber.spawn(amount, global_position + Vector3(0.0, 3.8, 0.0),
+		get_tree().current_scene, Color(1.0, 0.35, 0.1))
+	AudioManager.play("mech_hit", global_position, -6.0, randf_range(0.93, 1.07))
+	if not _is_burning and health / max_health <= BURN_THRESHOLD:
+		start_burning()
 	if health <= 0.0:
 		mech_died.emit()
+		AudioManager.play("mech_death", global_position, 0.0)
 		_on_died()
 
 const OUTLINE_SHADER = preload("res://scenes/vfx/mech_outline.gdshader")
 
 func set_highlighted(on: bool) -> void:
-	# Remove any existing outline nodes
-	for child in get_children():
-		if child.name.begins_with("_ol_"):
-			child.queue_free()
+	# Outlines are parented to their source meshes — search recursively to remove them
+	for ol in find_children("_ol_*", "MeshInstance3D", true, false):
+		ol.queue_free()
 	if not on:
 		return
-	# Spawn one outline MeshInstance3D per model mesh using back-face inflate
+	# Parent each outline to its source mesh so it inherits all transforms (including bob)
 	for i in _mesh_instances.size():
 		var src := _mesh_instances[i]
 		if not is_instance_valid(src):
@@ -185,32 +332,35 @@ func set_highlighted(on: bool) -> void:
 		sm.set_shader_parameter("outline_color", Color(1.0, 0.95, 0.55, 1.0))
 		sm.set_shader_parameter("outline_size", 0.07)
 		ol.material_override = sm
-		add_child(ol)
-		# Match world transform of the source mesh
-		ol.global_transform = src.global_transform
+		src.add_child(ol)
+		ol.transform = Transform3D.IDENTITY
+
+static var _shadow_tex: GradientTexture2D
 
 func _add_shadow_decal(width: float, depth: float, char_height: float) -> void:
 	const SUN_Y_DEG := 42.0
 	const SUN_ELEV  := 38.0
-	var offset_dist := char_height / tan(deg_to_rad(SUN_ELEV)) * 0.3
+	var offset_dist := char_height / tan(deg_to_rad(SUN_ELEV)) * 0.28
 	var shadow_dir  := Vector3(-sin(deg_to_rad(SUN_Y_DEG)), 0.0, -cos(deg_to_rad(SUN_Y_DEG)))
 
-	# Build a soft radial gradient texture for the shadow
-	var img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
-	for x in 128:
-		for y in 128:
-			var dx := (x - 64.0) / 64.0
-			var dy := (y - 64.0) / 64.0
-			var dist := sqrt(dx * dx + dy * dy)
-			var alpha := pow(clampf(1.0 - dist, 0.0, 1.0), 1.6)
-			img.set_pixel(x, y, Color(0.0, 0.0, 0.0, alpha))
-	var tex := ImageTexture.create_from_image(img)
+	# Build shared radial gradient texture once
+	if _shadow_tex == null:
+		var grad := Gradient.new()
+		grad.add_point(0.0, Color(0.0, 0.0, 0.0, 0.7))
+		grad.add_point(1.0, Color(0.0, 0.0, 0.0, 0.0))
+		_shadow_tex = GradientTexture2D.new()
+		_shadow_tex.gradient = grad
+		_shadow_tex.fill = GradientTexture2D.FILL_RADIAL
+		_shadow_tex.fill_from = Vector2(0.5, 0.5)
+		_shadow_tex.fill_to   = Vector2(1.0, 0.5)
+		_shadow_tex.width  = 128
+		_shadow_tex.height = 128
 
 	var decal := Decal.new()
-	decal.texture_albedo = tex
-	decal.size           = Vector3(width, 3.0, depth)
-	decal.albedo_mix     = 0.75
-	decal.position       = shadow_dir * offset_dist + Vector3(0.0, 1.5, 0.0)
+	decal.texture_albedo = _shadow_tex
+	decal.size           = Vector3(width, 6.0, depth)  # tall enough to reach ground from above
+	decal.albedo_mix     = 0.8
+	decal.position       = shadow_dir * offset_dist + Vector3(0.0, 3.0, 0.0)
 	decal.rotation.y     = -deg_to_rad(SUN_Y_DEG)
 	add_child(decal)
 
@@ -228,15 +378,15 @@ func _add_blob_shadow(radius: float, char_height: float) -> void:
 	cyl.height        = 0.01
 	disc.mesh = cyl
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.0, 0.0, 0.0, 0.40)
+	mat.albedo_color = Color(0.0, 0.0, 0.0, 0.28)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	disc.material_override = mat
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Offset along shadow direction, stretched in that axis
-	disc.position   = shadow_dir * shadow_len * 0.35 + Vector3(0.0, 0.02, 0.0)
+	disc.position   = shadow_dir * shadow_len * 0.16 + Vector3(0.0, 0.02, 0.0)
 	disc.rotation.y = -deg_to_rad(SUN_Y_DEG)
-	disc.scale      = Vector3(1.0, 1.0, 1.5)  # elongate along shadow direction
+	disc.scale      = Vector3(1.0, 1.0, 1.2)  # slightly elongate along shadow direction
 	add_child(disc)
 
 func set_color(color: Color) -> void:
@@ -252,18 +402,11 @@ func set_color(color: Color) -> void:
 			continue
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = color
-		mat.roughness = 0.6
-		mat.metallic = 0.4
+		mat.roughness = 0.75
+		mat.metallic = 0.15
 		mi.material_override = mat
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_mesh_instances.append(mi)
-
-func repair(amount: float) -> void:
-	health = minf(max_health, health + amount)
-	health_changed.emit(health, max_health)
-
-func set_burning(on: bool) -> void:
-	ability_active = not on
 
 func _on_died() -> void:
 	is_alive = false

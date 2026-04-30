@@ -1,5 +1,7 @@
 extends Node3D
 
+signal hit_enemy
+
 const SPEED      := 24.0
 const DAMAGE     := 20.0
 const HIT_RADIUS := 0.8
@@ -9,10 +11,12 @@ const BurstVFX = preload("res://scenes/vfx/BurstVFX.gd")
 
 var direction := Vector3.ZERO
 var _age      := 0.0
+var _damage_mult: float = 1.0
 
-func launch(from: Vector3, dir: Vector3) -> void:
+func launch(from: Vector3, dir: Vector3, damage_mult: float = 1.0) -> void:
 	global_position = from
 	direction = dir.normalized()
+	_damage_mult = damage_mult
 	_build_mesh()
 
 func _build_mesh() -> void:
@@ -27,6 +31,7 @@ func _build_mesh() -> void:
 	mat.emission = Color(1.0, 0.55, 0.0)
 	mat.emission_energy_multiplier = 3.0
 	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
 	var light := OmniLight3D.new()
@@ -48,7 +53,9 @@ func _process(delta: float) -> void:
 			continue
 		var dist := global_position.distance_to(enemy.global_position + Vector3(0.0, 0.8, 0.0))
 		if dist < HIT_RADIUS:
-			enemy.take_damage(DAMAGE)
+			enemy.take_damage(DAMAGE * _damage_mult)
 			BurstVFX.spawn(global_position, Color(1.0, 0.65, 0.1), 14, 5.0, 0.35, get_tree().current_scene)
+			AudioManager.play("bullet_impact", global_position, -8.0, randf_range(0.92, 1.1))
+			hit_enemy.emit()
 			queue_free()
 			return
