@@ -26,6 +26,16 @@ var _mesh_instances: Array[MeshInstance3D] = []
 var _flash_mat: StandardMaterial3D = null
 var _knockback_vel: Vector3 = Vector3.ZERO
 
+# Damage-over-time
+var _dot_dps:        float = 0.0
+var _dot_remaining:  float = 0.0
+var _dot_tick_timer: float = 0.0
+const DOT_TICK_INTERVAL := 0.5
+
+# Slow debuff: movement multiplier with timer
+var _slow_mult:      float = 1.0
+var _slow_remaining: float = 0.0
+
 signal enemy_died()
 
 func _ready() -> void:
@@ -104,10 +114,36 @@ func _add_blob_shadow(radius: float, char_height: float) -> void:
 func apply_knockback(impulse: Vector3) -> void:
 	_knockback_vel = impulse
 
+func apply_dot(dps: float, duration: float) -> void:
+	# Refresh duration and keep the strongest dps stack
+	_dot_dps       = maxf(_dot_dps, dps)
+	_dot_remaining = maxf(_dot_remaining, duration)
+	if _dot_tick_timer <= 0.0:
+		_dot_tick_timer = DOT_TICK_INTERVAL
+
+func apply_slow(mult: float, duration: float) -> void:
+	# Keep the strongest slow (smaller mult = stronger), refresh duration
+	_slow_mult      = minf(_slow_mult, mult)
+	_slow_remaining = maxf(_slow_remaining, duration)
+
 func _process(delta: float) -> void:
 	if _knockback_vel.length_squared() > 0.01:
 		_knockback_vel = _knockback_vel.lerp(Vector3.ZERO, 10.0 * delta)
 		global_position += _knockback_vel * delta
+
+	if _dot_remaining > 0.0:
+		_dot_remaining -= delta
+		_dot_tick_timer -= delta
+		if _dot_tick_timer <= 0.0:
+			_dot_tick_timer = DOT_TICK_INTERVAL
+			take_damage(_dot_dps * DOT_TICK_INTERVAL)
+		if _dot_remaining <= 0.0:
+			_dot_dps = 0.0
+
+	if _slow_remaining > 0.0:
+		_slow_remaining -= delta
+		if _slow_remaining <= 0.0:
+			_slow_mult = 1.0
 
 	_find_target()
 
@@ -128,7 +164,7 @@ func _process(delta: float) -> void:
 		var move_dir := dir + sep * SEPARATION_STRENGTH
 		if move_dir.length() > 0.01:
 			move_dir = move_dir.normalized()
-		position += move_dir * SPEED * delta
+		position += move_dir * SPEED * _slow_mult * delta
 		# Face movement direction
 		if move_dir.length() > 0.01:
 			rotation.y = atan2(move_dir.x, move_dir.z)
@@ -160,6 +196,11 @@ func _find_target() -> void:
 	var nearest: Node3D = null
 	var min_dist := INF
 	for m in mechs:
+		# Skip dead mechs so enemies retarget after a kill instead of swinging
+		# at the corpse.
+		var alive: Variant = m.get("is_alive")
+		if alive != null and not alive:
+			continue
 		var d := global_position.distance_to(m.global_position)
 		if d < min_dist:
 			min_dist = d
@@ -187,6 +228,7 @@ func take_damage(amount: float) -> void:
 		get_tree().current_scene, Color(1.0, 0.92, 0.15))
 	if health <= 0.0:
 		enemy_died.emit()
+		RunManager.notify_kill()
 		BurstVFX.spawn(
 			global_position + Vector3(0.0, 1.0, 0.0),
 			Color(0.9, 0.15, 0.05), 22, 7.0, 0.55,

@@ -3,8 +3,9 @@ extends "res://scenes/mechs/weapons/BaseWeapon.gd"
 const FIRE_RATE         := 1.3
 const ULT_COOLDOWN      := 12.0
 const DAMAGE_PER_BOUNCE := 18.0
+const ULT_DAMAGE_MULT   := 2.2
 const BOUNCES_PASSIVE   := 3
-const BOUNCES_ULT       := 12
+const BOUNCES_ULT       := 16
 const BOUNCE_RANGE      := 8.0
 
 func _on_setup() -> void:
@@ -17,12 +18,12 @@ func get_ult_cooldown() -> float:
 	return ULT_COOLDOWN
 
 func _passive_fire() -> void:
-	_fire_beam(BOUNCES_PASSIVE)
+	_fire_beam(BOUNCES_PASSIVE + projectile_count_bonus, 1.0)
 
 func _fire_ult() -> void:
-	_fire_beam(BOUNCES_ULT)
+	_fire_beam(BOUNCES_ULT + projectile_count_bonus, ULT_DAMAGE_MULT)
 
-func _fire_beam(max_bounces: int) -> void:
+func _fire_beam(max_bounces: int, damage_mult: float) -> void:
 	var first := _nearest_enemy()
 	if first == null:
 		return
@@ -31,20 +32,23 @@ func _fire_beam(max_bounces: int) -> void:
 	var points: Array[Vector3] = [origin]
 	var hit: Array[Node3D] = []
 	var current: Node3D = first
+	var prev_pos := origin
 	for _i in max_bounces:
 		if not is_instance_valid(current):
 			break
 		var hit_pos := current.global_position + Vector3(0.0, 0.8, 0.0)
 		points.append(hit_pos)
-		current.take_damage(DAMAGE_PER_BOUNCE)
+		var dir := current.global_position - prev_pos
+		_apply_hit(current, DAMAGE_PER_BOUNCE * damage_mult, current.global_position, dir)
 		hit.append(current)
+		prev_pos = current.global_position
 		current = _find_bounce_target(current.global_position, hit)
 	_draw_beam(points)
 	_mech.trigger_flash()
 
 func _find_bounce_target(from_pos: Vector3, exclude: Array[Node3D]) -> Node3D:
 	var best: Node3D = null
-	var best_dist := BOUNCE_RANGE
+	var best_dist := BOUNCE_RANGE * range_mult
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e):
 			continue

@@ -11,6 +11,19 @@ var _cooldown_timer: float = 0.0   # counts down from get_ult_cooldown() to 0
 var _fire_timer:    float  = 0.0
 var _drone_nearby:  bool   = false
 
+# ── Upgrade multipliers (modified by level-up cards) ─────────────────────────
+var damage_mult:            float = 1.0
+var fire_rate_mult:         float = 1.0   # >1 = faster
+var range_mult:             float = 1.0
+var projectile_count_bonus: int   = 0     # Gun: extra bullets, Beam: extra bounces
+var dot_dps:                float = 0.0   # damage-over-time applied on hit
+var knockback_force:        float = 0.0   # impulse magnitude on hit (0 = none)
+var splash_radius:          float = 0.0   # secondary AOE radius around hit (0 = none)
+var slow_mult:              float = 1.0   # 1.0 = no slow, 0.5 = half speed
+var slow_duration:          float = 0.0   # seconds the slow lasts
+const DOT_DURATION:         float = 3.0
+const SPLASH_DAMAGE_FRAC:   float = 0.5   # splash deals 50% of base damage
+
 # Ready-state ring (floating [E] label removed — panel button handles that)
 var _ready_ring: MeshInstance3D     = null
 var _ring_mat:   StandardMaterial3D = null
@@ -20,7 +33,7 @@ func setup(mech: Node3D) -> void:
 	_mech = mech
 	var col: Variant = mech.get("_base_color")
 	_mech_color = col as Color if col != null else Color.WHITE
-	_fire_timer = randf_range(0.0, get_fire_rate())
+	_fire_timer = randf_range(0.0, _effective_fire_period())
 	_build_ready_visuals()
 	_on_setup()
 	# Start 60 % into the first cooldown so first ult arrives sooner
@@ -38,6 +51,12 @@ func get_fire_rate() -> float:
 func get_ult_cooldown() -> float:
 	return 12.0
 
+func _effective_fire_period() -> float:
+	return get_fire_rate() / maxf(fire_rate_mult, 0.01)
+
+func _effective_shoot_range() -> float:
+	return SHOOT_RANGE * range_mult
+
 # ── Per-frame tick ────────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
@@ -46,7 +65,7 @@ func _process(delta: float) -> void:
 
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:
-		_fire_timer = get_fire_rate()
+		_fire_timer = _effective_fire_period()
 		_passive_fire()
 
 	if _cooldown_timer > 0.0:
@@ -157,7 +176,7 @@ func _build_ready_visuals() -> void:
 
 func _nearest_enemy() -> Node3D:
 	var nearest: Node3D = null
-	var min_dist := SHOOT_RANGE
+	var min_dist := _effective_shoot_range()
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e):
 			continue
@@ -169,7 +188,7 @@ func _nearest_enemy() -> Node3D:
 
 func _nearest_from(from_pos: Vector3) -> Node3D:
 	var nearest: Node3D = null
-	var min_dist := SHOOT_RANGE
+	var min_dist := _effective_shoot_range()
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e):
 			continue
@@ -187,3 +206,31 @@ func _enemies_in_radius(center: Vector3, radius: float) -> Array:
 		if center.distance_to(e.global_position) <= radius:
 			result.append(e)
 	return result
+
+# ── Damage helper ─────────────────────────────────────────────────────────────
+# Applies a hit to an enemy with all configured effects: damage (× damage_mult ×
+# combo), DOT, slow, knockback, splash. `hit_dir` is the incoming direction;
+# used for knockback. Splash uses SPLASH_DAMAGE_FRAC of the primary damage.
+func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Vector3 = Vector3.ZERO) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var combo := RunManager.combo_mult()
+	var dmg   := base_damage * damage_mult * combo
+	enemy.take_damage(dmg)
+	if dot_dps > 0.0 and enemy.has_method("apply_dot"):
+		enemy.apply_dot(dot_dps, DOT_DURATION)
+	if slow_duration > 0.0 and slow_mult < 1.0 and enemy.has_method("apply_slow"):
+		enemy.apply_slow(slow_mult, slow_duration)
+	if knockback_force > 0.0 and enemy.has_method("apply_knockback"):
+		var dir := hit_dir
+		dir.y = 0.0
+		if dir.length_squared() > 0.001:
+			enemy.apply_knockback(dir.normalized() * knockback_force)
+	if splash_radius > 0.0:
+		var splash_dmg := dmg * SPLASH_DAMAGE_FRAC
+		for other in _enemies_in_radius(hit_pos, splash_radius):
+			if other == enemy or not is_instance_valid(other):
+				continue
+			other.take_damage(splash_dmg)
+			if dot_dps > 0.0 and other.has_method("apply_dot"):
+				other.apply_dot(dot_dps, DOT_DURATION)

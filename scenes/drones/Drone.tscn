@@ -3,8 +3,8 @@
 [ext_resource type="Script" path="res://scenes/drones/Drone.gd" id="1"]
 
 [sub_resource type="SphereMesh" id="body_mesh"]
-radius = 0.25
-height = 0.5
+radius = 0.40
+height = 0.80
 
 [sub_resource type="StandardMaterial3D" id="body_mat"]
 albedo_color = Color(0.1, 0.8, 1.0, 1)
@@ -15,9 +15,9 @@ roughness = 0.1
 metallic = 0.8
 
 [sub_resource type="CylinderMesh" id="ring_mesh"]
-top_radius = 0.35
-bottom_radius = 0.35
-height = 0.05
+top_radius = 0.55
+bottom_radius = 0.55
+height = 0.08
 
 [sub_resource type="StandardMaterial3D" id="ring_mat"]
 albedo_color = Color(0.05, 0.4, 0.6, 1)

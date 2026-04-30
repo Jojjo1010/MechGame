@@ -90,16 +90,18 @@ func _process(delta: float) -> void:
 	if not ability_active:
 		return
 
+	var march_speed := SPEED * RunManager.line_speed_mult
+
 	# Always keep marching, alive or dead
 	if is_lead:
-		position.z -= SPEED * delta
+		position.z -= march_speed * delta
 		position.x = 0.0  # lead stays on the centre lane
 	elif leader != null:
 		var target := leader.global_position + leader.global_transform.basis.z * MECH_SPACING
 		var diff := target - global_position
 		diff.y = 0.0
 		if diff.length() > 0.05:
-			global_position += diff.normalized() * SPEED * delta
+			global_position += diff.normalized() * march_speed * delta
 
 	# Walk bob — runs while alive only
 	if is_alive:
@@ -296,6 +298,11 @@ func ult_fired(color: Color) -> void:
 	rtw.tween_callback(ring.queue_free)
 
 func take_damage(amount: float) -> void:
+	# Already-dead mechs don't take more damage and don't re-emit mech_died.
+	# Without this guard, enemies still wailing on the corpse would each fire
+	# mech_died → run-end counter drops past zero on the first real death.
+	if not is_alive:
+		return
 	health = maxf(0.0, health - amount)
 	health_changed.emit(health, max_health)
 	if is_instance_valid(_health_bar):

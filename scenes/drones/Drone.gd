@@ -12,6 +12,10 @@ const DAZE_DURATION   := 1.0   # seconds daze lasts
 const DAZE_SPEED_MULT := 0.5   # fraction of normal speed while dazed
 const KNOCKBACK_FORCE := 18.0  # impulse strength away from the enemy
 
+const DASH_FORCE     := 32.0
+const DASH_DURATION  := 0.18    # seconds drone is i-framed and locked to dash velocity
+const DASH_COOLDOWN  := 1.5
+
 var player_controlled: bool = false
 var repair_locked: bool = false
 var velocity := Vector3.ZERO
@@ -21,6 +25,8 @@ var _daze_mat: StandardMaterial3D = null
 var _mesh_instances: Array[MeshInstance3D] = []
 var _blob_shadow: MeshInstance3D = null
 var _blob_shadow_mat: StandardMaterial3D = null
+var _dash_active:    float = 0.0
+var _dash_cooldown:  float = 0.0
 
 func _ready() -> void:
 	add_to_group("drones")
@@ -33,6 +39,7 @@ func _ready() -> void:
 			_mesh_instances.append(mi)
 
 	_add_blob_shadow()
+	_add_drone_outline()
 	AudioManager.play_loop_on("drone_hum_loop", self, -22.0)
 
 	# Red-tint overlay applied while dazed
@@ -59,15 +66,50 @@ func _add_blob_shadow() -> void:
 	_blob_shadow.cast_shadow       = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_blob_shadow)
 
+# Inverted-hull outline. Shared static material so we don't allocate one
+# StandardMaterial3D per mesh per drone — params never vary.
+static var _OUTLINE_MAT: StandardMaterial3D = null
+
+static func _outline_material() -> StandardMaterial3D:
+	if _OUTLINE_MAT != null:
+		return _OUTLINE_MAT
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color  = Color(0.02, 0.02, 0.04, 1.0)
+	mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode     = BaseMaterial3D.CULL_FRONT
+	mat.grow          = true
+	mat.grow_amount   = 0.18
+	# Glow post-processing in the scene env washes out thin strokes against the
+	# emissive drone body — disabling fog + tagging it as not-receive-shadows
+	# keeps the silhouette readable through the bloom halo.
+	mat.disable_fog              = true
+	mat.disable_receive_shadows  = true
+	_OUTLINE_MAT = mat
+	return mat
+
+func _add_drone_outline() -> void:
+	for mi in _mesh_instances:
+		if not is_instance_valid(mi) or mi.mesh == null:
+			continue
+		var ol := MeshInstance3D.new()
+		ol.name = "_drone_outline"
+		ol.mesh = mi.mesh
+		ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ol.material_override = _outline_material()
+		mi.add_child(ol)
+		ol.transform = Transform3D.IDENTITY
+
 func _process(delta: float) -> void:
 	if _camera == null:
 		_camera = get_viewport().get_camera_3d()
 		if _camera == null:
 			return
 
-	# Blob shadow: keep it pinned to ground level, fade with height
+	# Blob shadow: keep it pinned to ground level, flat (no inheriting drone tilt),
+	# and fade with height.
 	if is_instance_valid(_blob_shadow) and _blob_shadow_mat != null:
 		_blob_shadow.global_position = Vector3(global_position.x, 0.04, global_position.z)
+		_blob_shadow.global_rotation = Vector3.ZERO
 		var h := maxf(global_position.y, 0.1)
 		_blob_shadow_mat.albedo_color.a = clampf(0.42 / (h * 0.38 + 0.6), 0.05, 0.42)
 
@@ -75,7 +117,21 @@ func _process(delta: float) -> void:
 		return
 
 	if repair_locked:
-		position.z -= MECH_SPEED * delta   # keep marching with mechs, block player input
+		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta   # keep marching with mechs, block player input
+		return
+
+	# Tick dash cooldown always (so it ticks down even while dazed)
+	if _dash_cooldown > 0.0:
+		_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
+
+	# Dashing: i-frames (skip enemy contact), locked velocity, full mech-line march
+	if _dash_active > 0.0:
+		_dash_active = maxf(0.0, _dash_active - delta)
+		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta
+		position += velocity * delta
+		position.y = HEIGHT
+		_resolve_mech_collisions()
+		_clamp_to_viewport()
 		return
 
 	# Check for enemy contacts → daze
@@ -91,7 +147,7 @@ func _process(delta: float) -> void:
 	var effective_speed := SPEED * (DAZE_SPEED_MULT if dazed else 1.0)
 
 	# Always march with the mech line, but slow it during daze so knockback can push through
-	position.z -= MECH_SPEED * (DAZE_SPEED_MULT if dazed else 1.0) * delta
+	position.z -= MECH_SPEED * RunManager.line_speed_mult * (DAZE_SPEED_MULT if dazed else 1.0) * delta
 
 	var cam_fwd   := _cam_forward()
 	var cam_right := _cam_right()
@@ -121,6 +177,40 @@ func _process(delta: float) -> void:
 		rotation = rotation.lerp(tilt_target, 8.0 * delta)
 	else:
 		rotation = rotation.lerp(Vector3.ZERO, 8.0 * delta)
+
+func _input(event: InputEvent) -> void:
+	if not player_controlled or repair_locked:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE:
+			_try_dash()
+
+func _try_dash() -> void:
+	if _dash_cooldown > 0.0 or _dash_active > 0.0:
+		return
+	# Dash direction: current WASD input (camera-relative). Falls back to current
+	# movement direction; if standing still, dash forward along the line of march.
+	var cam_fwd   := _cam_forward()
+	var cam_right := _cam_right()
+	var input := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W): input += cam_fwd
+	if Input.is_key_pressed(KEY_S): input -= cam_fwd
+	if Input.is_key_pressed(KEY_A): input -= cam_right
+	if Input.is_key_pressed(KEY_D): input += cam_right
+	if input.length_squared() < 0.01:
+		input = velocity if velocity.length_squared() > 0.5 else cam_fwd
+	input.y = 0.0
+	if input.length_squared() < 0.001:
+		return
+	velocity = input.normalized() * DASH_FORCE
+	_dash_active   = DASH_DURATION
+	_dash_cooldown = DASH_COOLDOWN
+	# Dash breaks daze
+	if _daze_timer > 0.0:
+		_daze_timer = 0.0
+		_set_daze_visual(false)
+	# Quick buzzy whoosh — reusing the daze sound at a higher pitch
+	AudioManager.play("drone_daze", global_position, -10.0, 1.7)
 
 func _check_enemy_contact() -> void:
 	if _daze_timer > 0.0:

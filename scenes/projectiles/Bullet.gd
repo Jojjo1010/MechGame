@@ -10,13 +10,15 @@ const LIFETIME   := 3.5
 const BurstVFX = preload("res://scenes/vfx/BurstVFX.gd")
 
 var direction := Vector3.ZERO
-var _age      := 0.0
-var _damage_mult: float = 1.0
+var _age:           float  = 0.0
+var _base_damage:   float  = DAMAGE   # pre-multiplied by ult-vs-passive factor
+var _source_weapon: Node3D = null
 
-func launch(from: Vector3, dir: Vector3, damage_mult: float = 1.0) -> void:
+func launch(from: Vector3, dir: Vector3, source_weapon: Node3D, base_damage: float = DAMAGE) -> void:
 	global_position = from
 	direction = dir.normalized()
-	_damage_mult = damage_mult
+	_source_weapon = source_weapon
+	_base_damage = base_damage
 	_build_mesh()
 
 func _build_mesh() -> void:
@@ -53,7 +55,10 @@ func _process(delta: float) -> void:
 			continue
 		var dist := global_position.distance_to(enemy.global_position + Vector3(0.0, 0.8, 0.0))
 		if dist < HIT_RADIUS:
-			enemy.take_damage(DAMAGE * _damage_mult)
+			if is_instance_valid(_source_weapon):
+				_source_weapon._apply_hit(enemy, _base_damage, global_position, direction)
+			else:
+				enemy.take_damage(_base_damage)
 			BurstVFX.spawn(global_position, Color(1.0, 0.65, 0.1), 14, 5.0, 0.35, get_tree().current_scene)
 			AudioManager.play("bullet_impact", global_position, -8.0, randf_range(0.92, 1.1))
 			hit_enemy.emit()

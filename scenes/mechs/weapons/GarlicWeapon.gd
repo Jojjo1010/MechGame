@@ -4,9 +4,9 @@ const FIRE_RATE       := 0.65
 const ULT_COOLDOWN    := 14.0
 const AURA_RADIUS     := 4.5
 const DAMAGE_PER_TICK := 10.0
-const ULT_RADIUS      := 9.0
-const ULT_DAMAGE      := 45.0
-const KNOCKBACK_FORCE := 22.0
+const ULT_RADIUS      := 12.0
+const ULT_DAMAGE      := 110.0
+const KNOCKBACK_FORCE := 38.0
 
 var _aura_ring: MeshInstance3D = null
 
@@ -41,34 +41,55 @@ func get_ult_cooldown() -> float:
 	return ULT_COOLDOWN
 
 func _passive_fire() -> void:
-	var enemies := _enemies_in_radius(_mech.global_position, AURA_RADIUS)
+	var radius := AURA_RADIUS * range_mult
+	var enemies := _enemies_in_radius(_mech.global_position, radius)
+	_update_aura_ring_scale()
 	if enemies.is_empty():
 		return
 	for e in enemies:
-		e.take_damage(DAMAGE_PER_TICK)
+		var radial: Vector3 = e.global_position - _mech.global_position
+		_apply_hit(e, DAMAGE_PER_TICK, e.global_position, radial)
 	_pulse_ring()
 	AudioManager.play("garlic_pulse", _mech.global_position, -12.0)
+
+func _update_aura_ring_scale() -> void:
+	if _aura_ring == null or not is_instance_valid(_aura_ring):
+		return
+	# Scale ring uniformly in XZ to match range_mult, preserving Y
+	var s := range_mult
+	var current := _aura_ring.scale
+	if absf(current.x - s) > 0.001:
+		_aura_ring.scale = Vector3(s, current.y, s)
 
 func _pulse_ring() -> void:
 	if _aura_ring == null or not is_instance_valid(_aura_ring):
 		return
+	var base := range_mult
 	var tw := _aura_ring.create_tween()
-	tw.tween_property(_aura_ring, "scale", Vector3(1.1, 1.0, 1.1), 0.06).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_aura_ring, "scale", Vector3(1.0, 1.0, 1.0), 0.20).set_ease(Tween.EASE_IN)
+	tw.tween_property(_aura_ring, "scale", Vector3(base * 1.1, 1.0, base * 1.1), 0.06).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_aura_ring, "scale", Vector3(base, 1.0, base), 0.20).set_ease(Tween.EASE_IN)
 
 func _fire_ult() -> void:
-	var enemies := _enemies_in_radius(_mech.global_position, ULT_RADIUS)
+	var radius := ULT_RADIUS * range_mult
+	var combo := RunManager.combo_mult()
+	var enemies := _enemies_in_radius(_mech.global_position, radius)
 	for e in enemies:
-		e.take_damage(ULT_DAMAGE)
+		e.take_damage(ULT_DAMAGE * damage_mult * combo)
+		if dot_dps > 0.0 and e.has_method("apply_dot"):
+			e.apply_dot(dot_dps, DOT_DURATION)
+		if slow_duration > 0.0 and slow_mult < 1.0 and e.has_method("apply_slow"):
+			e.apply_slow(slow_mult, slow_duration)
 		if e.has_method("apply_knockback"):
 			var diff: Vector3 = e.global_position - _mech.global_position
 			diff.y = 0.0
 			if diff.length_squared() > 0.001:
-				e.apply_knockback(diff.normalized() * KNOCKBACK_FORCE)
-	_spawn_shockwave()
+				# Ult always punches; stack any extra knockback from upgrades on top
+				var force := KNOCKBACK_FORCE + knockback_force
+				e.apply_knockback(diff.normalized() * force)
+	_spawn_shockwave(radius)
 	AudioManager.play("garlic_ult", _mech.global_position, -2.0)
 
-func _spawn_shockwave() -> void:
+func _spawn_shockwave(radius: float = ULT_RADIUS) -> void:
 	var ring := MeshInstance3D.new()
 	var torus := TorusMesh.new()
 	torus.inner_radius = 0.1
@@ -87,7 +108,7 @@ func _spawn_shockwave() -> void:
 	ring.material_override = mat
 	get_tree().current_scene.add_child(ring)
 	ring.global_position = _mech.global_position + Vector3(0.0, 0.4, 0.0)
-	var target_scale := Vector3(ULT_RADIUS * 2.2, 1.0, ULT_RADIUS * 2.2)
+	var target_scale := Vector3(radius * 2.2, 1.0, radius * 2.2)
 	var tw := ring.create_tween()
 	tw.tween_property(ring, "scale", target_scale, 0.42).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(mat, "albedo_color:a", 0.0, 0.42)

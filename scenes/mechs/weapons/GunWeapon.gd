@@ -4,10 +4,11 @@ const BULLET_SCRIPT := preload("res://scenes/projectiles/Bullet.gd")
 
 const FIRE_RATE       := 0.8
 const ULT_COOLDOWN    := 10.0
-const ULT_COUNT       := 7
-const ULT_SPREAD_DEG  := 44.0
-const ULT_DAMAGE_MULT := 1.5
+const ULT_COUNT       := 9
+const ULT_SPREAD_DEG  := 50.0
+const ULT_DAMAGE_MULT := 3.0
 const CONE_LEN        := 9.0
+const BULLET_BASE_DAMAGE := 20.0   # mirrors Bullet.gd DAMAGE
 
 var _aiming:           bool    = false
 var _aim_dir:          Vector3 = Vector3.ZERO
@@ -40,6 +41,9 @@ func activate_ult() -> bool:
 	return true
 
 # ── Passive fire ─────────────────────────────────────────────────────────────
+# Cone Burst card widens this; default 4° per gap.
+var passive_spread_per_bullet: float = 4.0
+
 func _passive_fire() -> void:
 	if _aiming:
 		return   # pause passive fire while player aims
@@ -49,7 +53,15 @@ func _passive_fire() -> void:
 	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
 	var target_pos := nearest.global_position + Vector3(0.0, 0.8, 0.0)
 	var dir := (target_pos - muzzle).normalized()
-	_shoot(muzzle, dir, 1.0)
+	var count := 1 + projectile_count_bonus
+	if count <= 1:
+		_shoot(muzzle, dir, 1.0)
+	else:
+		var spread := deg_to_rad(passive_spread_per_bullet * float(count - 1))
+		for i in count:
+			var t := (float(i) / float(count - 1)) - 0.5
+			var bdir := dir.rotated(Vector3.UP, t * spread)
+			_shoot(muzzle, bdir, 1.0)
 	_muzzle_flash(muzzle)
 	_mech.trigger_flash()
 	AudioManager.play("gun_fire", muzzle, -6.0, randf_range(0.92, 1.08))
@@ -66,16 +78,28 @@ func _cancel_aiming() -> void:
 	if _gun_drone_nearby and is_ready():
 		_show_e_label()
 
+const ULT_SECOND_WAVE_DELAY := 0.1   # seconds after the first wave
+
 func _confirm_and_fire() -> void:
 	_aiming = false
 	_reset_cooldown()
 	_destroy_cone()
 
+	# First wave fires immediately; the mech keeps marching, so the second wave
+	# fires from wherever the mech is at the time but in the same aimed direction.
+	var dir := _aim_dir
+	_fire_ult_wave(dir)
+	get_tree().create_timer(ULT_SECOND_WAVE_DELAY).timeout.connect(_fire_ult_wave.bind(dir))
+
+func _fire_ult_wave(dir: Vector3) -> void:
+	if _mech == null or not is_instance_valid(_mech) or not _mech.is_alive:
+		return
 	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
-	for i in ULT_COUNT:
-		var t   := (float(i) / float(ULT_COUNT - 1)) - 0.5
-		var dir := _aim_dir.rotated(Vector3.UP, t * deg_to_rad(ULT_SPREAD_DEG))
-		_shoot(muzzle, dir, ULT_DAMAGE_MULT)
+	var ult_count := ULT_COUNT + projectile_count_bonus
+	for i in ult_count:
+		var t   := (float(i) / float(maxi(ult_count - 1, 1))) - 0.5
+		var d := dir.rotated(Vector3.UP, t * deg_to_rad(ULT_SPREAD_DEG))
+		_shoot(muzzle, d, ULT_DAMAGE_MULT)
 	_muzzle_flash(muzzle)
 	_mech.trigger_flash()
 	AudioManager.play("gun_ult", muzzle, -2.0)
@@ -208,7 +232,9 @@ func _shoot(from: Vector3, dir: Vector3, dmg_mult: float) -> void:
 	var b := Node3D.new()
 	b.set_script(BULLET_SCRIPT)
 	get_tree().current_scene.add_child(b)
-	b.launch(from, dir, dmg_mult)
+	# Bullet calls _apply_hit on us at hit time, which folds in damage_mult,
+	# combo, knockback, splash, dot. Pass only the per-shot scaling here.
+	b.launch(from, dir, self, BULLET_BASE_DAMAGE * dmg_mult)
 
 func _muzzle_flash(pos: Vector3) -> void:
 	var flash := MeshInstance3D.new()

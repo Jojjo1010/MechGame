@@ -8,6 +8,9 @@ const GARLIC_WEAPON_SCRIPT  := preload("res://scenes/mechs/weapons/GarlicWeapon.
 const BEAM_WEAPON_SCRIPT    := preload("res://scenes/mechs/weapons/BouncyBeamWeapon.gd")
 const ULT_BAR_SCRIPT        := preload("res://scenes/ui/UltBar.gd")
 const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
+const UPGRADE_PICKER_SCRIPT := preload("res://scenes/ui/UpgradePicker.gd")
+const DEATH_SCREEN_SCRIPT   := preload("res://scenes/ui/DeathScreen.gd")
+const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
@@ -45,11 +48,25 @@ var drones:   Array[Node3D] = []
 var _weapons: Array[Node3D] = []
 var _ult_bar: CanvasLayer = null
 var _repair_active: bool = false
+var _alive_mechs:   int  = 0
+var _run_ended:     bool = false
+
+# Drone-hidden hint state — shown when a mech is between camera and drone.
+const DRONE_HIDE_THRESH_PX := 70.0   # screen-space mech↔drone distance below which we count occlusion
+const DRONE_HIDE_REVEAL    := 0.4    # seconds occluded before hint appears
+const DRONE_HIDE_DISMISS   := 0.25   # seconds clear before hint fades back out
+var _drone_hint:        CanvasLayer = null
+var _drone_hidden_t:    float = 0.0
+var _drone_clear_t:     float = 0.0
+var _drone_hint_shown:  bool  = false
 
 func _ready() -> void:
+	# Persistent autoloads carry state across scene reloads — wipe per-run state.
+	get_tree().paused = false
+	RunManager.reset_run()
 	_setup_camera()
 	_setup_environment()
-	_spawn_mech_line(3)
+	_spawn_mech_line(SaveData.unlocked_mech_slots)
 	_spawn_drone()
 	wave_spawner.setup(enemies_root)
 	mech_options.setup(camera)
@@ -58,7 +75,14 @@ func _ready() -> void:
 	_spawn_xp_bar()
 	_spawn_gold_counter()
 	_spawn_ult_bar()
+	_spawn_upgrade_picker()
+	_spawn_drone_hint()
 	AudioManager.play_music("bgm_main", -12.0)
+
+func _spawn_drone_hint() -> void:
+	_drone_hint = CanvasLayer.new()
+	_drone_hint.set_script(DRONE_HINT_SCRIPT)
+	add_child(_drone_hint)
 
 func _spawn_controls_legend() -> void:
 	var legend := CanvasLayer.new()
@@ -81,6 +105,15 @@ func _spawn_ult_bar() -> void:
 	add_child(_ult_bar)
 	_ult_bar.setup(_weapons, MECH_COLORS)
 
+func _spawn_upgrade_picker() -> void:
+	var picker := CanvasLayer.new()
+	picker.set_script(UPGRADE_PICKER_SCRIPT)
+	add_child(picker)
+	var colors: Array = []
+	for i in _weapons.size():
+		colors.append(MECH_COLORS[i % MECH_COLORS.size()])
+	picker.setup(_weapons, colors)
+
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
 	if event is InputEventMouseButton and event.pressed:
@@ -97,6 +130,46 @@ func _input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	_follow_camera(delta)
 	_check_drone_proximity()
+	_check_drone_visibility(delta)
+
+# Show a hint when a mech is roughly between the camera and the drone in
+# screen-space — that's when "the drone is hard to see" actually happens, not
+# in world-space distance terms. Hysteresis on both edges keeps it from blinking
+# every frame as the drone drifts past a mech.
+func _check_drone_visibility(delta: float) -> void:
+	if _drone_hint == null or drones.is_empty() or camera == null:
+		return
+	var occluded := _is_drone_screen_occluded(drones[0])
+	if occluded:
+		_drone_hidden_t += delta
+		_drone_clear_t   = 0.0
+		if not _drone_hint_shown and _drone_hidden_t >= DRONE_HIDE_REVEAL:
+			_drone_hint_shown = true
+			_drone_hint.set_hint_visible(true)
+	else:
+		_drone_clear_t  += delta
+		_drone_hidden_t  = 0.0
+		if _drone_hint_shown and _drone_clear_t >= DRONE_HIDE_DISMISS:
+			_drone_hint_shown = false
+			_drone_hint.set_hint_visible(false)
+
+func _is_drone_screen_occluded(drone: Node3D) -> bool:
+	if not is_instance_valid(drone) or not camera.is_position_in_frustum(drone.global_position):
+		return false
+	var drone_screen := camera.unproject_position(drone.global_position)
+	var cam_pos      := camera.global_position
+	var drone_dist   := cam_pos.distance_to(drone.global_position)
+	for mech in mechs:
+		if not is_instance_valid(mech):
+			continue
+		var mech_dist := cam_pos.distance_to(mech.global_position)
+		if mech_dist >= drone_dist - 0.3:
+			continue   # mech is behind or roughly even with the drone — can't occlude
+		# Sample mech at chest height since that's where the silhouette is widest
+		var mech_screen := camera.unproject_position(mech.global_position + Vector3(0.0, 1.6, 0.0))
+		if mech_screen.distance_to(drone_screen) < DRONE_HIDE_THRESH_PX:
+			return true
+	return false
 
 # --- Camera ---
 
@@ -212,9 +285,12 @@ const MECH_COLORS := [
 	Color(0.25, 0.55, 0.95),  # blue
 	Color(0.85, 0.35, 0.20),  # orange-red
 	Color(0.72, 0.20, 0.85),  # purple
+	Color(0.20, 0.85, 0.55),  # teal
+	Color(0.95, 0.85, 0.20),  # yellow
 ]
 
 func _spawn_mech_line(count: int) -> void:
+	_alive_mechs = count
 	for i in count:
 		var mech: Node3D = MECH_SCENE.instantiate()
 		mech.position = Vector3(0.0, 0.0, float(i) * 2.5)
@@ -223,12 +299,29 @@ func _spawn_mech_line(count: int) -> void:
 			mech.leader = mechs[i - 1]
 		mechs_root.add_child(mech)
 		mech.set_color(MECH_COLORS[i % MECH_COLORS.size()])
+		mech.mech_died.connect(_on_mech_died)
 		mechs.append(mech)
 		var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT]
 		var w := Node3D.new()
 		w.set_script(weapon_scripts[i % weapon_scripts.size()])
 		mech.attach_weapon(w)
 		_weapons.append(w)
+
+func _on_mech_died() -> void:
+	_alive_mechs = maxi(0, _alive_mechs - 1)
+	if _alive_mechs == 0 and not _run_ended:
+		_trigger_run_end()
+
+func _trigger_run_end() -> void:
+	_run_ended = true
+	# Award scrap: 1 per wave + 1 per 3 gold collected this run
+	var earned := RunManager.wave + int(RunManager.gold / 3.0)
+	SaveData.add_scrap(earned)
+	# Show death screen overlay (it pauses the game itself)
+	var screen := CanvasLayer.new()
+	screen.set_script(DEATH_SCREEN_SCRIPT)
+	add_child(screen)
+	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_scrap)
 
 func _spawn_drone() -> void:
 	var drone: Node3D = DRONE_SCENE.instantiate()

@@ -80,6 +80,9 @@ func _ready() -> void:
 	_music_player = AudioStreamPlayer.new()
 	_music_player.bus = "Master"
 	add_child(_music_player)
+	# Restart music when the stream ends so the bgm loops regardless of whether
+	# the imported file has a loop point set.
+	_music_player.finished.connect(_on_music_finished)
 
 # ── Public API ────────────────────────────────────────────────────────────
 
@@ -108,6 +111,13 @@ func play_music(id: String, volume_db: float = -10.0) -> void:
 func stop_music() -> void:
 	if _music_player != null:
 		_music_player.stop()
+
+# Loop the bgm by replaying when the stream ends. stop_music() does not emit
+# `finished`, so a deliberate stop won't restart playback.
+func _on_music_finished() -> void:
+	if _music_player == null or _music_player.stream == null:
+		return
+	_music_player.play()
 
 # Loop a stream on a dedicated player parented to a node. Returns the player so
 # the caller can stop/free it (e.g. when the burn ends or drone despawns).
