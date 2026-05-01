@@ -7,7 +7,8 @@ const DAMAGE     := 20.0
 const HIT_RADIUS := 0.8
 const LIFETIME   := 3.5
 
-const BurstVFX = preload("res://scenes/vfx/BurstVFX.gd")
+const BurstVFX    = preload("res://scenes/vfx/BurstVFX.gd")
+const EnemyGridCS = preload("res://scenes/enemies/EnemyGrid.gd")
 
 var direction := Vector3.ZERO
 var _age:           float  = 0.0
@@ -72,12 +73,15 @@ func _build_mesh() -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(mi)
 
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.6, 0.1)
-	light.light_energy = 5.0 if _is_ult else 2.5
-	light.omni_range   = 4.5 if _is_ult else 3.0
-	light.shadow_enabled = false
-	add_child(light)
+	# Only crit/ult bullets get a light — passive bullets accumulate fast and
+	# every OmniLight pays cluster-build cost per frame in Forward+.
+	if _is_crit or _is_ult:
+		var light := OmniLight3D.new()
+		light.light_color = Color(1.0, 0.6, 0.1)
+		light.light_energy = 5.0 if _is_ult else 2.5
+		light.omni_range   = 4.5 if _is_ult else 3.0
+		light.shadow_enabled = false
+		add_child(light)
 
 func _process(delta: float) -> void:
 	global_position += direction * SPEED * delta
@@ -86,7 +90,10 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	# Query the spatial grid instead of scanning the whole enemies group every
+	# frame — at high enemy/bullet counts the O(B*E) tree scan dominates.
+	EnemyGridCS.ensure_fresh(get_tree())
+	for enemy in EnemyGridCS.query(global_position, HIT_RADIUS):
 		if not is_instance_valid(enemy):
 			continue
 		if enemy in _hit_enemies:
