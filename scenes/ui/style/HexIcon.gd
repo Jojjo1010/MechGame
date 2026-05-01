@@ -92,14 +92,11 @@ func _draw() -> void:
 		draw_colored_polygon(fill_pts, fill_color)
 	# Hairline accent border
 	_stroke_hex(_hex_points(size, 0.96), accent_color, border_width)
-	# Glyph mode: delegate to UpgradeGlyphs if available
-	if glyph_id != "" and ResourceLoader.exists("res://scenes/ui/UpgradeGlyphs.gd"):
-		var script: Script = load("res://scenes/ui/UpgradeGlyphs.gd")
-		if script != null and script.has_method("draw"):
-			# Glyph rect is the hex's inscribed square, slightly inset
-			var inset := minf(size.x, size.y) * 0.18
-			var grect := Rect2(inset, inset, size.x - inset * 2.0, size.y - inset * 2.0)
-			script.draw(self, grect, glyph_id, label_color)
+	# Glyph mode: delegate to UpgradeGlyphs (class_name'd, no load needed)
+	if glyph_id != "":
+		var inset := minf(size.x, size.y) * 0.18
+		var grect := Rect2(inset, inset, size.x - inset * 2.0, size.y - inset * 2.0)
+		UpgradeGlyphs.draw(self, grect, glyph_id, label_color)
 
 func _stroke_hex(pts: PackedVector2Array, color: Color, w: float) -> void:
 	var loop := PackedVector2Array(pts)

@@ -1,3 +1,4 @@
+class_name UpgradeGlyphs
 extends RefCounted
 
 # Procedural glyph renderer for each upgrade id. Drawn into a Rect2 inside an
@@ -6,8 +7,6 @@ extends RefCounted
 #
 # To swap to a real icon library later, replace the per-id branches with
 # texture draws — the call site (IconDiamond._draw) doesn't change.
-
-class_name UpgradeGlyphs
 
 # Public: draw the glyph for `upgrade_id` centered in `rect`, in `color`.
 # Returns true if a custom glyph was drawn; false means the caller should
@@ -65,7 +64,8 @@ static func _crosshair(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 
 static func _double_shot(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	# Two bullets side by side, leading to the right
-	for s in [-1.0, 1.0]:
+	var sides: Array[float] = [-1.0, 1.0]
+	for s in sides:
 		var off := Vector2(0.0, s * r * 0.45)
 		var body := Rect2(p.x - r * 0.7 + off.x, p.y - r * 0.18 + off.y, r * 1.0, r * 0.36)
 		c.draw_rect(body, col, true)
@@ -89,7 +89,8 @@ static func _explosion(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 
 static func _decay(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	# Three downward-dripping teardrops — withering / decay
-	for s in [-1.0, 0.0, 1.0]:
+	var sides: Array[float] = [-1.0, 0.0, 1.0]
+	for s in sides:
 		var ox := s * r * 0.55
 		var top := p + Vector2(ox, -r * 0.7)
 		var bot := p + Vector2(ox,  r * 0.6)
@@ -166,13 +167,13 @@ static func _zigzag_chain(c: CanvasItem, p: Vector2, r: float, col: Color) -> vo
 	# Multi-bounce chain: a wider zigzag with three peaks
 	var w := r * 1.30
 	var th := r * 0.22
-	var pts := [
+	var pts := PackedVector2Array([
 		Vector2(p.x - w,       p.y - r * 0.55),
 		Vector2(p.x - w * 0.5, p.y + r * 0.55),
 		Vector2(p.x,           p.y - r * 0.55),
 		Vector2(p.x + w * 0.5, p.y + r * 0.55),
 		Vector2(p.x + w,       p.y - r * 0.55),
-	]
+	])
 	for i in pts.size() - 1:
 		c.draw_line(pts[i], pts[i + 1], col, th)
 	# Dots at each peak so the chain reads as discrete bounces
