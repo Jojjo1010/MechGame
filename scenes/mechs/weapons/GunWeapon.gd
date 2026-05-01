@@ -23,6 +23,7 @@ var _aim_im:           ImmediateMesh = null
 var _aim_mat:          StandardMaterial3D = null
 var _gun_drone_nearby: bool    = false
 var _shot_counter:     int     = 0   # ticks per passive fire; drives Headshot crit timing
+var _spotter_toggle:   bool    = false  # alternates targeting: false = nearest to mech, true = nearest to drone
 
 func _on_setup() -> void:
 	weapon_name = "GUN"
@@ -54,7 +55,16 @@ var passive_spread_per_bullet: float = 4.0
 func _passive_fire() -> void:
 	if _aiming:
 		return   # pause passive fire while player aims
-	var nearest := _nearest_enemy()
+	# Drone-as-spotter: every other passive shot picks the nearest enemy to the drone
+	# instead of the mech, letting the player redirect half the gun's DPS.
+	_spotter_toggle = not _spotter_toggle
+	var nearest: Node3D = null
+	if _spotter_toggle:
+		var drone := get_tree().get_first_node_in_group("drones") as Node3D
+		if drone != null and is_instance_valid(drone):
+			nearest = _nearest_from(drone.global_position)
+	if nearest == null:
+		nearest = _nearest_enemy()
 	if nearest == null:
 		return
 	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
