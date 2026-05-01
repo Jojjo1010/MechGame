@@ -1,12 +1,12 @@
 class_name UpgradeGlyphs
 extends RefCounted
 
-# Procedural glyph renderer for each upgrade id. Drawn into a Rect2 inside an
-# IconDiamond hex. Glyphs are intentionally simple silhouettes (a few primitives
-# each) so they read at small sizes and through the heavy hex border.
+# Procedural glyph renderer for each upgrade id. Drawn into a Rect2 inside a
+# HexIcon. Glyphs are intentionally simple silhouettes (a few primitives each)
+# so they read at small sizes and through the heavy hex border.
 #
 # To swap to a real icon library later, replace the per-id branches with
-# texture draws — the call site (IconDiamond._draw) doesn't change.
+# texture draws — the call site (HexIcon._draw) doesn't change.
 
 # Public: draw the glyph for `upgrade_id` centered in `rect`, in `color`.
 # Returns true if a custom glyph was drawn; false means the caller should
@@ -27,7 +27,25 @@ static func draw(canvas: CanvasItem, rect: Rect2, upgrade_id: String, color: Col
 		"beam_damage":      _laser(canvas, c, r, color)
 		"beam_bounces":     _zigzag_chain(canvas, c, r, color)
 		"beam_splash":      _star_burst(canvas, c, r, color)
+		"gun_pierce":       _pierce(canvas, c, r, color)
+		"garlic_sanctuary": _sanctuary(canvas, c, r, color)
+		"beam_overcharge":  _overcharge(canvas, c, r, color)
 		_:                  return false
+	return true
+
+# ── Archetype standees ───────────────────────────────────────────────────────
+# Big procedural silhouettes for the upgrade picker's mech-centerpiece zone.
+# Each standee fills the given rect with a single-color, dramatic emblem of the
+# archetype's identity: VOLLEY = riot-shield + rifle, AEGIS = aura'd guardian,
+# ARC = lightning rod. Drawn in the archetype tint.
+static func draw_standee(canvas: CanvasItem, rect: Rect2, weapon_name: String, color: Color) -> bool:
+	var c := rect.get_center()
+	var r := minf(rect.size.x, rect.size.y) * 0.42
+	match weapon_name:
+		"GUN":    _standee_volley(canvas, c, r, color)
+		"GARLIC": _standee_aegis(canvas, c, r, color)
+		"BEAM":   _standee_arc(canvas, c, r, color)
+		_:        return false
 	return true
 
 
@@ -54,18 +72,17 @@ static func _rapid_fire(c: CanvasItem, p: Vector2, r: float, col: Color) -> void
 static func _crosshair(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	# Outer ring
 	c.draw_arc(p, r, 0.0, TAU, 32, col, r * 0.16, true)
-	# Cross
-	c.draw_line(Vector2(p.x - r * 1.15, p.y), Vector2(p.x - r * 0.45, p.y), col, r * 0.16)
-	c.draw_line(Vector2(p.x + r * 0.45, p.y), Vector2(p.x + r * 1.15, p.y), col, r * 0.16)
-	c.draw_line(Vector2(p.x, p.y - r * 1.15), Vector2(p.x, p.y - r * 0.45), col, r * 0.16)
-	c.draw_line(Vector2(p.x, p.y + r * 0.45), Vector2(p.x, p.y + r * 1.15), col, r * 0.16)
+	# Four arms — outer tip toward each cardinal, leaving a gap at the center
+	var dirs: Array[Vector2] = [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]
+	for dir: Vector2 in dirs:
+		c.draw_line(p + dir * r * 0.45, p + dir * r * 1.15, col, r * 0.16)
 	# Center dot — the kill-shot point
 	c.draw_circle(p, r * 0.18, col)
 
 static func _double_shot(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	# Two bullets side by side, leading to the right
 	var sides: Array[float] = [-1.0, 1.0]
-	for s in sides:
+	for s: float in sides:
 		var off := Vector2(0.0, s * r * 0.45)
 		var body := Rect2(p.x - r * 0.7 + off.x, p.y - r * 0.18 + off.y, r * 1.0, r * 0.36)
 		c.draw_rect(body, col, true)
@@ -90,7 +107,7 @@ static func _explosion(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 static func _decay(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	# Three downward-dripping teardrops — withering / decay
 	var sides: Array[float] = [-1.0, 0.0, 1.0]
-	for s in sides:
+	for s: float in sides:
 		var ox := s * r * 0.55
 		var top := p + Vector2(ox, -r * 0.7)
 		var bot := p + Vector2(ox,  r * 0.6)
@@ -188,3 +205,150 @@ static func _star_burst(c: CanvasItem, p: Vector2, r: float, col: Color) -> void
 		var a := float(i) / float(spokes) * TAU
 		var dir := Vector2(cos(a), sin(a))
 		c.draw_line(p + dir * r * 0.45, p + dir * r * 1.15, col, r * 0.14)
+
+# ── Rare-tier glyphs (added with rarity=2 catalog entries) ────────────────────
+
+static func _pierce(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Long arrow piercing through three stacked targets — pierce/hollow rounds.
+	var dot_x: Array[float] = [-r * 0.55, 0.0, r * 0.55]
+	for x: float in dot_x:
+		c.draw_arc(Vector2(p.x + x, p.y), r * 0.28, 0.0, TAU, 24, col, r * 0.10, true)
+	# Shaft
+	c.draw_rect(Rect2(p.x - r * 1.10, p.y - r * 0.08, r * 2.20, r * 0.16), col, true)
+	# Arrow tip
+	var tip := PackedVector2Array([
+		Vector2(p.x + r * 1.10, p.y - r * 0.32),
+		Vector2(p.x + r * 1.45, p.y),
+		Vector2(p.x + r * 1.10, p.y + r * 0.32),
+	])
+	c.draw_colored_polygon(tip, col)
+
+static func _sanctuary(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Cross-on-shield / heart pulse — sanctuary / regen
+	var pts := PackedVector2Array([
+		Vector2(p.x - r * 0.95, p.y - r * 0.95),
+		Vector2(p.x + r * 0.95, p.y - r * 0.95),
+		Vector2(p.x + r * 0.95, p.y + r * 0.20),
+		Vector2(p.x,            p.y + r * 1.15),
+		Vector2(p.x - r * 0.95, p.y + r * 0.20),
+	])
+	c.draw_colored_polygon(pts, col)
+	var inner: Color = col.darkened(0.55)
+	# Plus sign — medical / healing
+	c.draw_rect(Rect2(p.x - r * 0.14, p.y - r * 0.55, r * 0.28, r * 1.10), inner, true)
+	c.draw_rect(Rect2(p.x - r * 0.55, p.y - r * 0.14, r * 1.10, r * 0.28), inner, true)
+
+static func _overcharge(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Twin lightning bolts crossing — supercharged beam
+	var bolt_a := PackedVector2Array([
+		Vector2(p.x - r * 0.20, p.y - r * 1.15),
+		Vector2(p.x - r * 0.75, p.y + r * 0.05),
+		Vector2(p.x - r * 0.30, p.y + r * 0.05),
+		Vector2(p.x - r * 0.55, p.y + r * 1.15),
+		Vector2(p.x + r * 0.30, p.y - r * 0.10),
+		Vector2(p.x - r * 0.10, p.y - r * 0.10),
+	])
+	c.draw_colored_polygon(bolt_a, col)
+	var bolt_b := PackedVector2Array([
+		Vector2(p.x + r * 0.65, p.y - r * 1.15),
+		Vector2(p.x + r * 0.10, p.y + r * 0.05),
+		Vector2(p.x + r * 0.55, p.y + r * 0.05),
+		Vector2(p.x + r * 0.30, p.y + r * 1.15),
+		Vector2(p.x + r * 1.15, p.y - r * 0.10),
+		Vector2(p.x + r * 0.75, p.y - r * 0.10),
+	])
+	c.draw_colored_polygon(bolt_b, col.lightened(0.25))
+
+# ── Archetype standees (large mech silhouettes) ───────────────────────────────
+# Hand-tuned for the UpgradePicker card's hero zone. Each is a single-color,
+# slightly-stylized "loadout standee" — read at a glance from across the room.
+
+static func _standee_volley(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Riot-shield silhouette + rifle barrel poking out the side. Heavy, planted.
+	var shield_w := r * 1.30
+	var shield_h := r * 1.80
+	# Shield body (rounded-top tower shield)
+	var shield := PackedVector2Array([
+		Vector2(p.x - shield_w, p.y - shield_h * 0.55),
+		Vector2(p.x + shield_w, p.y - shield_h * 0.55),
+		Vector2(p.x + shield_w, p.y + shield_h * 0.30),
+		Vector2(p.x,            p.y + shield_h * 0.60),
+		Vector2(p.x - shield_w, p.y + shield_h * 0.30),
+	])
+	c.draw_colored_polygon(shield, col)
+	# Vertical seam (darker) — shield split
+	var seam: Color = col.darkened(0.45)
+	c.draw_rect(Rect2(p.x - r * 0.06, p.y - shield_h * 0.55, r * 0.12, shield_h * 0.95), seam, true)
+	# Horizontal cross-band
+	c.draw_rect(Rect2(p.x - shield_w * 0.85, p.y - r * 0.10, shield_w * 1.70, r * 0.20), seam, true)
+	# Rifle barrel — poking out the right edge, suggests sustained fire
+	var barrel: Color = col.darkened(0.20)
+	c.draw_rect(Rect2(p.x + shield_w * 0.50, p.y - r * 0.22, shield_w * 1.10, r * 0.18), barrel, true)
+	# Muzzle
+	c.draw_rect(Rect2(p.x + shield_w * 1.55, p.y - r * 0.32, r * 0.30, r * 0.38), barrel, true)
+	# "Helmet" dome over the top so it reads as a mech, not just a shield
+	c.draw_circle(Vector2(p.x, p.y - shield_h * 0.65), r * 0.55, col)
+	# Visor slit
+	c.draw_rect(Rect2(p.x - r * 0.40, p.y - shield_h * 0.65 - r * 0.05, r * 0.80, r * 0.14), seam, true)
+
+static func _standee_aegis(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Guardian: round helmet + wide chest plate + concentric aura rings emanating
+	# outward. Communicates "support / shield".
+	# Aura rings (drawn first so the body sits on top)
+	for i in 3:
+		var rr: float = r * (0.95 + 0.45 * float(i))
+		var ring_alpha: float = 0.55 - 0.15 * float(i)
+		var ring: Color = Color(col.r, col.g, col.b, ring_alpha)
+		c.draw_arc(p, rr, 0.0, TAU, 48, ring, r * 0.10, true)
+	# Body — wide trapezoidal chest
+	var body := PackedVector2Array([
+		Vector2(p.x - r * 0.95, p.y - r * 0.20),
+		Vector2(p.x + r * 0.95, p.y - r * 0.20),
+		Vector2(p.x + r * 1.20, p.y + r * 0.95),
+		Vector2(p.x - r * 1.20, p.y + r * 0.95),
+	])
+	c.draw_colored_polygon(body, col)
+	# Helmet — round dome
+	c.draw_circle(Vector2(p.x, p.y - r * 0.55), r * 0.55, col)
+	# Visor stripe
+	var seam: Color = col.darkened(0.45)
+	c.draw_rect(Rect2(p.x - r * 0.42, p.y - r * 0.60, r * 0.84, r * 0.14), seam, true)
+	# Chest emblem — simple inset cross
+	c.draw_rect(Rect2(p.x - r * 0.10, p.y + r * 0.10, r * 0.20, r * 0.65), seam, true)
+	c.draw_rect(Rect2(p.x - r * 0.40, p.y + r * 0.32, r * 0.80, r * 0.20), seam, true)
+
+static func _standee_arc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Tall, antenna-tipped lightning rod silhouette with a bolt arcing across.
+	# Communicates "chained beam / energy".
+	# Body — narrow tower
+	var body := PackedVector2Array([
+		Vector2(p.x - r * 0.65, p.y - r * 0.30),
+		Vector2(p.x + r * 0.65, p.y - r * 0.30),
+		Vector2(p.x + r * 0.85, p.y + r * 1.00),
+		Vector2(p.x - r * 0.85, p.y + r * 1.00),
+	])
+	c.draw_colored_polygon(body, col)
+	# Helmet — sharp angular head
+	var head := PackedVector2Array([
+		Vector2(p.x - r * 0.55, p.y - r * 0.40),
+		Vector2(p.x,            p.y - r * 1.00),
+		Vector2(p.x + r * 0.55, p.y - r * 0.40),
+	])
+	c.draw_colored_polygon(head, col)
+	# Antenna prong above
+	c.draw_rect(Rect2(p.x - r * 0.05, p.y - r * 1.45, r * 0.10, r * 0.50), col, true)
+	c.draw_circle(Vector2(p.x, p.y - r * 1.50), r * 0.13, col.lightened(0.25))
+	# Arcing lightning bolt across the chest — the archetype's identity beat
+	var bolt: Color = col.lightened(0.30)
+	var bolt_pts := PackedVector2Array([
+		Vector2(p.x - r * 0.55, p.y + r * 0.10),
+		Vector2(p.x - r * 0.10, p.y + r * 0.30),
+		Vector2(p.x + r * 0.05, p.y + r * 0.20),
+		Vector2(p.x + r * 0.55, p.y + r * 0.85),
+		Vector2(p.x + r * 0.20, p.y + r * 0.55),
+		Vector2(p.x + r * 0.05, p.y + r * 0.65),
+	])
+	c.draw_colored_polygon(bolt_pts, bolt)
+	# Visor stripe
+	var seam: Color = col.darkened(0.50)
+	c.draw_rect(Rect2(p.x - r * 0.32, p.y - r * 0.55, r * 0.64, r * 0.12), seam, true)

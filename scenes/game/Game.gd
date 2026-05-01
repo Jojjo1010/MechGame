@@ -103,16 +103,13 @@ func _spawn_ult_bar() -> void:
 	_ult_bar = CanvasLayer.new()
 	_ult_bar.set_script(ULT_BAR_SCRIPT)
 	add_child(_ult_bar)
-	_ult_bar.setup(_weapons, MECH_COLORS)
+	_ult_bar.setup(_weapons, _archetype_colors())
 
 func _spawn_upgrade_picker() -> void:
 	var picker := CanvasLayer.new()
 	picker.set_script(UPGRADE_PICKER_SCRIPT)
 	add_child(picker)
-	var colors: Array = []
-	for i in _weapons.size():
-		colors.append(MECH_COLORS[i % MECH_COLORS.size()])
-	picker.setup(_weapons, colors)
+	picker.setup(_weapons, _archetype_colors())
 
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
@@ -281,16 +278,21 @@ func _on_repair_completed(_mech: Node3D) -> void:
 
 # --- Spawning ---
 
-const MECH_COLORS := [
-	Color(0.25, 0.55, 0.95),  # blue
-	Color(0.85, 0.35, 0.20),  # orange-red
-	Color(0.72, 0.20, 0.85),  # purple
-	Color(0.20, 0.85, 0.55),  # teal
-	Color(0.95, 0.85, 0.20),  # yellow
-]
+# Build a parallel color array for `_weapons` using archetype tints. Lets
+# legacy UI scripts (UltBar / UpgradePicker) keep their (weapons, colors)
+# setup signature without baking in MECH_COLORS-by-line-position.
+func _archetype_colors() -> Array:
+	var colors: Array = []
+	for w in _weapons:
+		if w == null:
+			colors.append(Color.WHITE)
+		else:
+			colors.append(MechArchetypes.color_for(String(w.weapon_name)))
+	return colors
 
 func _spawn_mech_line(count: int) -> void:
 	_alive_mechs = count
+	var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT]
 	for i in count:
 		var mech: Node3D = MECH_SCENE.instantiate()
 		mech.position = Vector3(0.0, 0.0, float(i) * 2.5)
@@ -298,13 +300,13 @@ func _spawn_mech_line(count: int) -> void:
 		if i > 0:
 			mech.leader = mechs[i - 1]
 		mechs_root.add_child(mech)
-		mech.set_color(MECH_COLORS[i % MECH_COLORS.size()])
 		mech.mech_died.connect(_on_mech_died)
 		mechs.append(mech)
-		var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT]
 		var w := Node3D.new()
 		w.set_script(weapon_scripts[i % weapon_scripts.size()])
 		mech.attach_weapon(w)
+		# Color follows weapon, so each archetype reads at a glance regardless of line position.
+		mech.set_color(MechArchetypes.color_for(String(w.weapon_name)))
 		_weapons.append(w)
 
 func _on_mech_died() -> void:

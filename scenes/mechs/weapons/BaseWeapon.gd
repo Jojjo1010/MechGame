@@ -27,6 +27,10 @@ var headshot_count:         int   = 0
 var withering_per_stack:    float = 0.0
 # Bulwark (Garlic) — fraction of damage reduced for mechs inside the aura
 var bulwark_dmg_reduction:  float = 0.0
+# Hollow Rounds (Gun rare) — how many additional enemies a single bullet pierces
+var pierce_count:           int   = 0
+# Sanctuary (Garlic rare) — HP per second restored to mechs inside the aura
+var aura_regen_per_sec:     float = 0.0
 const DOT_DURATION:         float = 3.0
 const SPLASH_DAMAGE_FRAC:   float = 0.5   # splash deals 50% of base damage
 const BASE_KNOCKBACK:       float = 4.0   # small baseline kick every weapon hit applies
@@ -218,10 +222,10 @@ func _enemies_in_radius(center: Vector3, radius: float) -> Array:
 
 # ── Damage helper ─────────────────────────────────────────────────────────────
 # Applies a hit to an enemy with all configured effects: damage (× damage_mult ×
-# combo × wither), DOT, slow, knockback, splash. `hit_dir` is the incoming
-# direction; used for knockback. Splash uses SPLASH_DAMAGE_FRAC of the primary
-# damage. `is_crit` flags the hit as a Headshot for the damage-number visual.
-func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Vector3 = Vector3.ZERO, is_crit: bool = false) -> void:
+# wither), DOT, slow, knockback, splash. `hit_dir` is the incoming direction;
+# used for knockback. Splash uses SPLASH_DAMAGE_FRAC of the primary damage.
+# `is_crit` flags the hit as a Headshot for the damage-number visual.
+func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Vector3 = Vector3.ZERO, is_crit: bool = false, bonus_knockback: float = 0.0) -> void:
 	if enemy == null or not is_instance_valid(enemy):
 		return
 	var wither_mult := 1.0
@@ -239,7 +243,7 @@ func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Ve
 		var dir := hit_dir
 		dir.y = 0.0
 		if dir.length_squared() > 0.001:
-			enemy.apply_knockback(dir.normalized() * (BASE_KNOCKBACK + knockback_force))
+			enemy.apply_knockback(dir.normalized() * (BASE_KNOCKBACK + knockback_force + bonus_knockback))
 	if splash_radius > 0.0:
 		var splash_dmg := dmg * SPLASH_DAMAGE_FRAC
 		for other in _enemies_in_radius(hit_pos, splash_radius):

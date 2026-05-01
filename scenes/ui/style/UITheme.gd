@@ -1,41 +1,43 @@
 extends RefCounted
 class_name UITheme
 
-# Single source of truth for the OW-inspired UI style. Reference all colors,
-# fonts, and spacings from here so the visual language stays consistent.
+# Single source of truth for the UI style. Reference all colors, fonts, and
+# spacings from here so the visual language stays consistent.
 #
-# Reference frames pulled from Overwatch screenshots:
-# - Hairline cyan borders (1.5–2 px, never thick fills)
-# - Uppercase white headings with letter-spacing
-# - Per-mech "team color" used as accent on that mech's UI
-# - Cyan = interactive / hover, Yellow = selected / action
+# Inspired by Marathon's UI:
+# - True-black backgrounds with hairline lime borders
+# - Solid-color fills for selected state (lime panel + black text)
+# - Lime = interactive / live UI, Hot pink = selected / action
+# - Per-mech "team color" overrides the lime accent on that mech's UI
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 
-const COLOR_DEEP        := Color("#04101a")    # darkest panel back
-const COLOR_PANEL       := Color("#0a1c2a")    # panel fill
-const COLOR_PANEL_ALPHA := Color(0.04, 0.10, 0.16, 0.86)   # over-world panel
+const COLOR_DEEP        := Color("#0a0a0a")               # darkest panel back
+const COLOR_PANEL       := Color("#101410")               # panel fill
+const COLOR_PANEL_ALPHA := Color(0.04, 0.05, 0.04, 0.72)  # over-world panel — see-through enough that the world reads through
 
-const COLOR_ACCENT_CYAN   := Color("#2dd9ff")  # interactive / hover / "live" UI
-const COLOR_ACCENT_YELLOW := Color("#ffce32")  # selected / action / "this is the answer"
-const COLOR_ACCENT_RED    := Color("#ff4d5a")  # danger / repair urgency
+const COLOR_ACCENT_LIME := Color("#b0e632")  # interactive / hover / "live" UI
+const COLOR_ACCENT_HOT  := Color("#ff2d6e")  # selected / action / "this is the answer"
+const COLOR_ACCENT_WARN := Color("#ff5a3c")  # danger / repair urgency
 
-const COLOR_BORDER_HAIR   := Color("#4a8aa0")  # 1.5 px hairline borders
-const COLOR_BORDER_BRIGHT := Color("#7ec8e0")  # active hairline
+const COLOR_BORDER_HAIR   := Color("#5a7a1a")  # 1.5 px hairline borders (dim lime)
+const COLOR_BORDER_BRIGHT := Color("#c8ff58")  # active hairline (bright lime)
 
 const COLOR_TEXT_PRIMARY   := Color("#ffffff")
-const COLOR_TEXT_SECONDARY := Color("#b0c4d4")
-const COLOR_TEXT_MUTED     := Color("#5e7888")
-const COLOR_TEXT_BLACK     := Color("#0a0a0a")  # for use on bright (yellow) chips
+const COLOR_TEXT_SECONDARY := Color("#a8b39c")
+const COLOR_TEXT_MUTED     := Color("#5e6858")
+const COLOR_TEXT_INVERSE   := Color("#0a0a0a")  # for use on bright (lime) fills
 
 # ── Typography ───────────────────────────────────────────────────────────────
+# Type scale also runs on the 8 px ladder, with 4 allowed as a half-step for
+# the smallest "micro" tier where 8 px would be illegible.
 
-const FONT_HEADING_XL := 72   # screen-dominant titles ("ATTACK")
-const FONT_HEADING_L  := 44   # subject titles ("TRACER", "LEVEL UP")
-const FONT_HEADING_M  := 28   # section titles
-const FONT_LABEL_CAPS := 20   # uppercase action labels ("ULTIMATE", "OFFENSE")
-const FONT_BODY       := 18   # body text
-const FONT_MICRO_CAPS := 13   # uppercase micro labels ("MATCH TIME")
+const FONT_HEADING_XL := 72   # screen-dominant titles ("ATTACK")        — 9×8
+const FONT_HEADING_L  := 48   # subject titles ("TRACER", "LEVEL UP")     — 6×8
+const FONT_HEADING_M  := 32   # section titles                            — 4×8
+const FONT_LABEL_CAPS := 24   # uppercase action labels ("ULTIMATE")      — 3×8
+const FONT_BODY       := 16   # body text                                 — 2×8
+const FONT_MICRO_CAPS := 12   # uppercase micro labels ("MATCH TIME")     — 1.5×8 (half-step)
 
 # Letter-spacing constants (Godot uses per-character pixel offset in theme).
 # Positive values widen; negative tightens.
@@ -60,11 +62,13 @@ const HAIR_DIVIDER_H    := 1.5
 const CARD_SLANT_DEG    := 12.0
 
 # ── Spacing ──────────────────────────────────────────────────────────────────
+# 8 px design system: every spacing token is a multiple of 8, with 4 as a
+# half-step for fine-grained adjustments. Component sizes follow the same scale.
 
-const PAD_S := 6
-const PAD_M := 12
-const PAD_L := 22
-const PAD_XL := 36
+const PAD_S := 8
+const PAD_M := 16
+const PAD_L := 24
+const PAD_XL := 32
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

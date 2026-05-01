@@ -25,6 +25,8 @@ const ALL := [
 	 rarity=0, target="GUN"},
 	{id="gun_splash",     title="Explosive Rounds", description="Gun: bullets do AOE on impact",
 	 rarity=1, target="GUN", unique=true},
+	{id="gun_pierce",     title="Hollow Rounds",  description="Gun: bullets pierce 2 extra enemies",
+	 rarity=2, target="GUN", unique=true},
 	# ── Garlic ────────────────────────────────────────────────────────────────
 	{id="garlic_wither",   title="Withering",     description="Garlic: pulses on the same enemy stack damage (max 3 wither stacks)",
 	 rarity=0, target="GARLIC"},
@@ -34,6 +36,8 @@ const ALL := [
 	 rarity=0, target="GARLIC"},
 	{id="garlic_slow",     title="Crippling Spores", description="Garlic: aura slows enemies 70% for 2.5s",
 	 rarity=1, target="GARLIC", unique=true},
+	{id="garlic_sanctuary", title="Sanctuary",     description="Garlic: mechs inside the aura regen 2 HP/s",
+	 rarity=2, target="GARLIC", unique=true},
 	# ── Beam ──────────────────────────────────────────────────────────────────
 	{id="beam_firerate",   title="Rapid Beam",    description="Beam: +25% fire rate",
 	 rarity=0, target="BEAM"},
@@ -43,6 +47,8 @@ const ALL := [
 	 rarity=0, target="BEAM"},
 	{id="beam_splash",     title="Static Discharge", description="Beam: bounces splash damage to nearby enemies",
 	 rarity=1, target="BEAM", unique=true},
+	{id="beam_overcharge", title="Overcharge",     description="Beam: +50% damage, +2 bounces, +30% range",
+	 rarity=2, target="BEAM", unique=true},
 ]
 
 # Hades-style weighted pick: draw `count` distinct upgrades from `pool`, with
@@ -118,6 +124,9 @@ static func apply(upgrade: Dictionary, weapons: Array) -> void:
 		"beam_damage":      _scale(weapons, "BEAM",   "damage_mult",    1.20)
 		"beam_bounces":     _add  (weapons, "BEAM",   "projectile_count_bonus", 1)
 		"beam_splash":      _set_prop(weapons, "BEAM",   "splash_radius", 2.0)
+		"gun_pierce":       _set_prop(weapons, "GUN",    "pierce_count", 2)
+		"garlic_sanctuary": _set_prop(weapons, "GARLIC", "aura_regen_per_sec", 2.0)
+		"beam_overcharge":  _beam_overcharge(weapons)
 		_:                  push_warning("Unknown upgrade id: %s" % upgrade.id)
 
 static func _scale(weapons: Array, target: String, prop: String, factor: float) -> void:
@@ -134,6 +143,13 @@ static func _set_prop(weapons: Array, target: String, prop: String, value: Varia
 	for w in weapons:
 		if w != null and w.weapon_name == target:
 			w.set(prop, value)
+
+static func _beam_overcharge(weapons: Array) -> void:
+	for w in weapons:
+		if w != null and w.weapon_name == "BEAM":
+			w.damage_mult *= 1.5
+			w.projectile_count_bonus += 2
+			w.range_mult *= 1.3
 
 static func _garlic_slow(weapons: Array) -> void:
 	for w in weapons:

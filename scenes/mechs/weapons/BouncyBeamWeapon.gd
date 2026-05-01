@@ -23,7 +23,9 @@ func _passive_fire() -> void:
 func _fire_ult() -> void:
 	_fire_beam(BOUNCES_ULT + projectile_count_bonus, ULT_DAMAGE_MULT)
 
-func _fire_beam(max_bounces: int, damage_mult: float) -> void:
+# `mode_scale` is the ult-vs-passive firepower factor (1.0 passive, ULT_DAMAGE_MULT
+# for the ult). The global upgrade multiplier is applied separately by _apply_hit.
+func _fire_beam(max_bounces: int, mode_scale: float) -> void:
 	var first := _nearest_enemy()
 	if first == null:
 		return
@@ -39,7 +41,7 @@ func _fire_beam(max_bounces: int, damage_mult: float) -> void:
 		var hit_pos := current.global_position + Vector3(0.0, 0.8, 0.0)
 		points.append(hit_pos)
 		var dir := current.global_position - prev_pos
-		_apply_hit(current, DAMAGE_PER_BOUNCE * damage_mult, current.global_position, dir)
+		_apply_hit(current, DAMAGE_PER_BOUNCE * mode_scale, current.global_position, dir)
 		hit.append(current)
 		prev_pos = current.global_position
 		current = _find_bounce_target(current.global_position, hit)

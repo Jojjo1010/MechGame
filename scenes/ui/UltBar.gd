@@ -21,25 +21,29 @@ const BAR_H               := 14.0
 
 # Per-upgrade-id 2-letter inventory icon. Falls back to first 2 chars of title.
 const UPGRADE_ICONS := {
-	"gun_firerate":    "FR",
-	"gun_headshot":    "HS",
-	"gun_projectile":  "+1",
-	"gun_splash":      "EX",
-	"garlic_wither":   "WT",
-	"garlic_bulwark":  "BW",
-	"garlic_range":    "RN",
-	"garlic_slow":     "SL",
-	"beam_firerate":   "FR",
-	"beam_damage":     "DM",
-	"beam_bounces":    "+1",
-	"beam_splash":     "ZP",
+	"gun_firerate":     "FR",
+	"gun_headshot":     "HS",
+	"gun_projectile":   "+1",
+	"gun_splash":       "EX",
+	"gun_pierce":       "PI",
+	"garlic_wither":    "WT",
+	"garlic_bulwark":   "BW",
+	"garlic_range":     "RN",
+	"garlic_slow":      "SL",
+	"garlic_sanctuary": "SA",
+	"beam_firerate":    "FR",
+	"beam_damage":      "DM",
+	"beam_bounces":     "+1",
+	"beam_splash":      "ZP",
+	"beam_overcharge":  "OV",
 }
 
-# Rarity → border color (matches UpgradePicker)
+# Rarity → border color. Common = dim lime (frame), uncommon = bright lime
+# (live), rare = hot pink (call-out). Lime stays the live signal across the UI.
 const RARITY_BORDERS := [
-	Color(0.78, 0.78, 0.85),
-	Color(0.45, 0.75, 1.00),
-	Color(1.00, 0.80, 0.20),
+	UITheme.COLOR_BORDER_HAIR,
+	UITheme.COLOR_BORDER_BRIGHT,
+	UITheme.COLOR_ACCENT_HOT,
 ]
 
 # Per-slot runtime state
@@ -48,6 +52,7 @@ var _bar_bgs:       Array[ColorRect] = []
 var _ready_labels:  Array[Label]     = []
 var _flash_tweens:  Array            = []
 var _weapon_names:  Array[String]    = []
+var _slot_colors:   Array[Color]     = []   # archetype tint per slot, used by charge fill
 var _upgrade_grids: Array[HBoxContainer] = []
 var _upgrade_states: Array[Dictionary]   = []   # per slot: { id → { count, badge, count_lbl } }
 
@@ -90,9 +95,10 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	bg_panel.size     = Vector2(SLOT_W, SLOT_H)
 	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.06, 0.05, 0.10, 0.90)
-	bg_style.set_corner_radius_all(10)
-	bg_style.set_border_width_all(2)
+	bg_style.bg_color = UITheme.COLOR_PANEL_ALPHA
+	bg_style.set_corner_radius_all(16)
+	bg_style.set_border_width_all(int(UITheme.PANEL_BORDER_W))
+	# Border picks up the archetype tint at 0.55 alpha — the slot's mech-identity cue.
 	bg_style.border_color = Color(color.r, color.g, color.b, 0.55)
 	bg_panel.add_theme_stylebox_override("panel", bg_style)
 	root.add_child(bg_panel)
@@ -106,15 +112,18 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var header_x := x + 14.0 + PORTRAIT_SIZE + 14.0
 
 	var name_lbl := Label.new()
-	name_lbl.text = weapon.weapon_name
+	# Archetype name (VOLLEY / AEGIS / ARC) — display label tinted with the
+	# mech color. Matching against upgrades still uses weapon_name (data).
+	name_lbl.text = MechArchetypes.name_for(String(weapon.weapon_name))
 	name_lbl.add_theme_font_size_override("font_size", NAME_FONT)
-	name_lbl.add_theme_color_override("font_color",         Color(1.0, 1.0, 1.0, 0.95))
-	name_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	name_lbl.add_theme_constant_override("outline_size",    2)
+	name_lbl.add_theme_color_override("font_color",         color)
+	name_lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
+	name_lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_HEADING)
 	name_lbl.position     = Vector2(header_x, 14.0)
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(name_lbl)
 	_weapon_names.append(weapon.weapon_name)
+	_slot_colors.append(color)
 
 	var chip := _make_key_chip("E")
 	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, 14.0)
@@ -125,7 +134,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + 14.0) - KEY_CHIP_SIZE - 14.0 - 14.0
 
 	var bar_bg := ColorRect.new()
-	bar_bg.color    = Color(0.14, 0.11, 0.20, 1.0)
+	bar_bg.color    = UITheme.COLOR_DEEP
 	bar_bg.size     = Vector2(bar_w, BAR_H)
 	bar_bg.position = Vector2(header_x, bar_y)
 	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -133,7 +142,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_bar_bgs.append(bar_bg)
 
 	var fill := ColorRect.new()
-	fill.color    = Color(0.3, 0.7, 1.0, 0.9)
+	fill.color    = color   # archetype-tinted; lerps to bright lime as it fills
 	fill.size     = Vector2(0.0, BAR_H)
 	fill.position = Vector2(header_x, bar_y)
 	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -141,12 +150,11 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_charge_fills.append(fill)
 
 	var ready_lbl := Label.new()
-	ready_lbl.text = "READY!"
+	ready_lbl.text = "READY"
 	ready_lbl.add_theme_font_size_override("font_size", 14)
-	ready_lbl.add_theme_color_override("font_color",        Color(0.35, 1.0, 0.45, 1.0))
-	ready_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.4, 0.0, 0.9))
-	ready_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	ready_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	ready_lbl.add_theme_color_override("font_color",        UITheme.COLOR_ACCENT_HOT)
+	ready_lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
+	ready_lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_BODY)
 	ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ready_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	ready_lbl.size      = Vector2(bar_w, BAR_H)
@@ -180,7 +188,7 @@ func _build_portrait(color: Color) -> Control:
 	style.bg_color = color
 	style.set_corner_radius_all(8)
 	style.set_border_width_all(int(PORTRAIT_BORDER))
-	style.border_color = Color(0.05, 0.04, 0.08, 1.0)
+	style.border_color = UITheme.COLOR_DEEP
 	panel.add_theme_stylebox_override("panel", style)
 
 	# Stylized "robot face" via positioned ColorRects, drawn in the panel's
@@ -190,7 +198,7 @@ func _build_portrait(color: Color) -> Control:
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(inner)
 
-	var dark := Color(0.05, 0.04, 0.08, 1.0)
+	var dark := UITheme.COLOR_DEEP
 	var s := PORTRAIT_SIZE - PORTRAIT_BORDER * 2.0
 
 	# Eyes
@@ -228,9 +236,16 @@ func _make_key_chip(text: String) -> PanelContainer:
 	chip.size = Vector2(KEY_CHIP_SIZE, KEY_CHIP_SIZE)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	# Lime-bordered key cap matching ControlsLegend's _make_key_cap — dark fill,
+	# hairline lime border with a thicker bottom edge for the beveled-key feel.
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.90, 0.88, 0.80, 1.0)
-	style.set_corner_radius_all(5)
+	style.bg_color = UITheme.COLOR_PANEL_ALPHA
+	style.border_color = UITheme.COLOR_ACCENT_LIME
+	style.border_width_left   = 2
+	style.border_width_right  = 2
+	style.border_width_top    = 2
+	style.border_width_bottom = 4
+	style.set_corner_radius_all(4)
 	style.content_margin_left   = 0.0
 	style.content_margin_right  = 0.0
 	style.content_margin_top    = 0.0
@@ -240,7 +255,7 @@ func _make_key_chip(text: String) -> PanelContainer:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_font_size_override("font_size", 22)
-	lbl.add_theme_color_override("font_color", Color(0.08, 0.06, 0.04, 1.0))
+	lbl.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_LIME)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -268,7 +283,9 @@ func _on_charge(idx: int, value: float) -> void:
 		bar_bg.visible    = true
 		ready_lbl.visible = false
 		fill.size.x       = bar_w * value
-		fill.color        = Color(0.3, 0.7, 1.0, 0.9).lerp(Color(1.0, 0.88, 0.1, 0.9), value)
+		# Charge fill lerps from archetype tint → bright lime as the ult tops off.
+		var slot_color: Color = _slot_colors[idx] if idx < _slot_colors.size() else UITheme.COLOR_ACCENT_LIME
+		fill.color = slot_color.lerp(UITheme.COLOR_BORDER_BRIGHT, value)
 		if _flash_tweens[idx] != null:
 			_flash_tweens[idx].kill()
 			_flash_tweens[idx] = null
@@ -320,7 +337,7 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	panel.custom_minimum_size = Vector2(UPGRADE_SLOT_SIZE, UPGRADE_SLOT_SIZE)
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.13, 0.10, 0.20, 1.0)
+	style.bg_color = UITheme.COLOR_PANEL_ALPHA
 	style.set_corner_radius_all(6)
 	style.set_border_width_all(2)
 	style.border_color = border
@@ -335,9 +352,9 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	var code: String = UPGRADE_ICONS[id] if UPGRADE_ICONS.has(id) else _fallback_code(String(upgrade.title))
 	icon.text = code
 	icon.add_theme_font_size_override("font_size", 14)
-	icon.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
-	icon.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	icon.add_theme_constant_override("outline_size", 2)
+	icon.add_theme_color_override("font_color", UITheme.COLOR_TEXT_PRIMARY)
+	icon.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
+	icon.add_theme_constant_override("outline_size", UITheme.OUTLINE_BODY)
 	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -348,9 +365,9 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	var count_lbl := Label.new()
 	count_lbl.text = "1"
 	count_lbl.add_theme_font_size_override("font_size", 12)
-	count_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.4, 1.0))
-	count_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	count_lbl.add_theme_constant_override("outline_size", 2)
+	count_lbl.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_LIME)
+	count_lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
+	count_lbl.add_theme_constant_override("outline_size", UITheme.OUTLINE_BODY)
 	count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_TOP
 	count_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)

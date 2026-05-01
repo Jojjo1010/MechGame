@@ -30,49 +30,47 @@ const MAIN_PANEL_PAD := 28
 
 const N_OFFERS := 3   # how many boons offered per level-up
 
-# ── Dark palette (matches MechOptionsPanel / ControlsLegend) ──────────────────
-const BACKDROP    := Color(0.04, 0.03, 0.02, 0.85)
-const PANEL_BG    := Color(0.05, 0.04, 0.09, 0.90)
-const PANEL_BG_2  := Color(0.10, 0.08, 0.16, 0.95)
-const TEXT_LIGHT  := Color(0.96, 0.92, 0.85, 0.96)
-const TEXT_DIM    := Color(0.70, 0.65, 0.60, 0.85)
-const BORDER_DIM  := Color(0.40, 0.34, 0.28, 0.85)
-const BORDER_DARK := Color(0.05, 0.04, 0.08, 1.0)
-const SELECTED_GOLD := Color(0.95, 0.78, 0.20, 1.0)
+# ── Palette aliases (single source of truth: UITheme) ────────────────────────
+const BACKDROP      := Color(0.0, 0.0, 0.0, 0.78)
+const PANEL_BG      := UITheme.COLOR_PANEL_ALPHA
+const PANEL_BG_2    := UITheme.COLOR_PANEL
+const TEXT_LIGHT    := UITheme.COLOR_TEXT_PRIMARY
+const TEXT_DIM      := UITheme.COLOR_TEXT_SECONDARY
+const BORDER_DIM    := UITheme.COLOR_BORDER_HAIR
+const BORDER_DARK   := UITheme.COLOR_OUTLINE
+# "Rolled target" call-out — hot pink keeps the new selected/committed language
+# consistent with the rest of the UI.
+const SELECTED_GOLD := UITheme.COLOR_ACCENT_HOT
 
-# ── Rarity styling ────────────────────────────────────────────────────────────
+# ── Rarity styling — lime stays "live", hot pink reserved for rare ───────────
 const RARITY_DATA := [
-	{name = "COMMON",   fill = Color(0.62, 0.42, 0.52, 1.0)},
-	{name = "UNCOMMON", fill = Color(0.40, 0.60, 0.55, 1.0)},
-	{name = "RARE",     fill = Color(0.85, 0.65, 0.20, 1.0)},
+	{name = "COMMON",   fill = UITheme.COLOR_BORDER_HAIR},
+	{name = "UNCOMMON", fill = UITheme.COLOR_ACCENT_LIME},
+	{name = "RARE",     fill = UITheme.COLOR_ACCENT_HOT},
 ]
 const RARITY_TEXT := [
-	Color(0.78, 0.70, 0.78, 1.0),
-	Color(0.55, 0.85, 0.78, 1.0),
-	Color(1.00, 0.85, 0.40, 1.0),
+	UITheme.COLOR_TEXT_MUTED,
+	UITheme.COLOR_BORDER_BRIGHT,
+	UITheme.COLOR_ACCENT_HOT,
 ]
-
-# ── Per-target accent (used as card border + subtitle color) ──────────────────
-const TARGET_TINTS := {
-	"GUN":    Color(1.00, 0.55, 0.30, 1.0),
-	"GARLIC": Color(0.50, 1.00, 0.50, 1.0),
-	"BEAM":   Color(0.45, 0.80, 1.00, 1.0),
-}
 
 # ── Icon code map (shared with UltBar) ────────────────────────────────────────
 const UPGRADE_ICONS := {
-	"gun_firerate":    "FR",
-	"gun_headshot":    "HS",
-	"gun_projectile":  "+1",
-	"gun_splash":      "EX",
-	"garlic_wither":   "WT",
-	"garlic_bulwark":  "BW",
-	"garlic_range":    "RN",
-	"garlic_slow":     "SL",
-	"beam_firerate":   "FR",
-	"beam_damage":     "DM",
-	"beam_bounces":    "+1",
-	"beam_splash":     "ZP",
+	"gun_firerate":     "FR",
+	"gun_headshot":     "HS",
+	"gun_projectile":   "+1",
+	"gun_splash":       "EX",
+	"gun_pierce":       "PI",
+	"garlic_wither":    "WT",
+	"garlic_bulwark":   "BW",
+	"garlic_range":     "RN",
+	"garlic_slow":      "SL",
+	"garlic_sanctuary": "SA",
+	"beam_firerate":    "FR",
+	"beam_damage":      "DM",
+	"beam_bounces":     "+1",
+	"beam_splash":      "ZP",
+	"beam_overcharge":  "OV",
 }
 
 # ── Runtime state ─────────────────────────────────────────────────────────────
@@ -392,7 +390,7 @@ func _refresh_portrait_styles() -> void:
 
 func _refresh_subtitle() -> void:
 	var target_str: String = _targets[_rolled_target_idx]
-	var color: Color = TARGET_TINTS.get(target_str, TEXT_LIGHT)
+	var color: Color = MechArchetypes.color_for(target_str)
 	_subtitle_label.text = "Upgrade %s" % target_str
 	_subtitle_label.add_theme_color_override("font_color", color)
 
@@ -476,7 +474,7 @@ func _make_card(upgrade: Dictionary) -> Control:
 	var rarity_idx: int = clampi(int(upgrade.get("rarity", 0)), 0, RARITY_DATA.size() - 1)
 	var rarity: Dictionary = RARITY_DATA[rarity_idx]
 	var target_str: String = String(upgrade.target)
-	var target_color: Color = TARGET_TINTS.get(target_str, TEXT_LIGHT)
+	var target_color: Color = MechArchetypes.color_for(target_str)
 
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = PANEL_BG_2

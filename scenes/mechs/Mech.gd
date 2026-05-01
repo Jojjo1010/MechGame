@@ -164,11 +164,14 @@ func _process(delta: float) -> void:
 const BULWARK_BUBBLE_RADIUS := 1.7
 const GARLIC_AURA_RADIUS    := 4.5   # mirrors GarlicWeapon.AURA_RADIUS — checked here to avoid a circular load
 
-# Each frame, scan all Garlic mechs with the Bulwark upgrade and take the
-# strongest reduction whose aura covers self. Drives both the take_damage
-# multiplier and the green protection bubble.
-func _update_bulwark_status(_delta: float) -> void:
-	var best := 0.0
+# Each frame, scan all Garlic mechs and take the strongest bulwark reduction
+# AND the strongest Sanctuary regen whose aura covers self. Drives:
+#   • the take_damage multiplier
+#   • the green protection bubble
+#   • passive HP regen tick (Sanctuary rare upgrade)
+func _update_bulwark_status(delta: float) -> void:
+	var best_bulwark := 0.0
+	var best_regen   := 0.0
 	for m in get_tree().get_nodes_in_group("mechs"):
 		if m == null or not is_instance_valid(m):
 			continue
@@ -178,14 +181,25 @@ func _update_bulwark_status(_delta: float) -> void:
 		if String(w.get("weapon_name")) != "GARLIC":
 			continue
 		var br: Variant = w.get("bulwark_dmg_reduction")
-		if br == null or float(br) <= 0.0:
+		var rg: Variant = w.get("aura_regen_per_sec")
+		var br_f := float(br) if br != null else 0.0
+		var rg_f := float(rg) if rg != null else 0.0
+		if br_f <= 0.0 and rg_f <= 0.0:
 			continue
 		var rm: Variant = w.get("range_mult")
 		var radius: float = GARLIC_AURA_RADIUS * (float(rm) if rm != null else 1.0)
 		if m.global_position.distance_to(global_position) <= radius:
-			best = maxf(best, float(br))
-	_bulwark_reduction = best
+			best_bulwark = maxf(best_bulwark, br_f)
+			best_regen   = maxf(best_regen,   rg_f)
+	_bulwark_reduction = best_bulwark
 	_update_bulwark_visual()
+	# Sanctuary tick: regen up to max_health while aura covers us. Burning still
+	# applies on top — at threshold the regen partly offsets burn DPS.
+	if best_regen > 0.0 and is_alive and health < max_health:
+		health = minf(max_health, health + best_regen * delta)
+		health_changed.emit(health, max_health)
+		if is_instance_valid(_health_bar):
+			_health_bar.set_fraction(health / max_health)
 
 func _update_bulwark_visual() -> void:
 	if _bulwark_reduction <= 0.0:

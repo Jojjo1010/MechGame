@@ -7,8 +7,14 @@ const ULT_COOLDOWN    := 10.0
 const ULT_COUNT       := 9
 const ULT_SPREAD_DEG  := 50.0
 const ULT_DAMAGE_MULT := 3.0
+const ULT_KNOCKBACK   := 22.0     # per-bullet impulse on top of base — enemies should fly
 const CONE_LEN        := 9.0
 const BULLET_BASE_DAMAGE := 20.0   # mirrors Bullet.gd DAMAGE
+# Enemy hit-centers sit at y≈0.8; muzzle is at y=2 (mech chest). The ult uses a
+# flat aim direction from the cursor, so without sloping the bullets they fly
+# straight over every enemy. Aim toward the enemy plane at cone-end distance so
+# bullets descend and actually connect.
+const ENEMY_HIT_Y     := 0.8
 
 var _aiming:           bool    = false
 var _aim_dir:          Vector3 = Vector3.ZERO
@@ -112,12 +118,16 @@ func _fire_ult_wave(dir: Vector3) -> void:
 	if _mech == null or not is_instance_valid(_mech) or not _mech.is_alive:
 		return
 	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
-	var ult_count := ULT_COUNT + projectile_count_bonus
+	# Slope from chest-height muzzle down to the enemy hit-plane at cone end.
+	# Rotating around UP keeps that downward slope on every spread bullet.
+	var aim_target := _mech.global_position + dir * CONE_LEN + Vector3(0.0, ENEMY_HIT_Y, 0.0)
+	var base_dir   := (aim_target - muzzle).normalized()
+	var ult_count  := ULT_COUNT + projectile_count_bonus
 	for i in ult_count:
 		var t   := (float(i) / float(maxi(ult_count - 1, 1))) - 0.5
-		var d := dir.rotated(Vector3.UP, t * deg_to_rad(ULT_SPREAD_DEG))
-		_shoot(muzzle, d, ULT_DAMAGE_MULT)
-	_muzzle_flash(muzzle)
+		var d := base_dir.rotated(Vector3.UP, t * deg_to_rad(ULT_SPREAD_DEG))
+		_shoot_ult(muzzle, d)
+	_ult_muzzle_flash(muzzle, dir)
 	_mech.trigger_flash()
 	AudioManager.play("gun_ult", muzzle, -2.0)
 
@@ -251,7 +261,13 @@ func _shoot(from: Vector3, dir: Vector3, dmg_mult: float, is_crit: bool = false)
 	get_tree().current_scene.add_child(b)
 	# Bullet calls _apply_hit on us at hit time, which folds in damage_mult,
 	# combo, knockback, splash, dot, wither. Pass per-shot scaling + crit flag.
-	b.launch(from, dir, self, BULLET_BASE_DAMAGE * dmg_mult, is_crit)
+	b.launch(from, dir, self, BULLET_BASE_DAMAGE * dmg_mult, is_crit, false, 0.0, pierce_count)
+
+func _shoot_ult(from: Vector3, dir: Vector3) -> void:
+	var b := Node3D.new()
+	b.set_script(BULLET_SCRIPT)
+	get_tree().current_scene.add_child(b)
+	b.launch(from, dir, self, BULLET_BASE_DAMAGE * ULT_DAMAGE_MULT, false, true, ULT_KNOCKBACK, pierce_count)
 
 func _muzzle_flash(pos: Vector3, is_crit: bool = false) -> void:
 	var flash := MeshInstance3D.new()
@@ -289,3 +305,37 @@ func _muzzle_flash(pos: Vector3, is_crit: bool = false) -> void:
 	var tw := flash.create_tween()
 	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18 if is_crit else 0.10)
 	tw.tween_callback(flash.queue_free)
+
+# Big ult-fire flash. Fat orange ball at the muzzle plus a forward smear cone
+# of BurstVFX particles so the cone of fire reads as a single decisive blast,
+# not nine independent passive shots.
+func _ult_muzzle_flash(pos: Vector3, dir: Vector3) -> void:
+	var flash := MeshInstance3D.new()
+	var sph   := SphereMesh.new()
+	sph.radius = 1.10
+	sph.height = 2.20
+	flash.mesh = sph
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color               = Color(1.0, 0.85, 0.3)
+	mat.emission_enabled           = true
+	mat.emission                   = Color(1.0, 0.6, 0.1)
+	mat.emission_energy_multiplier = 18.0
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash.material_override = mat
+	get_tree().current_scene.add_child(flash)
+	flash.global_position = pos
+	var light := OmniLight3D.new()
+	light.light_color    = Color(1.0, 0.7, 0.2)
+	light.light_energy   = 28.0
+	light.omni_range     = 12.0
+	light.shadow_enabled = false
+	flash.add_child(light)
+	var tw := flash.create_tween()
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.28)
+	tw.parallel().tween_property(flash, "scale", Vector3.ONE * 1.45, 0.28)
+	tw.tween_callback(flash.queue_free)
+	# Forward burst — sells the "blast in this direction" read.
+	const BurstVFX = preload("res://scenes/vfx/BurstVFX.gd")
+	var burst_pos := pos + dir * 1.2
+	BurstVFX.spawn(burst_pos, Color(1.0, 0.7, 0.2), 36, 9.0, 0.55, get_tree().current_scene)

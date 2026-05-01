@@ -27,5 +27,4 @@ SaveData="*res://src/SaveData.gd"
 [display]
 
 window/size/mode=2
-window/stretch/aspect="expand"
 window/size/mode.editor=0

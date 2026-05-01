@@ -7,11 +7,11 @@ class_name SlantCard
 # State machine: idle → hover (cyan glow strengthens) → selected (yellow tail
 # below + scale punch). Children render normally on top of the slanted backdrop.
 
-@export var accent_color:    Color = UITheme.COLOR_ACCENT_CYAN
+@export var accent_color:    Color = UITheme.COLOR_ACCENT_LIME
 @export var fill_color:      Color = UITheme.COLOR_PANEL_ALPHA
 @export var slant_deg:       float = UITheme.CARD_SLANT_DEG
 @export var border_width:    float = UITheme.PANEL_BORDER_W
-@export var selected_color:  Color = UITheme.COLOR_ACCENT_YELLOW
+@export var selected_color:  Color = UITheme.COLOR_ACCENT_HOT
 
 var _hover:    bool = false
 var _selected: bool = false
@@ -30,10 +30,14 @@ func _on_hover_out() -> void:
 	queue_redraw()
 
 func set_selected(on: bool) -> void:
+	if _selected == on:
+		return
 	_selected = on
 	queue_redraw()
 
 func set_accent(color: Color) -> void:
+	if accent_color == color:
+		return
 	accent_color = color
 	queue_redraw()
 

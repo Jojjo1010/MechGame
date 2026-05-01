@@ -14,9 +14,9 @@ const DAZE_DURATION   := 1.0   # seconds daze lasts
 const DAZE_SPEED_MULT := 0.5   # fraction of normal speed while dazed
 const KNOCKBACK_FORCE := 18.0  # impulse strength away from the enemy
 
-const DASH_FORCE     := 32.0
-const DASH_DURATION  := 0.18    # seconds drone is i-framed and locked to dash velocity
-const DASH_COOLDOWN  := 1.5
+const DASH_FORCE     := 40.0    # ~2.85× walk speed — clearly faster, not a teleport
+const DASH_DURATION  := 0.16    # short burst
+const DASH_COOLDOWN  := 0.7     # snappy — re-dash twice per second-ish, not rationed
 const DASH_HIT_RADIUS    := 1.6     # enemies inside this get punched through
 const DASH_DAMAGE        := 18.0    # damage per enemy passed through (one hit per dash)
 const DASH_KNOCKBACK     := 24.0    # impulse magnitude on enemies passed through
@@ -36,6 +36,7 @@ var _dash_cooldown:  float = 0.0
 var _dash_ghost_t:   float = 0.0
 var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
 var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
+var _space_was_down: bool = false              # edge-detect for polled Space key
 
 func _ready() -> void:
 	add_to_group("drones")
@@ -125,6 +126,16 @@ func _process(delta: float) -> void:
 	if not player_controlled:
 		return
 
+	# Poll Space for dash on the rising edge. Polling instead of using the _input
+	# event callback avoids cases where the engine/keyboard drops the Space-down
+	# event when WASD is already held — the original symptom was "dash only fires
+	# when standing still". Input.is_key_pressed reads the live key state, so it
+	# works regardless of event-stream quirks.
+	var space_now := Input.is_key_pressed(KEY_SPACE)
+	if space_now and not _space_was_down and not repair_locked:
+		_try_dash()
+	_space_was_down = space_now
+
 	if repair_locked:
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta   # keep marching with mechs, block player input
 		return
@@ -133,10 +144,22 @@ func _process(delta: float) -> void:
 	if _dash_cooldown > 0.0:
 		_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
 
-	# Dashing: i-frames (skip enemy contact), locked velocity, full mech-line march.
-	# Each enemy along the path is punched through once: damage + radial shove.
+	# Dashing: i-frames (skip enemy contact) + steerable. Re-read WASD each
+	# frame so the player can curve mid-dash; if no input, we keep the last dash
+	# direction. Each enemy along the path is punched through once.
 	if _dash_active > 0.0:
 		_dash_active = maxf(0.0, _dash_active - delta)
+		var cam_fwd2   := _cam_forward()
+		var cam_right2 := _cam_right()
+		var dash_input := Vector3.ZERO
+		if Input.is_key_pressed(KEY_W): dash_input += cam_fwd2
+		if Input.is_key_pressed(KEY_S): dash_input -= cam_fwd2
+		if Input.is_key_pressed(KEY_A): dash_input -= cam_right2
+		if Input.is_key_pressed(KEY_D): dash_input += cam_right2
+		if dash_input.length_squared() > 0.01:
+			dash_input.y = 0.0
+			_dash_dir = dash_input.normalized()
+		velocity = _dash_dir * DASH_FORCE
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta
 		position += velocity * delta
 		position.y = HEIGHT
@@ -192,13 +215,6 @@ func _process(delta: float) -> void:
 		rotation = rotation.lerp(tilt_target, 8.0 * delta)
 	else:
 		rotation = rotation.lerp(Vector3.ZERO, 8.0 * delta)
-
-func _input(event: InputEvent) -> void:
-	if not player_controlled or repair_locked:
-		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_SPACE:
-			_try_dash()
 
 func _try_dash() -> void:
 	if _dash_cooldown > 0.0 or _dash_active > 0.0:

@@ -1,13 +1,20 @@
 extends CanvasLayer
 
-const BAR_H      := 30.0   # unused for height now, kept for reference
-const PAD_SIDE   := 5.0
-const PAD_VERT   := 22.0   # generous top/bottom breathing room
-const FONT_SIZE  := 32
+# Top-of-screen XP/level readout. Static informational UI — no interaction
+# states. Dark strip with a full-height lime fill that grows L→R with XP.
+# Level label sits centered with a strong outline so it remains legible across
+# both filled (lime) and unfilled (dark) portions of the bar. A level-up
+# triggers a brief brighten on the fill + label flash; that's data-driven
+# animation, not an interaction state.
 
-var _bar_bg:   ColorRect
-var _bar_fg:   ColorRect
-var _lv_label: Label
+const TOTAL_H    := 64.0                    # 8 × 8 — strip height
+const PAD_SIDE   := UITheme.PAD_S           # 8 — small inset so the fill almost spans the screen
+const LABEL_FONT := UITheme.FONT_HEADING_M  # 32
+
+var _bar_bg:      ColorRect
+var _fill_live:   ColorRect    # full-height lime fill — grows L→R with XP
+var _lv_label:    Label
+var _flash_tween: Tween
 
 func _ready() -> void:
 	layer = 5
@@ -22,52 +29,42 @@ func _build() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var total_h := BAR_H + PAD_VERT * 2   # = 62 px
-
-	# Semi-transparent background strip
+	# Dark panel — sits behind the fill so unfilled XP still reads as a strip.
 	_bar_bg = ColorRect.new()
-	_bar_bg.color        = Color(0.06, 0.04, 0.12, 0.70)
+	_bar_bg.color = UITheme.COLOR_PANEL_ALPHA
 	_bar_bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_bar_bg.offset_left   = 0.0
 	_bar_bg.offset_top    = 0.0
-	_bar_bg.offset_right  = 0.0
-	_bar_bg.offset_bottom = total_h
+	_bar_bg.offset_bottom = TOTAL_H
 	_bar_bg.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_bar_bg)
 
-	# Purple fill — full height of the background, only inset on left/right
-	_bar_fg = ColorRect.new()
-	_bar_fg.color        = Color(0.70, 0.25, 1.00, 0.82)
-	_bar_fg.position     = Vector2(PAD_SIDE, 0.0)
-	_bar_fg.size         = Vector2(0.0, total_h)
-	_bar_fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_bar_fg)
+	# Full-height lime fill — width tracks XP fraction. Sits inside the side
+	# padding so a sliver of dark frames the meter at either end.
+	_fill_live = ColorRect.new()
+	_fill_live.color    = UITheme.COLOR_ACCENT_LIME
+	_fill_live.position = Vector2(PAD_SIDE, 0.0)
+	_fill_live.size     = Vector2(0.0, TOTAL_H)
+	_fill_live.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_fill_live)
 
-	# Level label — vertically centred across the full strip height
+	# Level label — white with strong outline so it stays legible whether the
+	# fill is behind it or not.
 	_lv_label = Label.new()
 	_lv_label.text = "LV 1"
-	_lv_label.add_theme_font_size_override("font_size", FONT_SIZE)
-	_lv_label.add_theme_color_override("font_color",          Color(1.0, 1.0, 1.0, 1.0))
-	_lv_label.add_theme_color_override("font_outline_color",  Color(0.0, 0.0, 0.0, 1.0))
-	_lv_label.add_theme_constant_override("outline_size",     3)
-	_lv_label.add_theme_color_override("font_shadow_color",   Color(0.0, 0.0, 0.0, 0.90))
-	_lv_label.add_theme_constant_override("shadow_offset_x",  2)
-	_lv_label.add_theme_constant_override("shadow_offset_y",  2)
+	UITheme.style_label_caps(_lv_label, LABEL_FONT, UITheme.COLOR_TEXT_PRIMARY)
 	_lv_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_lv_label.offset_left          = 0.0
 	_lv_label.offset_top           = 0.0
-	_lv_label.offset_right         = 0.0
-	_lv_label.offset_bottom        = total_h
+	_lv_label.offset_bottom        = TOTAL_H
 	_lv_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_lv_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_lv_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lv_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_lv_label)
 
 func _refresh(current: int, needed: int) -> void:
 	await get_tree().process_frame
-	var full_w: float = _bar_bg.size.x - PAD_SIDE * 2
+	var full_w: float = _bar_bg.size.x - PAD_SIDE * 2.0
 	var t: float = clampf(float(current) / float(needed), 0.0, 1.0)
-	_bar_fg.size.x = full_w * t
+	_fill_live.size.x = full_w * t
 
 func _on_xp_changed(current: int, needed: int) -> void:
 	_refresh(current, needed)
@@ -75,6 +72,12 @@ func _on_xp_changed(current: int, needed: int) -> void:
 func _on_level_up(new_level: int) -> void:
 	_lv_label.text = "LV %d" % new_level
 	_refresh(0, RunManager.xp_to_next)
-	var tw := create_tween()
-	tw.tween_property(_bar_fg, "color", Color(0.95, 0.80, 1.0, 0.95), 0.10)
-	tw.tween_property(_bar_fg, "color", Color(0.70, 0.25, 1.00, 0.82), 0.30)
+	# Data-driven flash: fill briefly jumps to bright lime, label tints lime,
+	# both ease back. Not an interaction state — fires on the level_up signal.
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_fill_live, "color", UITheme.COLOR_BORDER_BRIGHT, 0.08)
+	_flash_tween.parallel().tween_property(_lv_label, "theme_override_colors/font_color", UITheme.COLOR_ACCENT_LIME, 0.08)
+	_flash_tween.tween_property(_fill_live, "color", UITheme.COLOR_ACCENT_LIME, 0.30)
+	_flash_tween.parallel().tween_property(_lv_label, "theme_override_colors/font_color", UITheme.COLOR_TEXT_PRIMARY, 0.30)

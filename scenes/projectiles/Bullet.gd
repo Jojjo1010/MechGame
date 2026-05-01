@@ -14,13 +14,22 @@ var _age:           float  = 0.0
 var _base_damage:   float  = DAMAGE   # pre-multiplied by ult-vs-passive factor
 var _source_weapon: Node3D = null
 var _is_crit:       bool   = false
+var _is_ult:        bool   = false   # ult bullets render bigger and knock back harder
+var _bonus_knockback: float = 0.0
+# Hollow Rounds: extra enemies the bullet can pass through before despawning.
+# Each pierce keeps the bullet flying; _hit_enemies prevents re-hitting the same target.
+var _pierce_remaining: int = 0
+var _hit_enemies: Array = []
 
-func launch(from: Vector3, dir: Vector3, source_weapon: Node3D, base_damage: float = DAMAGE, is_crit: bool = false) -> void:
+func launch(from: Vector3, dir: Vector3, source_weapon: Node3D, base_damage: float = DAMAGE, is_crit: bool = false, is_ult: bool = false, bonus_knockback: float = 0.0, pierce: int = 0) -> void:
 	global_position = from
 	direction = dir.normalized()
 	_source_weapon = source_weapon
 	_base_damage = base_damage
 	_is_crit = is_crit
+	_is_ult  = is_ult
+	_bonus_knockback = bonus_knockback
+	_pierce_remaining = pierce
 	_build_mesh()
 
 func _build_mesh() -> void:
@@ -38,6 +47,15 @@ func _build_mesh() -> void:
 		mat.emission_energy_multiplier = 8.0
 		sph.radius = 0.30
 		sph.height = 0.60
+	elif _is_ult:
+		# Ult bullets read as fat orange tracer rounds — bigger silhouette so a
+		# sweeping cone of them is visible at a glance.
+		mat.albedo_color = Color(1.0, 0.85, 0.4)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.5, 0.05)
+		mat.emission_energy_multiplier = 6.0
+		sph.radius = 0.34
+		sph.height = 0.68
 	else:
 		mat.albedo_color = Color(1.0, 0.9, 0.2)
 		mat.emission_enabled = true
@@ -49,8 +67,8 @@ func _build_mesh() -> void:
 
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.6, 0.1)
-	light.light_energy = 2.5
-	light.omni_range = 3.0
+	light.light_energy = 5.0 if _is_ult else 2.5
+	light.omni_range   = 4.5 if _is_ult else 3.0
 	light.shadow_enabled = false
 	add_child(light)
 
@@ -64,18 +82,27 @@ func _process(delta: float) -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(enemy):
 			continue
+		if enemy in _hit_enemies:
+			continue
 		var dist := global_position.distance_to(enemy.global_position + Vector3(0.0, 0.8, 0.0))
 		if dist < HIT_RADIUS:
+			_hit_enemies.append(enemy)
 			if is_instance_valid(_source_weapon):
-				_source_weapon._apply_hit(enemy, _base_damage, global_position, direction, _is_crit)
+				_source_weapon._apply_hit(enemy, _base_damage, global_position, direction, _is_crit, _bonus_knockback)
 			else:
 				enemy.take_damage(_base_damage, _is_crit)
 			if _is_crit:
 				BurstVFX.spawn(global_position, Color(1.0, 0.95, 0.3), 28, 9.0, 0.55, get_tree().current_scene)
 				AudioManager.play("bullet_impact", global_position, -2.0, 1.6)
+			elif _is_ult:
+				BurstVFX.spawn(global_position, Color(1.0, 0.7, 0.2), 22, 7.5, 0.45, get_tree().current_scene)
+				AudioManager.play("bullet_impact", global_position, -4.0, randf_range(0.85, 1.0))
 			else:
 				BurstVFX.spawn(global_position, Color(1.0, 0.65, 0.1), 14, 5.0, 0.35, get_tree().current_scene)
 				AudioManager.play("bullet_impact", global_position, -8.0, randf_range(0.92, 1.1))
 			hit_enemy.emit()
+			if _pierce_remaining > 0:
+				_pierce_remaining -= 1
+				return
 			queue_free()
 			return
