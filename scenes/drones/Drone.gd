@@ -1,5 +1,7 @@
 extends Node3D
 
+const BurstVFX = preload("res://scenes/vfx/BurstVFX.gd")
+
 const SPEED        := 14.0
 const HEIGHT       := 2.2
 const TILT_AMOUNT  := 0.15
@@ -15,6 +17,10 @@ const KNOCKBACK_FORCE := 18.0  # impulse strength away from the enemy
 const DASH_FORCE     := 32.0
 const DASH_DURATION  := 0.18    # seconds drone is i-framed and locked to dash velocity
 const DASH_COOLDOWN  := 1.5
+const DASH_HIT_RADIUS    := 1.6     # enemies inside this get punched through
+const DASH_DAMAGE        := 18.0    # damage per enemy passed through (one hit per dash)
+const DASH_KNOCKBACK     := 24.0    # impulse magnitude on enemies passed through
+const DASH_GHOST_PERIOD  := 0.035   # seconds between afterimage spawns during dash
 
 var player_controlled: bool = false
 var repair_locked: bool = false
@@ -27,6 +33,9 @@ var _blob_shadow: MeshInstance3D = null
 var _blob_shadow_mat: StandardMaterial3D = null
 var _dash_active:    float = 0.0
 var _dash_cooldown:  float = 0.0
+var _dash_ghost_t:   float = 0.0
+var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
+var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
 
 func _ready() -> void:
 	add_to_group("drones")
@@ -124,7 +133,8 @@ func _process(delta: float) -> void:
 	if _dash_cooldown > 0.0:
 		_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
 
-	# Dashing: i-frames (skip enemy contact), locked velocity, full mech-line march
+	# Dashing: i-frames (skip enemy contact), locked velocity, full mech-line march.
+	# Each enemy along the path is punched through once: damage + radial shove.
 	if _dash_active > 0.0:
 		_dash_active = maxf(0.0, _dash_active - delta)
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta
@@ -132,6 +142,11 @@ func _process(delta: float) -> void:
 		position.y = HEIGHT
 		_resolve_mech_collisions()
 		_clamp_to_viewport()
+		_dash_ghost_t -= delta
+		if _dash_ghost_t <= 0.0:
+			_dash_ghost_t = DASH_GHOST_PERIOD
+			_spawn_dash_ghost()
+		_dash_punch_through()
 		return
 
 	# Check for enemy contacts → daze
@@ -205,12 +220,70 @@ func _try_dash() -> void:
 	velocity = input.normalized() * DASH_FORCE
 	_dash_active   = DASH_DURATION
 	_dash_cooldown = DASH_COOLDOWN
+	_dash_dir      = input.normalized()
+	_dash_ghost_t  = 0.0
+	_dash_hit_set.clear()
 	# Dash breaks daze
 	if _daze_timer > 0.0:
 		_daze_timer = 0.0
 		_set_daze_visual(false)
-	# Quick buzzy whoosh — reusing the daze sound at a higher pitch
-	AudioManager.play("drone_daze", global_position, -10.0, 1.7)
+	# Punchy dash whoosh — reused daze sound at a high pitch + boom layer
+	AudioManager.play("drone_daze", global_position, -4.0, 1.85)
+	AudioManager.play("garlic_pulse", global_position, -8.0, 0.85)
+	# Cyan flash burst at takeoff so the player sees the dash trigger
+	BurstVFX.spawn(global_position, Color(0.4, 0.85, 1.0), 22, 7.0, 0.45, get_tree().current_scene)
+
+# Find any enemies within DASH_HIT_RADIUS of the drone, deal damage + knockback
+# once per enemy per dash, and spawn a hit-through VFX.
+func _dash_punch_through() -> void:
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == null or not is_instance_valid(e):
+			continue
+		var enemy_id := e.get_instance_id()
+		if _dash_hit_set.has(enemy_id):
+			continue
+		var diff: Vector3 = e.global_position - global_position
+		diff.y = 0.0
+		if diff.length() > DASH_HIT_RADIUS:
+			continue
+		_dash_hit_set[enemy_id] = true
+		if e.has_method("take_damage"):
+			e.take_damage(DASH_DAMAGE, true)   # render as crit so the number shouts
+		if e.has_method("apply_knockback"):
+			# Shove enemies along dash direction (so they spray forward, readable)
+			var dir := _dash_dir
+			if dir.length_squared() < 0.01:
+				dir = diff.normalized()
+			e.apply_knockback(dir.normalized() * DASH_KNOCKBACK)
+		AudioManager.play("bullet_impact", e.global_position, -4.0, 1.4)
+		BurstVFX.spawn(e.global_position + Vector3(0.0, 1.0, 0.0),
+			Color(0.5, 0.9, 1.0), 18, 6.5, 0.4, get_tree().current_scene)
+
+# Spawn a faded copy of the drone's body meshes at the current pose. Each ghost
+# fades out over 0.28s, creating a continuous afterimage trail behind the dash.
+func _spawn_dash_ghost() -> void:
+	for mi in _mesh_instances:
+		if not is_instance_valid(mi) or mi.mesh == null:
+			continue
+		var ghost := MeshInstance3D.new()
+		ghost.mesh = mi.mesh
+		ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var gmat := StandardMaterial3D.new()
+		gmat.albedo_color              = Color(0.45, 0.85, 1.0, 0.55)
+		gmat.emission_enabled          = true
+		gmat.emission                  = Color(0.3, 0.7, 1.0)
+		gmat.emission_energy_multiplier = 4.0
+		gmat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+		gmat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+		gmat.no_depth_test             = true
+		gmat.render_priority           = 7
+		ghost.material_override = gmat
+		get_tree().current_scene.add_child(ghost)
+		ghost.global_transform = mi.global_transform
+		var tw := ghost.create_tween()
+		tw.tween_property(gmat, "albedo_color:a", 0.0, 0.28).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(ghost, "scale", ghost.scale * 0.6, 0.28).set_ease(Tween.EASE_OUT)
+		tw.tween_callback(ghost.queue_free)
 
 func _check_enemy_contact() -> void:
 	if _daze_timer > 0.0:
