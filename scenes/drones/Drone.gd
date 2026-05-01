@@ -40,7 +40,7 @@ var _dash_iframe:    float = 0.0              # daze-immune window — covers da
 var _dash_ghost_t:   float = 0.0
 var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
 var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
-var _space_was_down: bool = false              # edge-detect for polled Space key
+var _shift_was_down: bool = false              # edge-detect for polled Shift key
 
 func _ready() -> void:
 	add_to_group("drones")
@@ -130,15 +130,15 @@ func _process(delta: float) -> void:
 	if not player_controlled:
 		return
 
-	# Poll Space for dash on the rising edge. Polling instead of using the _input
-	# event callback avoids cases where the engine/keyboard drops the Space-down
+	# Poll Shift for dash on the rising edge. Polling instead of using the _input
+	# event callback avoids cases where the engine/keyboard drops the Shift-down
 	# event when WASD is already held — the original symptom was "dash only fires
 	# when standing still". Input.is_key_pressed reads the live key state, so it
 	# works regardless of event-stream quirks.
-	var space_now := Input.is_key_pressed(KEY_SPACE)
-	if space_now and not _space_was_down and not repair_locked:
+	var shift_now := Input.is_key_pressed(KEY_SHIFT)
+	if shift_now and not _shift_was_down and not repair_locked:
 		_try_dash()
-	_space_was_down = space_now
+	_shift_was_down = shift_now
 
 	if repair_locked:
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta   # keep marching with mechs, block player input

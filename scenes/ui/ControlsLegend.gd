@@ -1,13 +1,13 @@
 extends CanvasLayer
 
 # Left-side controls list. Each row uses a chip that mimics the actual input —
-# real keyboard caps for letter keys, a 4-key WASD cluster, a wide spacebar,
+# real keyboard caps for letter keys, a 4-key WASD cluster, a wide shift key,
 # and a procedural mouse icon for scroll. Reads at a glance: players see the
 # input, not an abstract label.
 
 const ENTRIES := [
 	{key = "WASD",   icon = "move",   action = "Move drone"},
-	{key = "Space",  icon = "dash",   action = "Dash"},
+	{key = "Shift",  icon = "dash",   action = "Dash"},
 	{key = "E",      icon = "ult",    action = "Mech ultimate"},
 	{key = "F",      icon = "repair", action = "Repair"},
 	{key = "Q",      icon = "camera", action = "Camera angle"},
@@ -20,8 +20,8 @@ const ROW_GAP    := 32   # between rows — 4× ROW_SEP creates clear grouping
 const ROW_SEP    := 8    # chip ↔ icon ↔ label inside a row
 const KEY_SIZE   := 40.0 # 5×8
 const KEY_GAP    := 4    # half-step
-const SPACE_W    := 128.0
-const SPACE_H    := 32.0
+const SHIFT_W    := 80.0
+const SHIFT_H    := 40.0
 const MOUSE_W    := 32.0
 const MOUSE_H    := 48.0
 const ICON_SIZE  := 32.0
@@ -29,7 +29,7 @@ const ICON_SIZE  := 32.0
 const TITLE_FONT  := UITheme.FONT_HEADING_M  # 32
 const ACTION_FONT := UITheme.FONT_LABEL_CAPS # 24
 const KEY_FONT    := UITheme.FONT_LABEL_CAPS # 24 — same tier as action labels
-const SPACE_FONT  := UITheme.FONT_BODY       # 16
+const SHIFT_FONT  := UITheme.FONT_BODY       # 16
 const PANEL_PAD_H := 24.0
 const PANEL_PAD_V := 32.0   # generous top/bottom breathing room
 const PANEL_CORNER_R := 16   # rounded — gentle, not pill-shaped
@@ -98,7 +98,7 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 func _make_chip(key_text: String) -> Control:
 	match key_text:
 		"WASD":   return _make_wasd_cluster()
-		"Space":  return _make_key_cap("SPACE", SPACE_W, SPACE_H, SPACE_FONT)
+		"Shift":  return _make_key_cap("SHIFT", SHIFT_W, SHIFT_H, SHIFT_FONT)
 		"Scroll": return _make_mouse_chip()
 		_:        return _make_key_cap(key_text, KEY_SIZE, KEY_SIZE, KEY_FONT)
 
