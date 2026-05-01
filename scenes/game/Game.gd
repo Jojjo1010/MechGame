@@ -17,7 +17,7 @@ const CAM_SMOOTH  := 4.0
 const CAM_SIZE    := 14.0
 
 const CAM_ZOOM_MIN  := 6.0
-const CAM_ZOOM_MAX  := 24.0
+const CAM_ZOOM_MAX  := 32.0
 const CAM_ZOOM_STEP := 1.5
 
 # Available isometric views (toggle with Q)

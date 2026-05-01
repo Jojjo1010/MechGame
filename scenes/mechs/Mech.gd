@@ -328,10 +328,13 @@ func start_repair_grace(seconds: float) -> void:
 	_repair_grace_timer = maxf(_repair_grace_timer, seconds)
 
 func repair() -> void:
-	health = max_health
+	# Partial heal — repair clamps the mech up to 50 HP (not full restore), so
+	# stacking repairs through a long wave still costs you something.
+	var target: float = minf(50.0, max_health)
+	health = maxf(health, target)
 	health_changed.emit(health, max_health)
 	if is_instance_valid(_health_bar):
-		_health_bar.set_fraction(1.0)
+		_health_bar.set_fraction(health / max_health)
 	stop_burning()
 	AudioManager.play("mech_repair_complete", global_position, -2.0)
 
