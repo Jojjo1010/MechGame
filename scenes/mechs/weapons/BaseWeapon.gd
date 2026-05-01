@@ -56,8 +56,8 @@ func setup(mech: Node3D) -> void:
 	_fire_timer = randf_range(0.0, _effective_fire_period())
 	_build_ready_visuals()
 	_on_setup()
-	# Start 60 % into the first cooldown so first ult arrives sooner
-	_cooldown_timer = get_ult_cooldown() * 0.6
+	# Ults start fully charged so the player can act immediately on wave 1.
+	_cooldown_timer = 0.0
 	charge_changed.emit(get_charge())
 
 func _on_setup() -> void:
@@ -139,6 +139,10 @@ func notify_drone_nearby(nearby: bool) -> void:
 # player to commit with left click. Game.gd polls this to show the click hint.
 func is_aim_mode() -> bool:
 	return false
+
+# Action text shown after "LEFT CLICK to" in the hint. Empty = no hint.
+func aim_action_text() -> String:
+	return ""
 
 # ── Ready / consumed hooks ────────────────────────────────────────────────────
 

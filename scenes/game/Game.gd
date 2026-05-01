@@ -267,14 +267,19 @@ func _check_drone_proximity() -> void:
 
 	# Notify each mech's weapon whether the drone is nearby
 	var any_aiming := false
+	var action_text := ""
 	for mech in mechs:
 		var w := mech.get("weapon") as Node3D
 		if w != null and w.has_method("notify_drone_nearby"):
 			w.notify_drone_nearby(mech == closest)
 		if w != null and w.has_method("is_aim_mode") and w.is_aim_mode():
 			any_aiming = true
+			if w.has_method("aim_action_text"):
+				action_text = w.aim_action_text()
 	if _left_click_hint != null:
 		_left_click_hint.set_hint_visible(any_aiming)
+		if any_aiming:
+			_left_click_hint.set_action_text(action_text)
 
 func _on_mech_repair_pressed(_mech: Node3D) -> void:
 	_try_start_repair()

@@ -12,8 +12,9 @@ extends CanvasLayer
 # dark navy panels, cream chips, light text. The rolled target's portrait is
 # highlighted gold; others dim. Equipped slots are shown above the boons.
 
-const Upgrades     := preload("res://src/Upgrades.gd")
-const ICON_DIAMOND := preload("res://scenes/ui/IconDiamond.gd")
+const Upgrades       := preload("res://src/Upgrades.gd")
+const ICON_DIAMOND   := preload("res://scenes/ui/IconDiamond.gd")
+const MechPortraitCS := preload("res://scenes/ui/MechPortrait.gd")
 
 # ── Sizing ────────────────────────────────────────────────────────────────────
 const PORTRAIT_SIZE := 84.0
@@ -54,25 +55,6 @@ const RARITY_TEXT := [
 	UITheme.COLOR_ACCENT_HOT,
 ]
 
-# ── Icon code map (shared with UltBar) ────────────────────────────────────────
-const UPGRADE_ICONS := {
-	"gun_firerate":     "FR",
-	"gun_headshot":     "HS",
-	"gun_projectile":   "+1",
-	"gun_splash":       "EX",
-	"gun_pierce":       "PI",
-	"garlic_wither":    "WT",
-	"garlic_bulwark":   "BW",
-	"garlic_range":     "RN",
-	"garlic_slow":      "SL",
-	"garlic_sanctuary": "SA",
-	"beam_firerate":    "FR",
-	"beam_damage":      "DM",
-	"beam_bounces":     "+1",
-	"beam_splash":      "ZP",
-	"beam_overcharge":  "OV",
-}
-
 # ── Runtime state ─────────────────────────────────────────────────────────────
 var _weapons: Array = []
 var _targets: Array = []
@@ -85,8 +67,7 @@ var _pending: int = 0
 var _root: Control
 var _backdrop: ColorRect
 var _portraits_hbox: HBoxContainer
-var _portrait_buttons: Array[Button] = []
-var _portrait_styles:  Array[StyleBoxFlat] = []
+var _portrait_nodes: Array[PanelContainer] = []   # MechPortrait instances
 var _portrait_full_labels: Array[Label] = []
 var _subtitle_label:  Label = null
 var _equipped_label:  Label = null
@@ -103,8 +84,7 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 
 	_targets       = []
 	_target_colors = []
-	_portrait_buttons.clear()
-	_portrait_styles.clear()
+	_portrait_nodes.clear()
 	_portrait_full_labels.clear()
 	for i in weapons.size():
 		_targets.append(weapons[i].weapon_name)
@@ -210,39 +190,20 @@ func _build() -> void:
 	pv.add_child(_cards_row)
 
 # ── Portrait construction ─────────────────────────────────────────────────────
+# Same MechPortrait as the bottom UltBar — neutral panel + baked mech texture.
+# Highlight border is driven by `set_highlight` during the slot-machine roll.
 func _build_portrait(idx: int) -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 4)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
-	btn.text = ""
-	# Hades: portraits are display-only (the system picks the target).
-	btn.disabled = true
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
 	var color: Color = _target_colors[idx]
 	var target_str: String = _targets[idx]
 
-	var st := StyleBoxFlat.new()
-	st.bg_color = color
-	st.set_corner_radius_all(8)
-	st.set_border_width_all(2)
-	st.border_color = BORDER_DIM
-	btn.add_theme_stylebox_override("normal",   st)
-	btn.add_theme_stylebox_override("disabled", st)
-	_portrait_styles.append(st)
-
-	# Inner content rendered on top of the button
-	var inner := Control.new()
-	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(inner)
-	_draw_face_icon(inner, PORTRAIT_SIZE)
-
-	v.add_child(btn)
-	_portrait_buttons.append(btn)
+	var portrait: PanelContainer = MechPortraitCS.new()
+	portrait.call("setup", color, PORTRAIT_SIZE, 2.0)
+	v.add_child(portrait)
+	_portrait_nodes.append(portrait)
 
 	var lbl := Label.new()
 	lbl.text = target_str
@@ -260,26 +221,6 @@ func _build_portrait(idx: int) -> Control:
 	v.add_child(full)
 	_portrait_full_labels.append(full)
 	return v
-
-func _draw_face_icon(inner: Control, size: float) -> void:
-	var dark := BORDER_DARK
-	var s := size - 6.0
-	var eye_w := s * 0.18
-	var eye_h := s * 0.13
-	var eye_y := s * 0.32
-	_add_rect(inner, Vector2(s * 0.20, eye_y), Vector2(eye_w, eye_h), dark)
-	_add_rect(inner, Vector2(s * 0.62, eye_y), Vector2(eye_w, eye_h), dark)
-	var mouth_w := s * 0.55
-	var mouth_h := s * 0.10
-	_add_rect(inner, Vector2((s - mouth_w) * 0.5, s * 0.62), Vector2(mouth_w, mouth_h), dark)
-
-func _add_rect(parent: Control, pos: Vector2, sz: Vector2, color: Color) -> void:
-	var r := ColorRect.new()
-	r.color = color
-	r.size = sz
-	r.position = pos
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(r)
 
 # ── Show / hide ───────────────────────────────────────────────────────────────
 func _on_level_up(_new_level: int) -> void:
@@ -337,7 +278,7 @@ func _animate_roll(final_idx: int) -> void:
 	const TICK_COUNT  := 18
 	const TICK_FAST   := 0.06
 	const TICK_SLOW   := 0.22
-	var n := _portrait_buttons.size()
+	var n := _portrait_nodes.size()
 	if n == 0:
 		return
 	# Build the sequence: cycle freely for most ticks, then walk the last few
@@ -370,30 +311,24 @@ func _animate_roll(final_idx: int) -> void:
 		await get_tree().create_timer(delay).timeout
 
 func _highlight_only(idx: int, final: bool = false) -> void:
-	for i in _portrait_buttons.size():
-		var st := _portrait_styles[i]
-		var btn := _portrait_buttons[i]
+	for i in _portrait_nodes.size():
+		var p := _portrait_nodes[i]
 		if i == idx:
-			st.border_color = SELECTED_GOLD
-			st.set_border_width_all(6 if final else 4)
-			btn.modulate = Color.WHITE
+			p.call("set_highlight", SELECTED_GOLD, 6 if final else 4)
+			p.modulate = Color.WHITE
 		else:
-			st.border_color = BORDER_DIM
-			st.set_border_width_all(2)
-			btn.modulate = Color(1.0, 1.0, 1.0, 0.40)
+			p.call("set_highlight", BORDER_DIM, 2)
+			p.modulate = Color(1.0, 1.0, 1.0, 0.40)
 
 func _refresh_portrait_styles() -> void:
-	for i in _portrait_buttons.size():
-		var st := _portrait_styles[i]
-		var btn := _portrait_buttons[i]
+	for i in _portrait_nodes.size():
+		var p := _portrait_nodes[i]
 		if i == _rolled_target_idx:
-			st.border_color = SELECTED_GOLD
-			st.set_border_width_all(5)
-			btn.modulate = Color.WHITE
+			p.call("set_highlight", SELECTED_GOLD, 5)
+			p.modulate = Color.WHITE
 		else:
-			st.border_color = BORDER_DIM
-			st.set_border_width_all(2)
-			btn.modulate = Color(1.0, 1.0, 1.0, 0.40)
+			p.call("set_highlight", BORDER_DIM, 2)
+			p.modulate = Color(1.0, 1.0, 1.0, 0.40)
 
 func _refresh_subtitle() -> void:
 	var target_str: String = _targets[_rolled_target_idx]
@@ -440,8 +375,7 @@ func _make_slot_column(owned: Dictionary, owned_ids: Array, slot_i: int) -> Cont
 		var stacks := int(owned[id])
 		var upgrade := _find_upgrade_by_id(id)
 		var rarity_idx: int = clampi(int(upgrade.get("rarity", 0)), 0, RARITY_DATA.size() - 1)
-		var code: String = UPGRADE_ICONS.get(id, _fallback_code(String(upgrade.get("title", ""))))
-		hex.set_icon(code, RARITY_DATA[rarity_idx].fill as Color, 36)
+		hex.set_glyph(id, RARITY_DATA[rarity_idx].fill as Color)
 		hex.border_color = BORDER_DARK
 		hex.queue_redraw()
 		var stack_text: String = ""
@@ -535,8 +469,7 @@ func _make_card(upgrade: Dictionary) -> Control:
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_row.add_child(icon)
 	var id := String(upgrade.id)
-	var code: String = UPGRADE_ICONS.get(id, _fallback_code(String(upgrade.title)))
-	icon.set_icon(code, rarity.fill as Color, 42)
+	icon.set_glyph(id, rarity.fill as Color)
 	icon.border_color = BORDER_DARK
 	icon.queue_redraw()
 
@@ -588,12 +521,6 @@ func _make_card(upgrade: Dictionary) -> Control:
 	btn.pressed.connect(_on_card_pressed.bind(upgrade))
 	btn.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
 	return btn
-
-func _fallback_code(title: String) -> String:
-	var t := title.strip_edges()
-	if t.is_empty():
-		return "?"
-	return t.substr(0, 2).to_upper()
 
 # ── Selection / close ─────────────────────────────────────────────────────────
 func _on_card_pressed(upgrade: Dictionary) -> void:

@@ -36,6 +36,9 @@ func notify_drone_nearby(nearby: bool) -> void:
 func is_aim_mode() -> bool:
 	return _aiming
 
+func aim_action_text() -> String:
+	return "FIRE" if _aiming else ""
+
 func get_fire_rate() -> float:
 	return FIRE_RATE
 

@@ -10,6 +10,12 @@ var icon_text:    String = ""
 var icon_color:   Color  = Color(1.0, 1.0, 1.0, 1.0)
 var icon_size:    int    = 36
 
+# When set, _draw() renders the procedural UpgradeGlyphs glyph for this id and
+# hides the text label. Lets the same diamond render either text codes or
+# real glyphs depending on the caller.
+var upgrade_id:   String = ""
+var glyph_color:  Color  = UITheme.COLOR_DEEP
+
 func _ready() -> void:
 	_ensure_label()
 	queue_redraw()
@@ -33,11 +39,24 @@ func set_icon(text: String, fill: Color, font_size: int = 36) -> void:
 	icon_text   = text
 	fill_color  = fill
 	icon_size   = font_size
+	upgrade_id  = ""
 	_ensure_label()
 	var lbl := get_node_or_null("Label") as Label
 	if lbl != null:
+		lbl.visible = true
 		lbl.text = icon_text
 		lbl.add_theme_font_size_override("font_size", icon_size)
+	queue_redraw()
+
+# Render the procedural UpgradeGlyphs glyph for `id` instead of a text code.
+# The text label is hidden while a glyph is set.
+func set_glyph(id: String, fill: Color, glyph_col: Color = UITheme.COLOR_DEEP) -> void:
+	upgrade_id  = id
+	fill_color  = fill
+	glyph_color = glyph_col
+	var lbl := get_node_or_null("Label") as Label
+	if lbl != null:
+		lbl.visible = false
 	queue_redraw()
 
 func _draw() -> void:
@@ -57,3 +76,9 @@ func _draw() -> void:
 	var loop := PackedVector2Array(pts)
 	loop.append(pts[0])
 	draw_polyline(loop, border_color, border_width, true)
+
+	if not upgrade_id.is_empty():
+		# Inset the glyph rect so it doesn't run into the hex border.
+		var pad := minf(s.x, s.y) * 0.20
+		var inner := Rect2(Vector2(pad, pad), Vector2(s.x - pad * 2.0, s.y - pad * 2.0))
+		UpgradeGlyphs.draw(self, inner, upgrade_id, glyph_color)

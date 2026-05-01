@@ -20,24 +20,8 @@ const NAME_FONT           := 26
 const KEY_CHIP_SIZE       := 36.0
 const BAR_H               := 14.0
 
-# Per-upgrade-id 2-letter inventory icon. Falls back to first 2 chars of title.
-const UPGRADE_ICONS := {
-	"gun_firerate":     "FR",
-	"gun_headshot":     "HS",
-	"gun_projectile":   "+1",
-	"gun_splash":       "EX",
-	"gun_pierce":       "PI",
-	"garlic_wither":    "WT",
-	"garlic_bulwark":   "BW",
-	"garlic_range":     "RN",
-	"garlic_slow":      "SL",
-	"garlic_sanctuary": "SA",
-	"beam_firerate":    "FR",
-	"beam_damage":      "DM",
-	"beam_bounces":     "+1",
-	"beam_splash":      "ZP",
-	"beam_overcharge":  "OV",
-}
+const UpgradeBadgeIconCS := preload("res://scenes/ui/UpgradeBadgeIcon.gd")
+const MechPortraitCS     := preload("res://scenes/ui/MechPortrait.gd")
 
 # Rarity → border color. Common = dim lime (frame), uncommon = bright lime
 # (live), rare = hot pink (call-out). Lime stays the live signal across the UI.
@@ -200,54 +184,9 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 
 # ── Portrait construction ─────────────────────────────────────────────────────
 func _build_portrait(color: Color) -> Control:
-	var panel := PanelContainer.new()
-	panel.size         = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = color
-	style.set_corner_radius_all(8)
-	style.set_border_width_all(int(PORTRAIT_BORDER))
-	style.border_color = UITheme.COLOR_DEEP
-	panel.add_theme_stylebox_override("panel", style)
-
-	# Stylized "robot face" via positioned ColorRects, drawn in the panel's
-	# child layer so they don't get clipped by the StyleBox.
-	var inner := Control.new()
-	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(inner)
-
-	var dark := UITheme.COLOR_DEEP
-	var s := PORTRAIT_SIZE - PORTRAIT_BORDER * 2.0
-
-	# Eyes
-	var eye_w := s * 0.18
-	var eye_h := s * 0.13
-	var eye_y := s * 0.32
-	var eye_l := ColorRect.new()
-	eye_l.color    = dark
-	eye_l.size     = Vector2(eye_w, eye_h)
-	eye_l.position = Vector2(s * 0.20, eye_y)
-	eye_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	inner.add_child(eye_l)
-	var eye_r := ColorRect.new()
-	eye_r.color    = dark
-	eye_r.size     = Vector2(eye_w, eye_h)
-	eye_r.position = Vector2(s * 0.62, eye_y)
-	eye_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	inner.add_child(eye_r)
-
-	# Mouth/visor
-	var mouth_w := s * 0.55
-	var mouth_h := s * 0.10
-	var mouth := ColorRect.new()
-	mouth.color    = dark
-	mouth.size     = Vector2(mouth_w, mouth_h)
-	mouth.position = Vector2((s - mouth_w) * 0.5, s * 0.62)
-	mouth.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	inner.add_child(mouth)
-
-	return panel
+	var p: PanelContainer = MechPortraitCS.new()
+	p.call("setup", color, PORTRAIT_SIZE, PORTRAIT_BORDER)
+	return p
 
 # ── Key chip matching MechOptionsPanel style ──────────────────────────────────
 func _make_key_chip(text: String) -> PanelContainer:
@@ -365,19 +304,12 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	# Tooltip = full upgrade name (built-in mouse tooltip; works on PanelContainer)
 	panel.tooltip_text = "%s — %s" % [upgrade.get("title", ""), upgrade.get("description", "")]
 
-	# Center icon (2-letter code)
-	var icon := Label.new()
-	var id := String(upgrade.id)
-	var code: String = UPGRADE_ICONS[id] if UPGRADE_ICONS.has(id) else _fallback_code(String(upgrade.title))
-	icon.text = code
-	icon.add_theme_font_size_override("font_size", 14)
-	icon.add_theme_color_override("font_color", UITheme.COLOR_TEXT_PRIMARY)
-	icon.add_theme_constant_override("outline_size", 0)
-	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	# Center procedural glyph — same renderer used in UpgradePicker.
+	var icon: Control = UpgradeBadgeIconCS.new()
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(icon)
+	icon.call("setup", String(upgrade.id), UITheme.COLOR_TEXT_PRIMARY)
 
 	# Count badge in top-right (hidden until count > 1)
 	var count_lbl := Label.new()
@@ -398,9 +330,3 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	panel.set_meta("count_lbl", count_lbl)
 
 	return panel
-
-func _fallback_code(title: String) -> String:
-	var trimmed := title.strip_edges()
-	if trimmed.is_empty():
-		return "?"
-	return trimmed.substr(0, 2).to_upper()

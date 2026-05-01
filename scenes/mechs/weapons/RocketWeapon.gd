@@ -23,6 +23,9 @@ func _on_setup() -> void:
 func is_aim_mode() -> bool:
 	return _marking
 
+func aim_action_text() -> String:
+	return "STRIKE" if _marking else ""
+
 func get_fire_rate() -> float:
 	return FIRE_RATE
 
