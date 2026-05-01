@@ -45,40 +45,15 @@ func _ready() -> void:
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(anchor)
 
-	var root := PanelContainer.new()
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color              = UITheme.COLOR_PANEL_ALPHA
-	sb.border_color          = UITheme.COLOR_BORDER_HAIR
-	sb.border_width_left     = int(UITheme.PANEL_BORDER_W)
-	sb.border_width_right    = int(UITheme.PANEL_BORDER_W)
-	sb.border_width_top      = int(UITheme.PANEL_BORDER_W)
-	sb.border_width_bottom   = int(UITheme.PANEL_BORDER_W)
-	sb.set_corner_radius_all(PANEL_CORNER_R)
-	sb.content_margin_left   = PANEL_PAD_H
-	sb.content_margin_right  = PANEL_PAD_H
-	sb.content_margin_top    = PANEL_PAD_V
-	sb.content_margin_bottom = PANEL_PAD_V
-	root.add_theme_stylebox_override("panel", sb)
-	anchor.add_child(root)
-
+	# Bare list — no panel, no border, no title. Just the rows of chip + icon + label.
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", ROW_GAP)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(col)
-
-	var title := Label.new()
-	title.text = "Controls"
-	UITheme.style_label_caps(title, TITLE_FONT, UITheme.COLOR_TEXT_PRIMARY)
-	col.add_child(title)
-	col.add_child(_make_divider())
+	col.position = Vector2(20.0, XP_BAR_BOTTOM + PANEL_TOP_GAP)
+	anchor.add_child(col)
 
 	for entry in ENTRIES:
 		col.add_child(_make_row(entry.key, entry.icon, entry.action))
-
-	# Anchor the panel at a fixed gap below the XP bar. Independent of panel
-	# height, so resizing the contents won't move the panel relative to the bar.
-	root.position = Vector2(20.0, XP_BAR_BOTTOM + PANEL_TOP_GAP)
 
 func _make_divider() -> Control:
 	# Hairline neutral divider — not lime; lime is reserved for key chips.
