@@ -23,6 +23,11 @@ const _DATA := {
 		tagline = "Chained beam strikes",
 		color   = Color("#3aa6e6"),   # electric blue
 	},
+	"ROCKET": {
+		name    = "SALVO",
+		tagline = "Heavy splash ordnance",
+		color   = Color("#e6a93a"),   # saffron
+	},
 }
 
 # Returns the archetype dictionary for `weapon_name`, or an empty fallback if

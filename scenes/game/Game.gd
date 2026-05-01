@@ -6,6 +6,7 @@ const DRONE_SCENE := preload("res://scenes/drones/Drone.tscn")
 const GUN_WEAPON_SCRIPT     := preload("res://scenes/mechs/weapons/GunWeapon.gd")
 const GARLIC_WEAPON_SCRIPT  := preload("res://scenes/mechs/weapons/GarlicWeapon.gd")
 const BEAM_WEAPON_SCRIPT    := preload("res://scenes/mechs/weapons/BouncyBeamWeapon.gd")
+const ROCKET_WEAPON_SCRIPT  := preload("res://scenes/mechs/weapons/RocketWeapon.gd")
 const ULT_BAR_SCRIPT        := preload("res://scenes/ui/UltBar.gd")
 const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
 const UPGRADE_PICKER_SCRIPT := preload("res://scenes/ui/UpgradePicker.gd")
@@ -296,7 +297,7 @@ func _archetype_colors() -> Array:
 
 func _spawn_mech_line(count: int) -> void:
 	_alive_mechs = count
-	var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT]
+	var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT, ROCKET_WEAPON_SCRIPT]
 	for i in count:
 		var mech: Node3D = MECH_SCENE.instantiate()
 		mech.position = Vector3(0.0, 0.0, float(i) * 2.5)

@@ -31,6 +31,12 @@ var bulwark_dmg_reduction:  float = 0.0
 var pierce_count:           int   = 0
 # Sanctuary (Garlic rare) — HP per second restored to mechs inside the aura
 var aura_regen_per_sec:     float = 0.0
+# Cluster Munition (Rocket uncommon) — extra micro-detonations per rocket impact
+var cluster_count:          int   = 0
+# Napalm Payload (Rocket rare) — burn-zone fields, all zero = no zone spawned
+var napalm_burn_dps:        float = 0.0
+var napalm_radius:          float = 0.0
+var napalm_duration:        float = 0.0
 const DOT_DURATION:         float = 3.0
 const SPLASH_DAMAGE_FRAC:   float = 0.5   # splash deals 50% of base damage
 const BASE_KNOCKBACK:       float = 4.0   # small baseline kick every weapon hit applies

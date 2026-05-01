@@ -2,7 +2,7 @@ extends RefCounted
 
 # Level-up upgrade catalog. An upgrade is a Dictionary:
 #   { id, title, description, rarity, target, unique? }
-# `target` is a weapon_name ("GUN", "GARLIC", "BEAM").
+# `target` is a weapon_name ("GUN", "GARLIC", "BEAM", "ROCKET").
 # `unique` (default false): once taken, removed from the pool for the rest of the run.
 # Filtering at draw-time excludes cards whose target weapon isn't in the run, and
 # unique cards already taken.
@@ -49,6 +49,17 @@ const ALL := [
 	 rarity=1, target="BEAM", unique=true},
 	{id="beam_overcharge", title="Overcharge",     description="Beam: +50% damage, +2 bounces, +30% range",
 	 rarity=2, target="BEAM", unique=true},
+	# ── Rocket ────────────────────────────────────────────────────────────────
+	{id="rocket_firerate", title="Quick Reload",   description="Rocket: +25% fire rate",
+	 rarity=0, target="ROCKET"},
+	{id="rocket_radius",   title="Bigger Boom",    description="Rocket: +30% splash radius",
+	 rarity=0, target="ROCKET"},
+	{id="rocket_damage",   title="Heavy Warhead",  description="Rocket: +25% damage",
+	 rarity=0, target="ROCKET"},
+	{id="rocket_cluster",  title="Cluster Munition", description="Rocket: each impact spawns 3 micro-detonations around it",
+	 rarity=1, target="ROCKET", unique=true},
+	{id="rocket_napalm",   title="Napalm Payload", description="Rocket: impacts leave a burn zone for 4s",
+	 rarity=2, target="ROCKET", unique=true},
 ]
 
 # Hades-style weighted pick: draw `count` distinct upgrades from `pool`, with
@@ -127,6 +138,11 @@ static func apply(upgrade: Dictionary, weapons: Array) -> void:
 		"gun_pierce":       _set_prop(weapons, "GUN",    "pierce_count", 2)
 		"garlic_sanctuary": _set_prop(weapons, "GARLIC", "aura_regen_per_sec", 2.0)
 		"beam_overcharge":  _beam_overcharge(weapons)
+		"rocket_firerate":  _scale(weapons, "ROCKET", "fire_rate_mult", 1.25)
+		"rocket_radius":    _scale(weapons, "ROCKET", "splash_radius",  1.30)
+		"rocket_damage":    _scale(weapons, "ROCKET", "damage_mult",    1.25)
+		"rocket_cluster":   _set_prop(weapons, "ROCKET", "cluster_count", 3)
+		"rocket_napalm":    _rocket_napalm(weapons)
 		_:                  push_warning("Unknown upgrade id: %s" % upgrade.id)
 
 static func _scale(weapons: Array, target: String, prop: String, factor: float) -> void:
@@ -156,3 +172,10 @@ static func _garlic_slow(weapons: Array) -> void:
 		if w != null and w.weapon_name == "GARLIC":
 			w.slow_mult     = 0.3
 			w.slow_duration = 2.5
+
+static func _rocket_napalm(weapons: Array) -> void:
+	for w in weapons:
+		if w != null and w.weapon_name == "ROCKET":
+			w.napalm_burn_dps = 8.0
+			w.napalm_radius   = 4.0
+			w.napalm_duration = 4.0

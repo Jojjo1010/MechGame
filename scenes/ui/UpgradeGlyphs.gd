@@ -30,6 +30,11 @@ static func draw(canvas: CanvasItem, rect: Rect2, upgrade_id: String, color: Col
 		"gun_pierce":       _pierce(canvas, c, r, color)
 		"garlic_sanctuary": _sanctuary(canvas, c, r, color)
 		"beam_overcharge":  _overcharge(canvas, c, r, color)
+		"rocket_firerate":  _reload_arrow(canvas, c, r, color)
+		"rocket_radius":    _blast_rings(canvas, c, r, color)
+		"rocket_damage":    _warhead(canvas, c, r, color)
+		"rocket_cluster":   _cluster_bursts(canvas, c, r, color)
+		"rocket_napalm":    _flame(canvas, c, r, color)
 		_:                  return false
 	return true
 
@@ -45,6 +50,7 @@ static func draw_standee(canvas: CanvasItem, rect: Rect2, weapon_name: String, c
 		"GUN":    _standee_volley(canvas, c, r, color)
 		"GARLIC": _standee_aegis(canvas, c, r, color)
 		"BEAM":   _standee_arc(canvas, c, r, color)
+		"ROCKET": _standee_salvo(canvas, c, r, color)
 		_:        return false
 	return true
 
@@ -352,3 +358,128 @@ static func _standee_arc(c: CanvasItem, p: Vector2, r: float, col: Color) -> voi
 	# Visor stripe
 	var seam: Color = col.darkened(0.50)
 	c.draw_rect(Rect2(p.x - r * 0.32, p.y - r * 0.55, r * 0.64, r * 0.12), seam, true)
+
+# ── Rocket glyphs ────────────────────────────────────────────────────────────
+
+static func _reload_arrow(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Three-quarter ring with an arrow tip — circular reload icon
+	c.draw_arc(p, r * 0.85, deg_to_rad(-60.0), deg_to_rad(240.0), 32, col, r * 0.18, true)
+	var tip_base := p + Vector2(cos(deg_to_rad(-60.0)), sin(deg_to_rad(-60.0))) * r * 0.85
+	var tip := PackedVector2Array([
+		tip_base + Vector2( r * 0.30, -r * 0.05),
+		tip_base + Vector2( r * 0.05,  r * 0.40),
+		tip_base + Vector2(-r * 0.25,  r * 0.05),
+	])
+	c.draw_colored_polygon(tip, col)
+
+static func _blast_rings(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Concentric expanding rings — bigger blast radius
+	for i in 3:
+		var rr := r * (0.45 + 0.30 * float(i))
+		var ring_alpha: float = 1.0 - 0.25 * float(i)
+		var ring: Color = Color(col.r, col.g, col.b, ring_alpha)
+		c.draw_arc(p, rr, 0.0, TAU, 36, ring, r * 0.13, true)
+	c.draw_circle(p, r * 0.20, col.lightened(0.25))
+
+static func _warhead(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Pointed missile silhouette pointing up — heavy ordnance
+	var nose := PackedVector2Array([
+		Vector2(p.x - r * 0.45, p.y - r * 0.25),
+		Vector2(p.x,            p.y - r * 1.15),
+		Vector2(p.x + r * 0.45, p.y - r * 0.25),
+	])
+	c.draw_colored_polygon(nose, col)
+	c.draw_rect(Rect2(p.x - r * 0.45, p.y - r * 0.25, r * 0.90, r * 1.05), col, true)
+	# Tail fins
+	var fin_l := PackedVector2Array([
+		Vector2(p.x - r * 0.45, p.y + r * 0.50),
+		Vector2(p.x - r * 0.95, p.y + r * 0.95),
+		Vector2(p.x - r * 0.45, p.y + r * 0.95),
+	])
+	var fin_r := PackedVector2Array([
+		Vector2(p.x + r * 0.45, p.y + r * 0.50),
+		Vector2(p.x + r * 0.95, p.y + r * 0.95),
+		Vector2(p.x + r * 0.45, p.y + r * 0.95),
+	])
+	c.draw_colored_polygon(fin_l, col.darkened(0.25))
+	c.draw_colored_polygon(fin_r, col.darkened(0.25))
+
+static func _cluster_bursts(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Three small starbursts in a triangle — cluster munition scatter
+	var offsets: Array[Vector2] = [
+		Vector2(0.0,        -r * 0.55),
+		Vector2(-r * 0.55,   r * 0.40),
+		Vector2( r * 0.55,   r * 0.40),
+	]
+	for o: Vector2 in offsets:
+		var center := p + o
+		var spikes := 6
+		var pts := PackedVector2Array()
+		for i in spikes * 2:
+			var t := float(i) / float(spikes * 2) * TAU
+			var rr: float = (r * 0.50) if (i % 2 == 0) else (r * 0.22)
+			pts.append(center + Vector2(cos(t), sin(t)) * rr)
+		c.draw_colored_polygon(pts, col)
+
+static func _flame(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Single tall flame silhouette — napalm / burn
+	var flame := PackedVector2Array([
+		Vector2(p.x,            p.y - r * 1.20),
+		Vector2(p.x + r * 0.45, p.y - r * 0.45),
+		Vector2(p.x + r * 0.30, p.y - r * 0.20),
+		Vector2(p.x + r * 0.85, p.y + r * 0.55),
+		Vector2(p.x + r * 0.65, p.y + r * 1.05),
+		Vector2(p.x - r * 0.65, p.y + r * 1.05),
+		Vector2(p.x - r * 0.85, p.y + r * 0.55),
+		Vector2(p.x - r * 0.30, p.y - r * 0.20),
+		Vector2(p.x - r * 0.45, p.y - r * 0.45),
+	])
+	c.draw_colored_polygon(flame, col)
+	# Inner hot core
+	var core := PackedVector2Array([
+		Vector2(p.x,            p.y - r * 0.55),
+		Vector2(p.x + r * 0.30, p.y + r * 0.20),
+		Vector2(p.x + r * 0.20, p.y + r * 0.65),
+		Vector2(p.x - r * 0.20, p.y + r * 0.65),
+		Vector2(p.x - r * 0.30, p.y + r * 0.20),
+	])
+	c.draw_colored_polygon(core, col.lightened(0.35))
+
+# ── SALVO standee ────────────────────────────────────────────────────────────
+
+static func _standee_salvo(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	# Wide-stanced soldier silhouette with shoulder-mounted launcher tube.
+	# Communicates "heavy ordnance + planted firing pose."
+	# Body — broad trapezoid
+	var body := PackedVector2Array([
+		Vector2(p.x - r * 0.85, p.y - r * 0.20),
+		Vector2(p.x + r * 0.85, p.y - r * 0.20),
+		Vector2(p.x + r * 1.10, p.y + r * 1.00),
+		Vector2(p.x - r * 1.10, p.y + r * 1.00),
+	])
+	c.draw_colored_polygon(body, col)
+	# Helmet — squared-off industrial dome
+	var helm := PackedVector2Array([
+		Vector2(p.x - r * 0.50, p.y - r * 0.95),
+		Vector2(p.x + r * 0.50, p.y - r * 0.95),
+		Vector2(p.x + r * 0.55, p.y - r * 0.20),
+		Vector2(p.x - r * 0.55, p.y - r * 0.20),
+	])
+	c.draw_colored_polygon(helm, col)
+	# Shoulder launcher tube — cylinder rising over the right shoulder
+	var tube := PackedVector2Array([
+		Vector2(p.x + r * 0.40, p.y - r * 1.25),
+		Vector2(p.x + r * 1.30, p.y - r * 1.05),
+		Vector2(p.x + r * 1.45, p.y - r * 0.55),
+		Vector2(p.x + r * 0.55, p.y - r * 0.75),
+	])
+	c.draw_colored_polygon(tube, col.lightened(0.20))
+	# Tube mouth — darker disc on the front end
+	var mouth: Color = col.darkened(0.55)
+	c.draw_circle(Vector2(p.x + r * 1.35, p.y - r * 0.80), r * 0.22, mouth)
+	# Visor stripe
+	var seam: Color = col.darkened(0.45)
+	c.draw_rect(Rect2(p.x - r * 0.40, p.y - r * 0.70, r * 0.80, r * 0.14), seam, true)
+	# Chest plates — two stacked rectangles
+	c.draw_rect(Rect2(p.x - r * 0.55, p.y + r * 0.10, r * 1.10, r * 0.18), seam, true)
+	c.draw_rect(Rect2(p.x - r * 0.55, p.y + r * 0.45, r * 1.10, r * 0.18), seam, true)
