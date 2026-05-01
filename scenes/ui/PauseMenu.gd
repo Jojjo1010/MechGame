@@ -1,0 +1,380 @@
+extends CanvasLayer
+
+# Pause menu — opens on ESC. Two views:
+#   MAIN  — RESUME (primary), DEBUG (secondary), QUIT (secondary)
+#   DEBUG — live run stats + action buttons (level-up, gold, heal, kill enemies)
+# ESC closes from MAIN, goes back to MAIN from DEBUG.
+#
+# Spawned from Game.gd as a CanvasLayer at layer 55 (above gameplay UI but
+# below DeathScreen at 60). Pauses the tree on open; resumes on close. The
+# entire layer runs PROCESS_MODE_ALWAYS so it keeps ticking while paused.
+
+const GARAGE_SCENE_PATH := "res://scenes/garage/Garage.tscn"
+
+const PANEL_PAD_H    := UITheme.PAD_XL * 2
+const PANEL_PAD_V    := UITheme.PAD_XL * 2
+const PANEL_CORNER_R := 16
+const PANEL_MIN_W    := 480.0
+const COL_GAP        := UITheme.PAD_L
+const TITLE_GAP      := UITheme.PAD_S
+const BTN_W          := 320.0
+const BTN_H          := 64.0
+const BTN_GAP        := UITheme.PAD_M
+
+const STAT_GAP       := UITheme.PAD_S
+const STAT_ROW_W     := 384.0
+
+const HOVER_SCALE     := 1.03
+const HOVER_DUR       := 0.10
+const PRESS_FLASH_DUR := 0.08
+
+var _root:        Control = null
+var _main_view:   Control = null
+var _debug_view:  Control = null
+var _stat_labels: Dictionary = {}   # label_key -> Label
+
+func _ready() -> void:
+	layer = 55
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_build()
+	get_tree().paused = true
+
+func _exit_tree() -> void:
+	# Defensive — if we're freed without going through _resume, restore the tree.
+	if get_tree() != null and get_tree().paused:
+		get_tree().paused = false
+
+func _build() -> void:
+	_root = Control.new()
+	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_root)
+
+	# Backdrop — see-through enough that the player still sees the frozen
+	# battlefield, dark enough that the menu reads cleanly.
+	var backdrop := ColorRect.new()
+	var bd_color := UITheme.COLOR_DEEP
+	bd_color.a = 0.78
+	backdrop.color = bd_color
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_root.add_child(backdrop)
+
+	_main_view  = _build_main_view()
+	_debug_view = _build_debug_view()
+	_root.add_child(_main_view)
+	_root.add_child(_debug_view)
+	_debug_view.visible = false
+
+func _build_main_view() -> Control:
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(PANEL_MIN_W, 0.0)
+	var sb := UITheme.panel_stylebox(UITheme.COLOR_BORDER_HAIR)
+	sb.bg_color              = UITheme.COLOR_PANEL
+	sb.set_corner_radius_all(PANEL_CORNER_R)
+	sb.content_margin_left   = PANEL_PAD_H
+	sb.content_margin_right  = PANEL_PAD_H
+	sb.content_margin_top    = PANEL_PAD_V
+	sb.content_margin_bottom = PANEL_PAD_V
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", COL_GAP)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = "PAUSED"
+	UITheme.style_heading(title, UITheme.FONT_HEADING_XL, UITheme.COLOR_TEXT_PRIMARY)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	var btns := VBoxContainer.new()
+	btns.add_theme_constant_override("separation", BTN_GAP)
+	btns.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(btns)
+
+	var resume := _make_primary_button("RESUME")
+	var debug  := _make_secondary_button("DEBUG")
+	var quit   := _make_secondary_button("QUIT TO GARAGE")
+	resume.pressed.connect(_resume)
+	debug.pressed.connect(_show_debug)
+	quit.pressed.connect(_quit_to_garage)
+	btns.add_child(resume)
+	btns.add_child(debug)
+	btns.add_child(quit)
+
+	return center
+
+func _build_debug_view() -> Control:
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(PANEL_MIN_W, 0.0)
+	var sb := UITheme.panel_stylebox(UITheme.COLOR_BORDER_HAIR)
+	sb.bg_color              = UITheme.COLOR_PANEL
+	sb.set_corner_radius_all(PANEL_CORNER_R)
+	sb.content_margin_left   = PANEL_PAD_H
+	sb.content_margin_right  = PANEL_PAD_H
+	sb.content_margin_top    = PANEL_PAD_V
+	sb.content_margin_bottom = PANEL_PAD_V
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", COL_GAP)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = "DEBUG"
+	UITheme.style_heading(title, UITheme.FONT_HEADING_L, UITheme.COLOR_ACCENT_LIME)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	# ── Live stats block ────────────────────────────────────────────────────
+	var stats := VBoxContainer.new()
+	stats.add_theme_constant_override("separation", STAT_GAP)
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(stats)
+	for spec in [
+		["WAVE",  "wave"],
+		["LEVEL", "level"],
+		["XP",    "xp"],
+		["GOLD",  "gold"],
+		["SCRAP", "scrap"],
+		["FPS",   "fps"],
+	]:
+		stats.add_child(_make_stat_row(spec[0], spec[1]))
+
+	col.add_child(_divider())
+
+	# ── Action buttons ──────────────────────────────────────────────────────
+	var actions := VBoxContainer.new()
+	actions.add_theme_constant_override("separation", BTN_GAP)
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(actions)
+
+	var lvl_btn   := _make_secondary_button("FORCE LEVEL UP")
+	var gold_btn  := _make_secondary_button("+500 GOLD")
+	var heal_btn  := _make_secondary_button("HEAL ALL MECHS")
+	var kill_btn  := _make_secondary_button("KILL ALL ENEMIES")
+	lvl_btn.pressed.connect(_dbg_level_up)
+	gold_btn.pressed.connect(_dbg_gold)
+	heal_btn.pressed.connect(_dbg_heal)
+	kill_btn.pressed.connect(_dbg_kill_enemies)
+	actions.add_child(lvl_btn)
+	actions.add_child(gold_btn)
+	actions.add_child(heal_btn)
+	actions.add_child(kill_btn)
+
+	col.add_child(_divider())
+
+	var back := _make_primary_button("BACK")
+	back.pressed.connect(_show_main)
+	col.add_child(back)
+
+	return center
+
+# ── ESC handling ─────────────────────────────────────────────────────────────
+
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	if event.keycode != KEY_ESCAPE:
+		return
+	if _debug_view.visible:
+		_show_main()
+	else:
+		_resume()
+	get_viewport().set_input_as_handled()
+
+# ── View transitions ─────────────────────────────────────────────────────────
+
+func _show_main() -> void:
+	AudioManager.play("ui_click")
+	_main_view.visible  = true
+	_debug_view.visible = false
+
+func _show_debug() -> void:
+	AudioManager.play("ui_click")
+	_main_view.visible  = false
+	_debug_view.visible = true
+	_refresh_stats()
+
+func _resume() -> void:
+	AudioManager.play("ui_click")
+	get_tree().paused = false
+	queue_free()
+
+func _quit_to_garage() -> void:
+	AudioManager.play("ui_click")
+	get_tree().paused = false
+	get_tree().change_scene_to_file(GARAGE_SCENE_PATH)
+
+# ── Debug actions ────────────────────────────────────────────────────────────
+
+func _dbg_level_up() -> void:
+	AudioManager.play("ui_click")
+	# Top off XP to trigger exactly one level-up. The level-up signal fires the
+	# UpgradePicker which expects no other modal in the way — so close ourselves
+	# first. Tree stays paused (the picker re-pauses).
+	var needed: int = maxi(1, RunManager.xp_to_next - RunManager.xp)
+	queue_free()
+	RunManager.add_xp(needed)
+
+func _dbg_gold() -> void:
+	AudioManager.play("ui_click")
+	RunManager.add_gold(500)
+	_refresh_stats()
+
+func _dbg_heal() -> void:
+	AudioManager.play("ui_click")
+	for m in get_tree().get_nodes_in_group("mechs"):
+		if not is_instance_valid(m):
+			continue
+		if not bool(m.get("is_alive")):
+			continue
+		var max_hp: float = float(m.get("max_health"))
+		m.set("health", max_hp)
+		if m.has_signal("health_changed"):
+			m.emit_signal("health_changed", max_hp, max_hp)
+
+func _dbg_kill_enemies() -> void:
+	AudioManager.play("ui_click")
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(e) and e.has_method("take_damage"):
+			e.take_damage(99999.0, true)
+
+# ── Stats ────────────────────────────────────────────────────────────────────
+
+func _process(_delta: float) -> void:
+	if _debug_view != null and _debug_view.visible:
+		_refresh_stats()
+
+func _refresh_stats() -> void:
+	_set_stat("wave",  "%d" % RunManager.wave)
+	_set_stat("level", "%d" % RunManager.level)
+	_set_stat("xp",    "%d / %d" % [RunManager.xp, RunManager.xp_to_next])
+	_set_stat("gold",  "%d" % RunManager.gold)
+	_set_stat("scrap", "%d" % SaveData.total_scrap)
+	_set_stat("fps",   "%d" % Engine.get_frames_per_second())
+
+func _set_stat(key: String, value: String) -> void:
+	var lbl: Label = _stat_labels.get(key)
+	if lbl != null:
+		lbl.text = value
+
+func _make_stat_row(label_text: String, key: String) -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(STAT_ROW_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_M)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	UITheme.style_label_caps(lbl, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_SECONDARY)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(lbl)
+
+	var val := Label.new()
+	val.text = "—"
+	UITheme.style_label_caps(val, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_ACCENT_LIME)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	hbox.add_child(val)
+	_stat_labels[key] = val
+	return hbox
+
+func _divider() -> Control:
+	var wrapper := MarginContainer.new()
+	wrapper.add_theme_constant_override("margin_top",    UITheme.PAD_S)
+	wrapper.add_theme_constant_override("margin_bottom", UITheme.PAD_S)
+	var bar := ColorRect.new()
+	bar.color                 = UITheme.COLOR_BORDER_HAIR
+	bar.custom_minimum_size   = Vector2(0.0, UITheme.HAIR_DIVIDER_H)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.add_child(bar)
+	return wrapper
+
+# ── Buttons (mirrors DeathScreen styling) ────────────────────────────────────
+
+func _make_primary_button(text: String) -> Button:
+	var btn := _make_button_base(text, UITheme.COLOR_TEXT_PRIMARY)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color     = UITheme.COLOR_ACCENT_HOT
+	normal.border_color = UITheme.COLOR_BORDER_HAIR
+	normal.set_border_width_all(int(UITheme.PANEL_BORDER_W))
+	normal.set_corner_radius_all(PANEL_CORNER_R)
+	btn.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color     = UITheme.COLOR_ACCENT_HOT.lerp(UITheme.COLOR_TEXT_PRIMARY, 0.18)
+	hover.border_color = UITheme.COLOR_BORDER_BRIGHT
+	btn.add_theme_stylebox_override("hover", hover)
+	var pressed := normal.duplicate()
+	pressed.bg_color     = UITheme.COLOR_TEXT_PRIMARY
+	pressed.border_color = UITheme.COLOR_BORDER_BRIGHT
+	btn.add_theme_stylebox_override("pressed", pressed)
+	_wire_button_motion(btn)
+	return btn
+
+func _make_secondary_button(text: String) -> Button:
+	var btn := _make_button_base(text, UITheme.COLOR_ACCENT_LIME)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color     = UITheme.COLOR_PANEL
+	normal.border_color = UITheme.COLOR_ACCENT_LIME
+	normal.set_border_width_all(int(UITheme.PANEL_BORDER_W))
+	normal.set_corner_radius_all(PANEL_CORNER_R)
+	btn.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	var lime_wash := UITheme.COLOR_ACCENT_LIME
+	lime_wash.a = 0.10
+	hover.bg_color     = lime_wash
+	hover.border_color = UITheme.COLOR_BORDER_BRIGHT
+	btn.add_theme_stylebox_override("hover", hover)
+	var pressed := normal.duplicate()
+	pressed.bg_color     = UITheme.COLOR_ACCENT_HOT
+	pressed.border_color = UITheme.COLOR_ACCENT_HOT
+	btn.add_theme_stylebox_override("pressed", pressed)
+	_wire_button_motion(btn)
+	return btn
+
+func _make_button_base(text: String, font_color: Color) -> Button:
+	var btn := Button.new()
+	btn.text = text.to_upper()
+	btn.custom_minimum_size = Vector2(BTN_W, BTN_H)
+	btn.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+	btn.add_theme_color_override("font_color",         font_color)
+	btn.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
+	btn.add_theme_constant_override("outline_size",    UITheme.OUTLINE_LABEL)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
+	return btn
+
+func _wire_button_motion(btn: Button) -> void:
+	btn.mouse_entered.connect(func() -> void:
+		AudioManager.play("ui_hover")
+		var t := btn.create_tween()
+		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DUR)
+	)
+	btn.mouse_exited.connect(func() -> void:
+		var t := btn.create_tween()
+		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		t.tween_property(btn, "scale", Vector2.ONE, HOVER_DUR)
+	)
+	btn.button_down.connect(func() -> void:
+		var t := btn.create_tween()
+		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		t.tween_property(btn, "scale", Vector2(0.96, 0.96), PRESS_FLASH_DUR)
+	)
+	btn.button_up.connect(func() -> void:
+		var t := btn.create_tween()
+		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_FLASH_DUR)
+	)

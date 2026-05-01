@@ -12,6 +12,7 @@ const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
 const UPGRADE_PICKER_SCRIPT := preload("res://scenes/ui/UpgradePicker.gd")
 const DEATH_SCREEN_SCRIPT   := preload("res://scenes/ui/DeathScreen.gd")
 const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
+const PAUSE_MENU_SCRIPT     := preload("res://scenes/ui/PauseMenu.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
@@ -86,6 +87,11 @@ func _spawn_drone_hint() -> void:
 	_drone_hint.set_script(DRONE_HINT_SCRIPT)
 	add_child(_drone_hint)
 
+func _open_pause_menu() -> void:
+	var menu := CanvasLayer.new()
+	menu.set_script(PAUSE_MENU_SCRIPT)
+	add_child(menu)
+
 func _spawn_controls_legend() -> void:
 	var legend := CanvasLayer.new()
 	legend.set_script(preload("res://scenes/ui/ControlsLegend.gd"))
@@ -125,6 +131,12 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_Q:
 			_cam_view_idx = (_cam_view_idx + 1) % CAM_VIEWS.size()
 			_cam_offset_target = CAM_VIEWS[_cam_view_idx]
+		elif event.keycode == KEY_ESCAPE:
+			# Game._input only fires while unpaused (PROCESS_MODE_INHERIT) — so
+			# this path can't open a pause menu over the upgrade picker / death
+			# screen / repair minigame, all of which already pause the tree.
+			_open_pause_menu()
+			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	_follow_camera(delta)
