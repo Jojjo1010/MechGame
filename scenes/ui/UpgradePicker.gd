@@ -62,11 +62,11 @@ const TARGET_TINTS := {
 # ── Icon code map (shared with UltBar) ────────────────────────────────────────
 const UPGRADE_ICONS := {
 	"gun_firerate":    "FR",
-	"gun_damage":      "DM",
+	"gun_headshot":    "HS",
 	"gun_projectile":  "+1",
 	"gun_splash":      "EX",
-	"garlic_firerate": "FR",
-	"garlic_damage":   "DM",
+	"garlic_wither":   "WT",
+	"garlic_bulwark":  "BW",
 	"garlic_range":    "RN",
 	"garlic_slow":     "SL",
 	"beam_firerate":   "FR",

@@ -19,20 +19,20 @@ const ALL := [
 	# ── Gun ───────────────────────────────────────────────────────────────────
 	{id="gun_firerate",   title="Rapid Gun",      description="Gun: +25% fire rate",
 	 rarity=0, target="GUN"},
-	{id="gun_damage",     title="Heavy Slugs",    description="Gun: +20% damage",
+	{id="gun_headshot",   title="Headshot",       description="Gun: every Nth shot crits 6× — N drops 4→3→2→1",
 	 rarity=0, target="GUN"},
 	{id="gun_projectile", title="Twin Shot",      description="Gun: +1 bullet per shot",
 	 rarity=0, target="GUN"},
 	{id="gun_splash",     title="Explosive Rounds", description="Gun: bullets do AOE on impact",
 	 rarity=1, target="GUN", unique=true},
 	# ── Garlic ────────────────────────────────────────────────────────────────
-	{id="garlic_firerate", title="Quick Pulse",   description="Garlic: +25% pulse rate",
+	{id="garlic_wither",   title="Withering",     description="Garlic: pulses on the same enemy stack damage (max 3 wither stacks)",
 	 rarity=0, target="GARLIC"},
-	{id="garlic_damage",   title="Toxic Aura",    description="Garlic: +20% damage",
+	{id="garlic_bulwark",  title="Bulwark",       description="Garlic: mechs inside the aura take less damage",
 	 rarity=0, target="GARLIC"},
 	{id="garlic_range",    title="Wide Aura",     description="Garlic: +20% radius",
 	 rarity=0, target="GARLIC"},
-	{id="garlic_slow",     title="Crippling Spores", description="Garlic: aura slows enemies 50% for 1.5s",
+	{id="garlic_slow",     title="Crippling Spores", description="Garlic: aura slows enemies 70% for 2.5s",
 	 rarity=1, target="GARLIC", unique=true},
 	# ── Beam ──────────────────────────────────────────────────────────────────
 	{id="beam_firerate",   title="Rapid Beam",    description="Beam: +25% fire rate",
@@ -107,11 +107,11 @@ static func apply(upgrade: Dictionary, weapons: Array) -> void:
 		RunManager.taken_unique_upgrades.append(upgrade.id)
 	match upgrade.id:
 		"gun_firerate":     _scale(weapons, "GUN",    "fire_rate_mult", 1.25)
-		"gun_damage":       _scale(weapons, "GUN",    "damage_mult",    1.20)
+		"gun_headshot":     _add  (weapons, "GUN",    "headshot_count", 1)
 		"gun_projectile":   _add  (weapons, "GUN",    "projectile_count_bonus", 1)
 		"gun_splash":       _set_prop(weapons, "GUN",    "splash_radius", 2.5)
-		"garlic_firerate":  _scale(weapons, "GARLIC", "fire_rate_mult", 1.25)
-		"garlic_damage":    _scale(weapons, "GARLIC", "damage_mult",    1.20)
+		"garlic_wither":    _add  (weapons, "GARLIC", "withering_per_stack", 0.25)
+		"garlic_bulwark":   _add  (weapons, "GARLIC", "bulwark_dmg_reduction", 0.25)
 		"garlic_range":     _scale(weapons, "GARLIC", "range_mult",     1.20)
 		"garlic_slow":      _garlic_slow(weapons)
 		"beam_firerate":    _scale(weapons, "BEAM",   "fire_rate_mult", 1.25)
@@ -138,5 +138,5 @@ static func _set_prop(weapons: Array, target: String, prop: String, value: Varia
 static func _garlic_slow(weapons: Array) -> void:
 	for w in weapons:
 		if w != null and w.weapon_name == "GARLIC":
-			w.slow_mult     = 0.5
-			w.slow_duration = 1.5
+			w.slow_mult     = 0.3
+			w.slow_duration = 2.5

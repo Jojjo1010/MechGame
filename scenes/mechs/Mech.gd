@@ -29,6 +29,9 @@ const ULT_FLASH_DURATION := 0.35
 var _base_color: Color = Color.WHITE
 var _mesh_instances: Array[MeshInstance3D] = []
 var _health_bar: Node3D = null
+var _bulwark_reduction: float = 0.0   # 0..1, refreshed each frame from nearby Garlic auras
+var _bulwark_bubble: MeshInstance3D = null
+var _bulwark_bubble_mat: StandardMaterial3D = null
 var _model_base_y: float = 0.0
 var _bob_time: float = 0.0
 var _step_pitch_base: float = 1.0   # randomized per mech so the conga line has variety
@@ -147,6 +150,8 @@ func _process(delta: float) -> void:
 				if is_instance_valid(mi) and mi.material_override:
 					(mi.material_override as StandardMaterial3D).albedo_color = _base_color
 
+	_update_bulwark_status(delta)
+
 	# Burning tick
 	if _is_burning and is_alive:
 		if is_instance_valid(_burn_light):
@@ -155,6 +160,61 @@ func _process(delta: float) -> void:
 		if _burn_damage_timer <= 0.0:
 			_burn_damage_timer = 1.0
 			take_damage(BURN_DAMAGE_PER_SEC)
+
+const BULWARK_BUBBLE_RADIUS := 1.7
+const GARLIC_AURA_RADIUS    := 4.5   # mirrors GarlicWeapon.AURA_RADIUS — checked here to avoid a circular load
+
+# Each frame, scan all Garlic mechs with the Bulwark upgrade and take the
+# strongest reduction whose aura covers self. Drives both the take_damage
+# multiplier and the green protection bubble.
+func _update_bulwark_status(_delta: float) -> void:
+	var best := 0.0
+	for m in get_tree().get_nodes_in_group("mechs"):
+		if m == null or not is_instance_valid(m):
+			continue
+		var w: Variant = m.get("weapon")
+		if w == null or not is_instance_valid(w):
+			continue
+		if String(w.get("weapon_name")) != "GARLIC":
+			continue
+		var br: Variant = w.get("bulwark_dmg_reduction")
+		if br == null or float(br) <= 0.0:
+			continue
+		var rm: Variant = w.get("range_mult")
+		var radius: float = GARLIC_AURA_RADIUS * (float(rm) if rm != null else 1.0)
+		if m.global_position.distance_to(global_position) <= radius:
+			best = maxf(best, float(br))
+	_bulwark_reduction = best
+	_update_bulwark_visual()
+
+func _update_bulwark_visual() -> void:
+	if _bulwark_reduction <= 0.0:
+		if is_instance_valid(_bulwark_bubble):
+			_bulwark_bubble.visible = false
+		return
+	if _bulwark_bubble == null or not is_instance_valid(_bulwark_bubble):
+		_bulwark_bubble = MeshInstance3D.new()
+		var sph := SphereMesh.new()
+		sph.radius = BULWARK_BUBBLE_RADIUS
+		sph.height = BULWARK_BUBBLE_RADIUS * 2.0 * 1.6   # slightly elongated to wrap mech body
+		_bulwark_bubble.mesh = sph
+		_bulwark_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_bulwark_bubble_mat = StandardMaterial3D.new()
+		_bulwark_bubble_mat.albedo_color              = Color(0.3, 1.0, 0.4, 0.22)
+		_bulwark_bubble_mat.emission_enabled          = true
+		_bulwark_bubble_mat.emission                  = Color(0.2, 1.0, 0.3)
+		_bulwark_bubble_mat.emission_energy_multiplier = 1.6
+		_bulwark_bubble_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_bulwark_bubble_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_bulwark_bubble_mat.cull_mode                 = BaseMaterial3D.CULL_FRONT
+		_bulwark_bubble.material_override = _bulwark_bubble_mat
+		_bulwark_bubble.position = Vector3(0.0, 1.8, 0.0)
+		add_child(_bulwark_bubble)
+	_bulwark_bubble.visible = true
+	# Pulse opacity with a quick sine so the bubble breathes
+	if _bulwark_bubble_mat != null:
+		var pulse := 0.18 + 0.10 * absf(sin(Time.get_ticks_msec() * 0.005))
+		_bulwark_bubble_mat.albedo_color.a = pulse * (0.6 + 0.4 * _bulwark_reduction)
 
 func attach_weapon(w: Node3D) -> void:
 	weapon = w
@@ -303,12 +363,22 @@ func take_damage(amount: float) -> void:
 	# mech_died → run-end counter drops past zero on the first real death.
 	if not is_alive:
 		return
+	# Bulwark: any nearby Garlic mech with the upgrade reduces incoming damage.
+	var shielded := _bulwark_reduction > 0.0
+	if shielded:
+		amount *= maxf(0.0, 1.0 - _bulwark_reduction)
 	health = maxf(0.0, health - amount)
 	health_changed.emit(health, max_health)
 	if is_instance_valid(_health_bar):
 		_health_bar.set_fraction(health / max_health)
+	# Shielded hits show a desaturated blue-green number so the player sees the save.
+	var dmg_color := Color(0.55, 1.0, 0.7) if shielded else Color(1.0, 0.35, 0.1)
 	DamageNumber.spawn(amount, global_position + Vector3(0.0, 3.8, 0.0),
-		get_tree().current_scene, Color(1.0, 0.35, 0.1))
+		get_tree().current_scene, dmg_color)
+	if shielded:
+		# Bubble flash on every blocked hit so the player sees the save.
+		if _bulwark_bubble_mat != null:
+			_bulwark_bubble_mat.albedo_color.a = 0.55
 	AudioManager.play("mech_hit", global_position, -6.0, randf_range(0.93, 1.07))
 	if not _is_burning and health / max_health <= BURN_THRESHOLD:
 		start_burning()

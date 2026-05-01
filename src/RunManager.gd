@@ -117,7 +117,7 @@ func reset_run() -> void:
 	level      = 1
 	xp_to_next = 10
 	line_speed_mult = 1.0
-	combo_enabled = false
+	combo_enabled = true
 	_combo_stacks.clear()
 	taken_unique_upgrades.clear()
 	taken_upgrades.clear()

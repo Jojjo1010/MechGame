@@ -36,6 +36,12 @@ const DOT_TICK_INTERVAL := 0.5
 var _slow_mult:      float = 1.0
 var _slow_remaining: float = 0.0
 
+# Wither stacks (Garlic Withering upgrade): per-enemy escalating multiplier
+const WITHER_MAX_STACKS := 3
+var _wither_stacks:    int   = 0
+var _wither_remaining: float = 0.0
+var _wither_pips:      Label3D = null
+
 signal enemy_died()
 
 func _ready() -> void:
@@ -114,12 +120,50 @@ func _add_blob_shadow(radius: float, char_height: float) -> void:
 func apply_knockback(impulse: Vector3) -> void:
 	_knockback_vel = impulse
 
+# Increment wither stacks (capped) and refresh the decay timer. Returns the new
+# stack count so the calling weapon can compute its damage multiplier.
+func apply_wither(refresh_duration: float) -> int:
+	_wither_stacks    = mini(_wither_stacks + 1, WITHER_MAX_STACKS)
+	_wither_remaining = refresh_duration
+	_update_wither_visual()
+	return _wither_stacks
+
+func _update_wither_visual() -> void:
+	if _wither_stacks <= 0:
+		if is_instance_valid(_wither_pips):
+			_wither_pips.queue_free()
+			_wither_pips = null
+		return
+	if _wither_pips == null or not is_instance_valid(_wither_pips):
+		_wither_pips = Label3D.new()
+		_wither_pips.font_size  = 64
+		_wither_pips.outline_size = 8
+		_wither_pips.outline_modulate = Color(0.0, 0.05, 0.0, 1.0)
+		_wither_pips.modulate = Color(0.55, 1.0, 0.35, 1.0)
+		_wither_pips.billboard       = BaseMaterial3D.BILLBOARD_ENABLED
+		_wither_pips.no_depth_test   = true
+		_wither_pips.render_priority = 9
+		_wither_pips.position = Vector3(0.0, 3.4, 0.0)
+		add_child(_wither_pips)
+	# Skull-like pip glyphs; one bullet per stack
+	_wither_pips.text = "•".repeat(_wither_stacks)
+	# Tint shifts darker green as stacks rise
+	var t := float(_wither_stacks) / float(WITHER_MAX_STACKS)
+	_wither_pips.modulate = Color(0.55 - 0.30 * t, 1.0, 0.35 - 0.20 * t, 1.0)
+
 func apply_dot(dps: float, duration: float) -> void:
 	# Refresh duration and keep the strongest dps stack
 	_dot_dps       = maxf(_dot_dps, dps)
 	_dot_remaining = maxf(_dot_remaining, duration)
 	if _dot_tick_timer <= 0.0:
 		_dot_tick_timer = DOT_TICK_INTERVAL
+
+func _damage_number_color(is_crit: bool) -> Color:
+	if is_crit:
+		return Color(1.0, 0.95, 0.25)         # bright yellow for crits
+	if _wither_stacks > 0:
+		return Color(0.55, 1.0, 0.35)         # green for wither-amped hits
+	return Color(1.0, 0.92, 0.15)             # default
 
 func apply_slow(mult: float, duration: float) -> void:
 	# Keep the strongest slow (smaller mult = stronger), refresh duration
@@ -144,6 +188,13 @@ func _process(delta: float) -> void:
 		_slow_remaining -= delta
 		if _slow_remaining <= 0.0:
 			_slow_mult = 1.0
+
+	# Wither decay: stacks reset entirely when the timer expires (escape window)
+	if _wither_remaining > 0.0:
+		_wither_remaining -= delta
+		if _wither_remaining <= 0.0:
+			_wither_stacks = 0
+			_update_wither_visual()
 
 	_find_target()
 
@@ -218,14 +269,14 @@ func _flash_hit() -> void:
 			if is_instance_valid(mi):
 				mi.material_overlay = null)
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, is_crit: bool = false) -> void:
 	health = maxf(0.0, health - amount)
 	_flash_hit()
 	if is_instance_valid(_health_bar):
 		_health_bar.visible = true
 		_health_bar.set_fraction(health / max_health)
 	DamageNumber.spawn(amount, global_position + Vector3(0.0, 2.2, 0.0),
-		get_tree().current_scene, Color(1.0, 0.92, 0.15))
+		get_tree().current_scene, _damage_number_color(is_crit), is_crit)
 	if health <= 0.0:
 		enemy_died.emit()
 		RunManager.notify_kill()

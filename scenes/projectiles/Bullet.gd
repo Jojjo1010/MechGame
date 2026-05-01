@@ -13,12 +13,14 @@ var direction := Vector3.ZERO
 var _age:           float  = 0.0
 var _base_damage:   float  = DAMAGE   # pre-multiplied by ult-vs-passive factor
 var _source_weapon: Node3D = null
+var _is_crit:       bool   = false
 
-func launch(from: Vector3, dir: Vector3, source_weapon: Node3D, base_damage: float = DAMAGE) -> void:
+func launch(from: Vector3, dir: Vector3, source_weapon: Node3D, base_damage: float = DAMAGE, is_crit: bool = false) -> void:
 	global_position = from
 	direction = dir.normalized()
 	_source_weapon = source_weapon
 	_base_damage = base_damage
+	_is_crit = is_crit
 	_build_mesh()
 
 func _build_mesh() -> void:
@@ -28,10 +30,19 @@ func _build_mesh() -> void:
 	sph.height = 0.36
 	mi.mesh = sph
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.9, 0.2)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.55, 0.0)
-	mat.emission_energy_multiplier = 3.0
+	# Crit bullets glow yellow-white so the player sees the kill-shot coming.
+	if _is_crit:
+		mat.albedo_color = Color(1.0, 1.0, 0.6)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.95, 0.2)
+		mat.emission_energy_multiplier = 8.0
+		sph.radius = 0.30
+		sph.height = 0.60
+	else:
+		mat.albedo_color = Color(1.0, 0.9, 0.2)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.55, 0.0)
+		mat.emission_energy_multiplier = 3.0
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
@@ -56,11 +67,15 @@ func _process(delta: float) -> void:
 		var dist := global_position.distance_to(enemy.global_position + Vector3(0.0, 0.8, 0.0))
 		if dist < HIT_RADIUS:
 			if is_instance_valid(_source_weapon):
-				_source_weapon._apply_hit(enemy, _base_damage, global_position, direction)
+				_source_weapon._apply_hit(enemy, _base_damage, global_position, direction, _is_crit)
 			else:
-				enemy.take_damage(_base_damage)
-			BurstVFX.spawn(global_position, Color(1.0, 0.65, 0.1), 14, 5.0, 0.35, get_tree().current_scene)
-			AudioManager.play("bullet_impact", global_position, -8.0, randf_range(0.92, 1.1))
+				enemy.take_damage(_base_damage, _is_crit)
+			if _is_crit:
+				BurstVFX.spawn(global_position, Color(1.0, 0.95, 0.3), 28, 9.0, 0.55, get_tree().current_scene)
+				AudioManager.play("bullet_impact", global_position, -2.0, 1.6)
+			else:
+				BurstVFX.spawn(global_position, Color(1.0, 0.65, 0.1), 14, 5.0, 0.35, get_tree().current_scene)
+				AudioManager.play("bullet_impact", global_position, -8.0, randf_range(0.92, 1.1))
 			hit_enemy.emit()
 			queue_free()
 			return

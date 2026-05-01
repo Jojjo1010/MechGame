@@ -21,9 +21,17 @@ var knockback_force:        float = 0.0   # impulse magnitude on hit (0 = none)
 var splash_radius:          float = 0.0   # secondary AOE radius around hit (0 = none)
 var slow_mult:              float = 1.0   # 1.0 = no slow, 0.5 = half speed
 var slow_duration:          float = 0.0   # seconds the slow lasts
+# Headshot (Gun) — number of upgrade stacks taken; 0 = off, 3 = every shot crits
+var headshot_count:         int   = 0
+# Withering (Garlic) — per-stack damage bonus on enemies hit by consecutive pulses
+var withering_per_stack:    float = 0.0
+# Bulwark (Garlic) — fraction of damage reduced for mechs inside the aura
+var bulwark_dmg_reduction:  float = 0.0
 const DOT_DURATION:         float = 3.0
 const SPLASH_DAMAGE_FRAC:   float = 0.5   # splash deals 50% of base damage
 const BASE_KNOCKBACK:       float = 4.0   # small baseline kick every weapon hit applies
+const CRIT_MULT:            float = 6.0   # Headshot crit damage multiplier
+const WITHER_REFRESH_SEC:   float = 1.5   # how long wither stacks linger after a pulse
 
 # Ready-state ring (floating [E] label removed — panel button handles that)
 var _ready_ring: MeshInstance3D     = null
@@ -210,14 +218,20 @@ func _enemies_in_radius(center: Vector3, radius: float) -> Array:
 
 # ── Damage helper ─────────────────────────────────────────────────────────────
 # Applies a hit to an enemy with all configured effects: damage (× damage_mult ×
-# combo), DOT, slow, knockback, splash. `hit_dir` is the incoming direction;
-# used for knockback. Splash uses SPLASH_DAMAGE_FRAC of the primary damage.
-func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Vector3 = Vector3.ZERO) -> void:
+# combo × wither), DOT, slow, knockback, splash. `hit_dir` is the incoming
+# direction; used for knockback. Splash uses SPLASH_DAMAGE_FRAC of the primary
+# damage. `is_crit` flags the hit as a Headshot for the damage-number visual.
+func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Vector3 = Vector3.ZERO, is_crit: bool = false) -> void:
 	if enemy == null or not is_instance_valid(enemy):
 		return
 	var combo := RunManager.combo_mult()
-	var dmg   := base_damage * damage_mult * combo
-	enemy.take_damage(dmg)
+	var wither_mult := 1.0
+	# Withering: refresh stacks on every pulse this enemy gets, scale damage with the post-refresh count.
+	if withering_per_stack > 0.0 and enemy.has_method("apply_wither"):
+		var stacks: int = enemy.apply_wither(WITHER_REFRESH_SEC)
+		wither_mult = 1.0 + withering_per_stack * float(stacks)
+	var dmg := base_damage * damage_mult * combo * wither_mult
+	enemy.take_damage(dmg, is_crit)
 	if dot_dps > 0.0 and enemy.has_method("apply_dot"):
 		enemy.apply_dot(dot_dps, DOT_DURATION)
 	if slow_duration > 0.0 and slow_mult < 1.0 and enemy.has_method("apply_slow"):

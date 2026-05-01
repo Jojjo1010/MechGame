@@ -16,6 +16,7 @@ var _aim_root:         Node3D  = null
 var _aim_im:           ImmediateMesh = null
 var _aim_mat:          StandardMaterial3D = null
 var _gun_drone_nearby: bool    = false
+var _shot_counter:     int     = 0   # ticks per passive fire; drives Headshot crit timing
 
 func _on_setup() -> void:
 	weapon_name = "GUN"
@@ -53,18 +54,34 @@ func _passive_fire() -> void:
 	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
 	var target_pos := nearest.global_position + Vector3(0.0, 0.8, 0.0)
 	var dir := (target_pos - muzzle).normalized()
+
+	# Headshot: every Nth shot crits at CRIT_MULT damage. Stack 1 → every 3rd,
+	# stack 2 → every 2nd, stack 3 → every shot. headshot_count==0 disables.
+	var is_crit := false
+	if headshot_count > 0:
+		var period := maxi(1, 4 - headshot_count)
+		if period <= 1:
+			is_crit = true
+		else:
+			_shot_counter = (_shot_counter + 1) % period
+			is_crit = (_shot_counter == 0)
+
+	var dmg_mult: float = CRIT_MULT if is_crit else 1.0
 	var count := 1 + projectile_count_bonus
 	if count <= 1:
-		_shoot(muzzle, dir, 1.0)
+		_shoot(muzzle, dir, dmg_mult, is_crit)
 	else:
 		var spread := deg_to_rad(passive_spread_per_bullet * float(count - 1))
 		for i in count:
 			var t := (float(i) / float(count - 1)) - 0.5
 			var bdir := dir.rotated(Vector3.UP, t * spread)
-			_shoot(muzzle, bdir, 1.0)
-	_muzzle_flash(muzzle)
+			_shoot(muzzle, bdir, dmg_mult, is_crit)
+	_muzzle_flash(muzzle, is_crit)
 	_mech.trigger_flash()
-	AudioManager.play("gun_fire", muzzle, -6.0, randf_range(0.92, 1.08))
+	if is_crit:
+		AudioManager.play("gun_fire", muzzle, 0.0, 1.7)
+	else:
+		AudioManager.play("gun_fire", muzzle, -6.0, randf_range(0.92, 1.08))
 
 # ── Aiming mode ──────────────────────────────────────────────────────────────
 func _start_aiming() -> void:
@@ -228,36 +245,47 @@ func _destroy_cone() -> void:
 	_aim_mat  = null
 
 # ── Bullet + flash helpers ───────────────────────────────────────────────────
-func _shoot(from: Vector3, dir: Vector3, dmg_mult: float) -> void:
+func _shoot(from: Vector3, dir: Vector3, dmg_mult: float, is_crit: bool = false) -> void:
 	var b := Node3D.new()
 	b.set_script(BULLET_SCRIPT)
 	get_tree().current_scene.add_child(b)
 	# Bullet calls _apply_hit on us at hit time, which folds in damage_mult,
-	# combo, knockback, splash, dot. Pass only the per-shot scaling here.
-	b.launch(from, dir, self, BULLET_BASE_DAMAGE * dmg_mult)
+	# combo, knockback, splash, dot, wither. Pass per-shot scaling + crit flag.
+	b.launch(from, dir, self, BULLET_BASE_DAMAGE * dmg_mult, is_crit)
 
-func _muzzle_flash(pos: Vector3) -> void:
+func _muzzle_flash(pos: Vector3, is_crit: bool = false) -> void:
 	var flash := MeshInstance3D.new()
 	var sph   := SphereMesh.new()
-	sph.radius = 0.45
-	sph.height = 0.9
+	# Crit flash is bigger and brighter so the player can see "this one is the kill shot."
+	if is_crit:
+		sph.radius = 0.85
+		sph.height = 1.7
+	else:
+		sph.radius = 0.45
+		sph.height = 0.9
 	flash.mesh = sph
 	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color              = Color(1.0, 0.9, 0.4)
-	mat.emission_enabled          = true
-	mat.emission                  = Color(1.0, 0.7, 0.1)
-	mat.emission_energy_multiplier = 6.0
+	if is_crit:
+		mat.albedo_color = Color(1.0, 1.0, 0.6)
+		mat.emission_enabled          = true
+		mat.emission                  = Color(1.0, 0.95, 0.3)
+		mat.emission_energy_multiplier = 14.0
+	else:
+		mat.albedo_color = Color(1.0, 0.9, 0.4)
+		mat.emission_enabled          = true
+		mat.emission                  = Color(1.0, 0.7, 0.1)
+		mat.emission_energy_multiplier = 6.0
 	mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	flash.material_override = mat
 	get_tree().current_scene.add_child(flash)
 	flash.global_position = pos
 	var light := OmniLight3D.new()
-	light.light_color    = Color(1.0, 0.65, 0.1)
-	light.light_energy   = 8.0
-	light.omni_range     = 5.0
+	light.light_color    = Color(1.0, 0.95, 0.4) if is_crit else Color(1.0, 0.65, 0.1)
+	light.light_energy   = 18.0 if is_crit else 8.0
+	light.omni_range     = 8.0  if is_crit else 5.0
 	light.shadow_enabled = false
 	flash.add_child(light)
 	var tw := flash.create_tween()
-	tw.tween_property(mat, "albedo_color:a", 0.0, 0.10)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18 if is_crit else 0.10)
 	tw.tween_callback(flash.queue_free)

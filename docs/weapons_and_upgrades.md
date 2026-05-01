@@ -64,7 +64,7 @@ Every regular hit also applies a small base knockback (no upgrade required).
 
 ### Common
 - **Rapid Gun** — +25% fire rate (stacks 3×)
-- **Heavy Slugs** — +20% damage (stacks 3×)
+- **Headshot** — every Nth shot crits at 6× damage; N drops 4 → 3 → 2 → 1 (stacks 3×)
 - **Twin Shot** — +1 bullet per shot (stacks 3×)
 
 ### Uncommon (unique)
@@ -75,12 +75,12 @@ Every regular hit also applies a small base knockback (no upgrade required).
 ## Garlic Upgrades
 
 ### Common
-- **Quick Pulse** — +25% pulse rate (stacks 3×)
-- **Toxic Aura** — +20% damage (stacks 3×)
+- **Withering** — pulses on the same enemy stack +25%/+50%/+75% damage per wither stack (max 3 stacks per enemy, resets after 1.5s without a pulse) (stacks 3×)
+- **Bulwark** — mechs inside the aura take −25%/−50%/−75% damage; protected mechs glow green (stacks 3×)
 - **Wide Aura** — +20% radius (stacks 3×)
 
 ### Uncommon (unique)
-- **Crippling Spores** — aura slows enemies 50% for 1.5s
+- **Crippling Spores** — aura slows enemies 70% for 2.5s
 
 ---
 
@@ -109,6 +109,15 @@ Every regular hit also applies a small base knockback (no upgrade required).
 | `splash_radius`         | secondary AOE around hit       | hits (50% dmg)   |
 | `slow_mult`             | enemy speed mult while slowed  | hits with slow   |
 | `slow_duration`         | seconds slow lasts             | hits with slow   |
+| `headshot_count`        | Gun: stacks → every Nth shot crits 6× | passive bullets  |
+| `withering_per_stack`   | Garlic: dmg added per wither stack | hits + splash    |
+| `bulwark_dmg_reduction` | Garlic: dmg reduction for mechs in aura | mech.take_damage |
+
+## Combo
+
+Kill streak buffs the whole line. Always on. Each kill adds a stack (max 3),
+each stack lasts 2s and grants +30% damage to all weapons. Top-center HUD
+shows current stacks; tint escalates white → yellow → orange → red.
 
 ---
 
