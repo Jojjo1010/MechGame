@@ -167,7 +167,7 @@ func _process(delta: float) -> void:
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta
 		position += velocity * delta
 		position.y = HEIGHT
-		_resolve_mech_collisions()
+		# No mech collision resolution during dash — pass through allies cleanly.
 		_clamp_to_viewport()
 		_dash_ghost_t -= delta
 		if _dash_ghost_t <= 0.0:
