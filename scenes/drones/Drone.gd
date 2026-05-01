@@ -15,9 +15,11 @@ const DAZE_SPEED_MULT := 0.5   # fraction of normal speed while dazed
 const KNOCKBACK_FORCE := 18.0  # impulse strength away from the enemy
 
 const DASH_FORCE     := 40.0    # ~2.85× walk speed — clearly faster, not a teleport
-const DASH_DURATION  := 0.16    # short burst
+const DASH_DURATION  := 0.12    # short burst (4.8u of travel at design aspect)
+const DASH_DURATION_MAX := 0.18 # cap on the per-aspect bump for ultrawides
+const DASH_DESIGN_ASPECT := 1.6 # 2880×1800 — the design machine's aspect
+const DASH_IFRAMES_GRACE := 0.18 # daze-immune grace tacked on after dash ends
 const DASH_COOLDOWN  := 0.7     # snappy — re-dash twice per second-ish, not rationed
-const DASH_IFRAMES   := 0.35    # daze-immune for the dash + brief grace, so landing on an enemy doesn't instantly stun
 const DASH_HIT_RADIUS    := 1.6     # enemies inside this get punched through
 const DASH_DAMAGE        := 18.0    # damage per enemy passed through (one hit per dash)
 const DASH_KNOCKBACK     := 24.0    # impulse magnitude on enemies passed through
@@ -220,6 +222,14 @@ func _process(delta: float) -> void:
 	else:
 		rotation = rotation.lerp(Vector3.ZERO, 8.0 * delta)
 
+func _dash_duration_for_aspect() -> float:
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	if vp.y <= 0.0:
+		return DASH_DURATION
+	var aspect: float = vp.x / vp.y
+	var dur_scale: float = maxf(1.0, aspect / DASH_DESIGN_ASPECT)
+	return minf(DASH_DURATION_MAX, DASH_DURATION * dur_scale)
+
 func _try_dash() -> void:
 	if _dash_cooldown > 0.0 or _dash_active > 0.0:
 		return
@@ -238,9 +248,12 @@ func _try_dash() -> void:
 	if input.length_squared() < 0.001:
 		return
 	velocity = input.normalized() * DASH_FORCE
-	_dash_active   = DASH_DURATION
+	# Bump dash duration on wider-than-design viewports so the felt distance
+	# (dash-as-fraction-of-screen) stays consistent across monitors.
+	var duration := _dash_duration_for_aspect()
+	_dash_active   = duration
 	_dash_cooldown = DASH_COOLDOWN
-	_dash_iframe   = DASH_IFRAMES
+	_dash_iframe   = duration + DASH_IFRAMES_GRACE
 	_dash_dir      = input.normalized()
 	_dash_ghost_t  = 0.0
 	_dash_hit_set.clear()
