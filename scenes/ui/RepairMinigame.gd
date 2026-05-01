@@ -8,9 +8,9 @@ const KEY_DIRS   := ["UP", "LEFT", "DOWN", "RIGHT"]
 const ARROW_CHARS := ["↑", "←", "↓", "→"]   # W A S D
 const KEY_CODES  := [KEY_W, KEY_A, KEY_S, KEY_D]
 
-const BOX_W := 90.0
-const BOX_H := 90.0
-const BOX_GAP := 14.0
+const BOX_W := 150.0
+const BOX_H := 150.0
+const BOX_GAP := 22.0
 
 var _mech:     Node3D = null
 var _drone:    Node3D = null
@@ -20,6 +20,7 @@ var _boxes:    Array[PanelContainer] = []
 var _box_labels: Array[Label] = []
 var _shake_tween: Tween = null
 var _root: Control = null
+var _active_pulse_tween: Tween = null
 
 # Drone work animation
 var _work_timer:  float = 0.0
@@ -278,52 +279,65 @@ func _build_ui() -> void:
 	add_child(_root)
 
 	var total_w := BOX_W * SEQ_LEN + BOX_GAP * (SEQ_LEN - 1)
-	var panel_w := total_w + 60.0
-	var panel_h := BOX_H + 110.0
+	var panel_w := total_w + 100.0
+	var panel_h := BOX_H + 170.0
 
 	await get_tree().process_frame
 	var vp := get_viewport().get_visible_rect()
 	var px  := (vp.size.x - panel_w) * 0.5
-	var py  := vp.size.y * 0.62
+	# Push the panel a bit higher up the screen so it dominates the view.
+	var py  := vp.size.y * 0.50
 
-	# Dark backdrop panel
-	var bg := ColorRect.new()
-	bg.color        = Color(0.04, 0.03, 0.08, 0.90)
-	bg.size         = Vector2(panel_w, panel_h)
-	bg.position     = Vector2(px, py)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(bg)
+	# Dark backdrop panel with a thick orange border so it shouts "act now"
+	var bg_panel := PanelContainer.new()
+	bg_panel.size         = Vector2(panel_w, panel_h)
+	bg_panel.position     = Vector2(px, py)
+	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.04, 0.03, 0.08, 0.92)
+	bg_style.set_corner_radius_all(12)
+	bg_style.border_width_left   = 4
+	bg_style.border_width_right  = 4
+	bg_style.border_width_top    = 4
+	bg_style.border_width_bottom = 4
+	bg_style.border_color        = Color(1.0, 0.55, 0.1, 0.85)
+	bg_style.shadow_color        = Color(0.0, 0.0, 0.0, 0.8)
+	bg_style.shadow_size         = 18
+	bg_style.shadow_offset       = Vector2(0, 6)
+	bg_panel.add_theme_stylebox_override("panel", bg_style)
+	_root.add_child(bg_panel)
 
 	# Title
 	var title := Label.new()
 	title.text = "REPAIR SEQUENCE"
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 38)
 	title.add_theme_color_override("font_color", Color(1.0, 0.65, 0.1, 1.0))
-	title.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
-	title.add_theme_constant_override("shadow_offset_x", 1)
-	title.add_theme_constant_override("shadow_offset_y", 1)
+	title.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
+	title.add_theme_constant_override("outline_size", 4)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.size         = Vector2(panel_w, 36.0)
-	title.position     = Vector2(px, py + 10.0)
+	title.size         = Vector2(panel_w, 50.0)
+	title.position     = Vector2(px, py + 14.0)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(title)
 
 	# Hint
 	var hint := Label.new()
-	hint.text = "use  W A S D"
-	hint.add_theme_font_size_override("font_size", 16)
-	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.75))
+	hint.text = "use  W  A  S  D"
+	hint.add_theme_font_size_override("font_size", 26)
+	hint.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85, 0.95))
+	hint.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
+	hint.add_theme_constant_override("outline_size", 3)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.size         = Vector2(panel_w, 24.0)
-	hint.position     = Vector2(px, py + panel_h - 28.0)
+	hint.size         = Vector2(panel_w, 36.0)
+	hint.position     = Vector2(px, py + panel_h - 42.0)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(hint)
 
-	# Key boxes
+	# Key boxes — arranged in a row beneath the title
 	_boxes.clear()
 	_box_labels.clear()
 	var boxes_x := px + (panel_w - total_w) * 0.5
-	var boxes_y := py + 46.0
+	var boxes_y := py + 80.0
 
 	for i in SEQ_LEN:
 		var bx := boxes_x + i * (BOX_W + BOX_GAP)
@@ -334,11 +348,11 @@ func _build_ui() -> void:
 
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.10, 0.08, 0.18, 1.0)
-		style.set_corner_radius_all(8)
-		style.border_width_left   = 3
-		style.border_width_right  = 3
-		style.border_width_top    = 3
-		style.border_width_bottom = 3
+		style.set_corner_radius_all(14)
+		style.border_width_left   = 5
+		style.border_width_right  = 5
+		style.border_width_top    = 5
+		style.border_width_bottom = 5
 		style.border_color = Color(0.35, 0.28, 0.55, 1.0)
 		box.add_theme_stylebox_override("panel", style)
 		_root.add_child(box)
@@ -346,7 +360,9 @@ func _build_ui() -> void:
 
 		var lbl := Label.new()
 		lbl.text = ARROW_CHARS[_sequence[i]]
-		lbl.add_theme_font_size_override("font_size", 42)
+		lbl.add_theme_font_size_override("font_size", 96)
+		lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
+		lbl.add_theme_constant_override("outline_size", 4)
 		lbl.add_theme_color_override("font_color", Color(0.7, 0.65, 0.85, 1.0))
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
@@ -363,17 +379,40 @@ func _highlight_step(idx: int) -> void:
 		if style == null:
 			continue
 		if i == idx:
-			style.bg_color    = Color(0.20, 0.15, 0.40, 1.0)
+			# "Press this now" — the only thing that should grab the eye
+			style.bg_color    = Color(0.32, 0.22, 0.55, 1.0)
 			style.border_color = Color(1.0, 0.88, 0.25, 1.0)
 			_box_labels[i].add_theme_color_override("font_color", Color(1.0, 0.95, 0.3, 1.0))
+			_boxes[i].pivot_offset = _boxes[i].size * 0.5
+			_boxes[i].scale = Vector2(1.18, 1.18)
 		elif i < idx:
-			style.bg_color    = Color(0.06, 0.22, 0.08, 1.0)
-			style.border_color = Color(0.2, 0.85, 0.3, 1.0)
+			# Already cleared — green check style
+			style.bg_color    = Color(0.06, 0.30, 0.10, 1.0)
+			style.border_color = Color(0.25, 1.0, 0.35, 1.0)
 			_box_labels[i].add_theme_color_override("font_color", Color(0.3, 1.0, 0.4, 1.0))
+			_boxes[i].scale = Vector2.ONE
 		else:
+			# Future steps — dim
 			style.bg_color    = Color(0.10, 0.08, 0.18, 1.0)
 			style.border_color = Color(0.35, 0.28, 0.55, 1.0)
 			_box_labels[i].add_theme_color_override("font_color", Color(0.7, 0.65, 0.85, 1.0))
+			_boxes[i].scale = Vector2.ONE
+	_pulse_active_box(idx)
+
+# Looping breathing pulse on the active box so the player can't miss which key
+# is next. Killed and restarted any time the step advances.
+func _pulse_active_box(idx: int) -> void:
+	if _active_pulse_tween != null and _active_pulse_tween.is_valid():
+		_active_pulse_tween.kill()
+	if idx < 0 or idx >= _boxes.size():
+		return
+	var box := _boxes[idx]
+	box.pivot_offset = box.size * 0.5
+	_active_pulse_tween = box.create_tween().set_loops()
+	_active_pulse_tween.tween_property(box, "scale", Vector2(1.30, 1.30), 0.30) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_active_pulse_tween.tween_property(box, "scale", Vector2(1.10, 1.10), 0.30) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 func _input(event: InputEvent) -> void:
 	if _mech == null or not is_instance_valid(_mech):
@@ -406,38 +445,51 @@ func _on_key(key_idx: int) -> void:
 
 func _on_success() -> void:
 	_cleanup_work_visuals()
+	if _active_pulse_tween != null and _active_pulse_tween.is_valid():
+		_active_pulse_tween.kill()
 	if is_instance_valid(_drone):
 		_drone.repair_locked = false
 	if is_instance_valid(_mech) and _mech.has_method("repair"):
 		_mech.repair()
 	repair_completed.emit(_mech)
-	# Flash all boxes green then free
-	for box in _boxes:
+	# Flash all boxes green and pop them outward — clear "you did it" signal
+	for i in _boxes.size():
+		var box := _boxes[i]
 		var style := box.get_theme_stylebox("panel") as StyleBoxFlat
 		if style:
-			style.bg_color    = Color(0.08, 0.35, 0.10, 1.0)
-			style.border_color = Color(0.2, 1.0, 0.3, 1.0)
+			style.bg_color    = Color(0.10, 0.55, 0.15, 1.0)
+			style.border_color = Color(0.35, 1.0, 0.45, 1.0)
+		box.pivot_offset = box.size * 0.5
+		var ptw := box.create_tween()
+		ptw.tween_property(box, "scale", Vector2(1.45, 1.45), 0.10).set_ease(Tween.EASE_OUT)
+		ptw.tween_property(box, "scale", Vector2(1.0, 1.0), 0.18).set_ease(Tween.EASE_IN)
 	var tw := _root.create_tween()
+	tw.tween_interval(0.28)
 	tw.tween_property(_root, "modulate:a", 0.0, 0.30)
 	tw.tween_callback(queue_free)
 
 func _on_wrong() -> void:
-	# Flash all boxes red, then reset to step 0
+	# Pause the pulse during the shake so the wrong-flash reads cleanly.
+	if _active_pulse_tween != null and _active_pulse_tween.is_valid():
+		_active_pulse_tween.kill()
+	# Flash all boxes red and snap them to default scale, then reset to step 0
 	for box in _boxes:
 		var style := box.get_theme_stylebox("panel") as StyleBoxFlat
 		if style:
-			style.bg_color    = Color(0.35, 0.05, 0.05, 1.0)
-			style.border_color = Color(1.0, 0.15, 0.1, 1.0)
+			style.bg_color    = Color(0.55, 0.06, 0.08, 1.0)
+			style.border_color = Color(1.0, 0.18, 0.14, 1.0)
+		box.scale = Vector2.ONE
 	for lbl in _box_labels:
-		lbl.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1.0))
-	# Shake root
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4, 1.0))
+	# Heavier shake — left/right + small vertical jiggle
 	if _shake_tween != null:
 		_shake_tween.kill()
 	var orig_x: float = _root.position.x
 	_shake_tween = _root.create_tween()
-	_shake_tween.tween_property(_root, "position:x", orig_x + 10.0, 0.04)
-	_shake_tween.tween_property(_root, "position:x", orig_x - 10.0, 0.04)
-	_shake_tween.tween_property(_root, "position:x", orig_x + 6.0,  0.03)
+	_shake_tween.tween_property(_root, "position:x", orig_x + 18.0, 0.04)
+	_shake_tween.tween_property(_root, "position:x", orig_x - 18.0, 0.04)
+	_shake_tween.tween_property(_root, "position:x", orig_x + 10.0, 0.03)
+	_shake_tween.tween_property(_root, "position:x", orig_x - 6.0,  0.03)
 	_shake_tween.tween_property(_root, "position:x", orig_x,        0.03)
 	_shake_tween.tween_callback(func() -> void:
 		_step = 0
