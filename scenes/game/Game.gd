@@ -300,7 +300,7 @@ func _spawn_mech_line(count: int) -> void:
 		if i > 0:
 			mech.leader = mechs[i - 1]
 		mechs_root.add_child(mech)
-		mech.mech_died.connect(_on_mech_died)
+		mech.mech_died.connect(_on_mech_died.bind(mech))
 		mechs.append(mech)
 		var w := Node3D.new()
 		w.set_script(weapon_scripts[i % weapon_scripts.size()])
@@ -309,7 +309,27 @@ func _spawn_mech_line(count: int) -> void:
 		mech.set_color(MechArchetypes.color_for(String(w.weapon_name)))
 		_weapons.append(w)
 
-func _on_mech_died() -> void:
+func _on_mech_died(mech: Node3D) -> void:
+	# Pull the dead mech off the field and re-link the conga line so survivors
+	# don't try to follow a freed node. Then rebuild the UltBar so its slot
+	# count matches the surviving line.
+	var dead_idx := mechs.find(mech)
+	if dead_idx >= 0:
+		var dead_leader: Node3D = mech.leader
+		var was_lead: bool = mech.is_lead
+		for m in mechs:
+			if m == mech or not is_instance_valid(m):
+				continue
+			if m.leader == mech:
+				m.leader = dead_leader
+				if was_lead and dead_leader == null:
+					m.is_lead = true
+		_weapons.remove_at(dead_idx)
+		mechs.remove_at(dead_idx)
+		mech.queue_free()
+		if _ult_bar != null and is_instance_valid(_ult_bar):
+			_ult_bar.setup(_weapons, _archetype_colors())
+
 	_alive_mechs = maxi(0, _alive_mechs - 1)
 	if _alive_mechs == 0 and not _run_ended:
 		_trigger_run_end()

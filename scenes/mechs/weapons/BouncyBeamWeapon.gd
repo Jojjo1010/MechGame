@@ -25,6 +25,9 @@ func _fire_ult() -> void:
 
 # `mode_scale` is the ult-vs-passive firepower factor (1.0 passive, ULT_DAMAGE_MULT
 # for the ult). The global upgrade multiplier is applied separately by _apply_hit.
+# Damage is *deferred* into the per-segment tween callbacks so each enemy takes
+# the hit when the beam visually reaches it — without that, fast enemies died
+# before the bounce visual landed.
 func _fire_beam(max_bounces: int, mode_scale: float) -> void:
 	var first := _nearest_enemy()
 	if first == null:
@@ -32,20 +35,18 @@ func _fire_beam(max_bounces: int, mode_scale: float) -> void:
 	var origin := _mech.global_position + Vector3(0.0, 2.0, 0.0)
 	AudioManager.play("beam_fire", origin, -6.0, randf_range(0.95, 1.05))
 	var points: Array[Vector3] = [origin]
+	var targets: Array[Node3D] = []      # parallel to segments — targets[i] is the enemy hit on segment i
 	var hit: Array[Node3D] = []
 	var current: Node3D = first
-	var prev_pos := origin
 	for _i in max_bounces:
 		if not is_instance_valid(current):
 			break
 		var hit_pos := current.global_position + Vector3(0.0, 0.8, 0.0)
 		points.append(hit_pos)
-		var dir := current.global_position - prev_pos
-		_apply_hit(current, DAMAGE_PER_BOUNCE * mode_scale, current.global_position, dir)
+		targets.append(current)
 		hit.append(current)
-		prev_pos = current.global_position
 		current = _find_bounce_target(current.global_position, hit)
-	_draw_beam(points)
+	_draw_beam(points, targets, mode_scale)
 	_mech.trigger_flash()
 
 func _find_bounce_target(from_pos: Vector3, exclude: Array[Node3D]) -> Node3D:
@@ -62,11 +63,11 @@ func _find_bounce_target(from_pos: Vector3, exclude: Array[Node3D]) -> Node3D:
 			best = e
 	return best
 
-func _draw_beam(points: Array[Vector3]) -> void:
+func _draw_beam(points: Array[Vector3], targets: Array[Node3D] = [], mode_scale: float = 1.0) -> void:
 	if points.size() < 2:
 		return
 
-	const BEAM_SPEED := 42.0   # world units / second
+	const BEAM_SPEED := 20.0   # world units / second — slow enough that each bounce reads
 
 	# ── Traveling head sphere ──────────────────────────────
 	var head := MeshInstance3D.new()
@@ -89,16 +90,23 @@ func _draw_beam(points: Array[Vector3]) -> void:
 	head.global_position = points[0]
 
 	# Chain one tween step per segment:
-	# head moves to next point → segment + impact spawned on arrival
+	# head moves to next point → segment + impact + damage applied on arrival
 	var tw := head.create_tween()
 	for i in points.size() - 1:
 		var seg_a: Vector3 = points[i]
 		var seg_b: Vector3 = points[i + 1]
+		var seg_idx := i
 		var dur := seg_a.distance_to(seg_b) / BEAM_SPEED
 		tw.tween_property(head, "global_position", seg_b, dur).set_trans(Tween.TRANS_LINEAR)
 		tw.tween_callback(func() -> void:
 			_spawn_segment(seg_a, seg_b)
 			_spawn_impact(seg_b)
+			# Damage lands *now*, when the beam visibly arrives at this enemy.
+			if seg_idx < targets.size():
+				var target: Node3D = targets[seg_idx]
+				if is_instance_valid(target):
+					var dir := seg_b - seg_a
+					_apply_hit(target, DAMAGE_PER_BOUNCE * mode_scale, target.global_position, dir)
 			AudioManager.play("beam_bounce", seg_b, -10.0, randf_range(0.9, 1.15))
 		)
 

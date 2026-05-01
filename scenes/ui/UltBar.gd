@@ -47,6 +47,7 @@ const RARITY_BORDERS := [
 ]
 
 # Per-slot runtime state
+var _root:          Control = null
 var _charge_fills:  Array[ColorRect] = []
 var _bar_bgs:       Array[ColorRect] = []
 var _ready_labels:  Array[Label]     = []
@@ -60,29 +61,48 @@ func _ready() -> void:
 	layer = 6
 
 func setup(weapons: Array, mech_colors: Array) -> void:
+	# Re-runnable: called once at boot, then again whenever a mech dies so
+	# the bottom strip's slot count tracks the surviving conga line.
+	if _root != null and is_instance_valid(_root):
+		_root.queue_free()
+	_charge_fills.clear()
+	_bar_bgs.clear()
+	_ready_labels.clear()
+	_flash_tweens.clear()
+	_weapon_names.clear()
+	_slot_colors.clear()
+	_upgrade_grids.clear()
+	_upgrade_states.clear()
+
 	var slot_count := weapons.size()
+	if slot_count == 0:
+		_root = null
+		return
+
 	var total_w := SLOT_W * slot_count + SLOT_GAP * maxi(slot_count - 1, 0)
 
 	# Pin bottom-center via anchors so the bar always sits there even if the
 	# viewport hasn't fully laid out by the time setup() runs.
-	var root := Control.new()
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.anchor_left   = 0.5
-	root.anchor_right  = 0.5
-	root.anchor_top    = 1.0
-	root.anchor_bottom = 1.0
-	root.offset_left   = -total_w * 0.5
-	root.offset_right  = total_w * 0.5
-	root.offset_top    = -SLOT_H - MARGIN_BOT
-	root.offset_bottom = -MARGIN_BOT
-	add_child(root)
+	_root = Control.new()
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.anchor_left   = 0.5
+	_root.anchor_right  = 0.5
+	_root.anchor_top    = 1.0
+	_root.anchor_bottom = 1.0
+	_root.offset_left   = -total_w * 0.5
+	_root.offset_right  = total_w * 0.5
+	_root.offset_top    = -SLOT_H - MARGIN_BOT
+	_root.offset_bottom = -MARGIN_BOT
+	add_child(_root)
 
 	for i in slot_count:
-		_build_slot(root, i, weapons[i], mech_colors[i])
+		_build_slot(_root, i, weapons[i], mech_colors[i])
 
-	# Connect upgrade pickup → grid badge
-	RunManager.upgrade_taken.connect(_on_upgrade_taken)
-	# Replay any upgrades already taken (handles scene reload edge cases)
+	# Connect upgrade pickup → grid badge (guard against double-connect on rebuild)
+	if not RunManager.upgrade_taken.is_connected(_on_upgrade_taken):
+		RunManager.upgrade_taken.connect(_on_upgrade_taken)
+	# Replay any upgrades already taken so surviving slots show the inventory
+	# they had before the rebuild.
 	for u in RunManager.taken_upgrades:
 		_apply_upgrade_to_grid(u)
 
