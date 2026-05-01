@@ -46,7 +46,8 @@ const DRONE_INTERACT_RADIUS := 5.0
 var mechs:    Array[Node3D] = []
 var drones:   Array[Node3D] = []
 var _weapons: Array[Node3D] = []
-var _ult_bar: CanvasLayer = null
+var _ult_bar:        CanvasLayer = null
+var _upgrade_picker: CanvasLayer = null
 var _repair_active: bool = false
 var _alive_mechs:   int  = 0
 var _run_ended:     bool = false
@@ -106,10 +107,10 @@ func _spawn_ult_bar() -> void:
 	_ult_bar.setup(_weapons, _archetype_colors())
 
 func _spawn_upgrade_picker() -> void:
-	var picker := CanvasLayer.new()
-	picker.set_script(UPGRADE_PICKER_SCRIPT)
-	add_child(picker)
-	picker.setup(_weapons, _archetype_colors())
+	_upgrade_picker = CanvasLayer.new()
+	_upgrade_picker.set_script(UPGRADE_PICKER_SCRIPT)
+	add_child(_upgrade_picker)
+	_upgrade_picker.setup(_weapons, _archetype_colors())
 
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
@@ -329,6 +330,10 @@ func _on_mech_died(mech: Node3D) -> void:
 		mech.queue_free()
 		if _ult_bar != null and is_instance_valid(_ult_bar):
 			_ult_bar.setup(_weapons, _archetype_colors())
+		# Drop the dead mech's archetype from the upgrade picker too — no more
+		# offers for a weapon that isn't on the field.
+		if _upgrade_picker != null and is_instance_valid(_upgrade_picker):
+			_upgrade_picker.setup(_weapons, _archetype_colors())
 
 	_alive_mechs = maxi(0, _alive_mechs - 1)
 	if _alive_mechs == 0 and not _run_ended:

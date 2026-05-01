@@ -94,6 +94,8 @@ var _equipped_row:    HBoxContainer = null
 var _cards_row:       HBoxContainer = null
 
 # ── Public ────────────────────────────────────────────────────────────────────
+# Re-runnable: called once at boot and again whenever a mech dies, so the
+# portrait row + offer pool track only the surviving mechs.
 func setup(weapons: Array, mech_colors: Array) -> void:
 	_weapons = weapons
 	layer = 50
@@ -101,13 +103,20 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 
 	_targets       = []
 	_target_colors = []
+	_portrait_buttons.clear()
+	_portrait_styles.clear()
+	_portrait_full_labels.clear()
 	for i in weapons.size():
 		_targets.append(weapons[i].weapon_name)
 		_target_colors.append(mech_colors[i] if i < mech_colors.size() else Color.WHITE)
 
+	if _root != null and is_instance_valid(_root):
+		_root.queue_free()
+
 	_build()
 	_root.visible = false
-	RunManager.level_up.connect(_on_level_up)
+	if not RunManager.level_up.is_connected(_on_level_up):
+		RunManager.level_up.connect(_on_level_up)
 
 # ── Build (once) ──────────────────────────────────────────────────────────────
 func _build() -> void:

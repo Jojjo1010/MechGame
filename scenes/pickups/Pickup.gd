@@ -135,13 +135,19 @@ func _process(delta: float) -> void:
 		_collect()
 		return
 
-	if dist < ATTRACT_RADIUS:
+	# Once a pickup is attracted it *commits* — keeps chasing the drone even
+	# if a dash carries them past ATTRACT_RADIUS, so the collect isn't dropped.
+	if not _attracted and dist < ATTRACT_RADIUS:
 		_attracted = true
+
+	if _attracted:
 		var dir := (_drone.global_position - global_position)
 		dir.y = 0.0
 		dir = dir.normalized()
-		# Accelerate as it gets closer
-		var speed: float = FLY_SPEED * (1.0 + (ATTRACT_RADIUS - dist) / ATTRACT_RADIUS)
+		# Speed boost for close-range pickups; clamped so post-dash chase still
+		# moves at base speed instead of stalling out negative.
+		var boost: float = clampf((ATTRACT_RADIUS - dist) / ATTRACT_RADIUS, 0.0, 1.0)
+		var speed: float = FLY_SPEED * (1.0 + boost)
 		global_position += dir * speed * delta
 		global_position.y = lerpf(global_position.y, _drone.global_position.y, 6.0 * delta)
 	else:
