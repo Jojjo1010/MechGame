@@ -11,7 +11,6 @@ const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
 const UPGRADE_PICKER_SCRIPT := preload("res://scenes/ui/UpgradePicker.gd")
 const DEATH_SCREEN_SCRIPT   := preload("res://scenes/ui/DeathScreen.gd")
 const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
-const COMBO_HUD_SCRIPT      := preload("res://scenes/ui/ComboHUD.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
@@ -78,18 +77,12 @@ func _ready() -> void:
 	_spawn_ult_bar()
 	_spawn_upgrade_picker()
 	_spawn_drone_hint()
-	_spawn_combo_hud()
 	AudioManager.play_music("bgm_main", -12.0)
 
 func _spawn_drone_hint() -> void:
 	_drone_hint = CanvasLayer.new()
 	_drone_hint.set_script(DRONE_HINT_SCRIPT)
 	add_child(_drone_hint)
-
-func _spawn_combo_hud() -> void:
-	var combo_hud := CanvasLayer.new()
-	combo_hud.set_script(COMBO_HUD_SCRIPT)
-	add_child(combo_hud)
 
 func _spawn_controls_legend() -> void:
 	var legend := CanvasLayer.new()

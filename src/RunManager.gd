@@ -9,12 +9,7 @@ var xp_to_next:    int = 10   # XP needed for next level (scales up each level)
 # Run-wide multipliers applied by upgrades
 var line_speed_mult: float = 1.0
 
-# Conga-combo: kills give the whole line a stacking damage buff for a short window
-var combo_enabled:  bool        = false
-const COMBO_MAX_STACKS  := 3
-const COMBO_DURATION    := 2.0
-const COMBO_PER_STACK   := 0.30
-var _combo_stacks:  Array[float] = []   # remaining time per active stack
+# (Combo system removed in playtest — see git history for the prior wiring.)
 
 # Tracks which one-shot (unique) upgrades have been taken so they drop from the pool.
 var taken_unique_upgrades: Array[String] = []
@@ -36,19 +31,6 @@ signal wave_started(number: int)
 signal gold_changed(total: int)
 signal xp_changed(current: int, needed: int)
 signal level_up(new_level: int)
-signal combo_changed(stacks: int)
-
-func _process(delta: float) -> void:
-	if _combo_stacks.is_empty():
-		return
-	var changed := false
-	for i in range(_combo_stacks.size() - 1, -1, -1):
-		_combo_stacks[i] -= delta
-		if _combo_stacks[i] <= 0.0:
-			_combo_stacks.remove_at(i)
-			changed = true
-	if changed:
-		combo_changed.emit(_combo_stacks.size())
 
 func start_wave(number: int) -> void:
 	wave = number
@@ -97,18 +79,7 @@ func is_target_at_type_cap(target: String) -> bool:
 	return target_owned_type_count(target) >= MAX_TYPES_PER_TARGET
 
 func notify_kill() -> void:
-	if not combo_enabled:
-		return
-	_combo_stacks.append(COMBO_DURATION)
-	if _combo_stacks.size() > COMBO_MAX_STACKS:
-		_combo_stacks.pop_front()
-	# Chime escalates with stack count so the player hears the buildup
-	var pitch := 1.0 + 0.18 * float(_combo_stacks.size())
-	AudioManager.play("xp_collect", Vector3.INF, -8.0, pitch)
-	combo_changed.emit(_combo_stacks.size())
-
-func combo_mult() -> float:
-	return 1.0 + COMBO_PER_STACK * float(_combo_stacks.size())
+	pass   # combo system removed; hook kept so call-sites in Enemy.gd don't break
 
 func reset_run() -> void:
 	wave       = 0
@@ -117,11 +88,8 @@ func reset_run() -> void:
 	level      = 1
 	xp_to_next = 10
 	line_speed_mult = 1.0
-	combo_enabled = true
-	_combo_stacks.clear()
 	taken_unique_upgrades.clear()
 	taken_upgrades.clear()
 	owned_upgrades.clear()
 	gold_changed.emit(gold)
 	xp_changed.emit(xp, xp_to_next)
-	combo_changed.emit(0)

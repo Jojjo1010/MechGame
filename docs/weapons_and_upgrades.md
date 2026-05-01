@@ -113,11 +113,6 @@ Every regular hit also applies a small base knockback (no upgrade required).
 | `withering_per_stack`   | Garlic: dmg added per wither stack | hits + splash    |
 | `bulwark_dmg_reduction` | Garlic: dmg reduction for mechs in aura | mech.take_damage |
 
-## Combo
-
-Kill streak buffs the whole line. Always on. Each kill adds a stack (max 3),
-each stack lasts 2s and grants +30% damage to all weapons. Top-center HUD
-shows current stacks; tint escalates white → yellow → orange → red.
 
 ---
 

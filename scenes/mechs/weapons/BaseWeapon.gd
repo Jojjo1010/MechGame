@@ -224,13 +224,12 @@ func _enemies_in_radius(center: Vector3, radius: float) -> Array:
 func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Vector3 = Vector3.ZERO, is_crit: bool = false) -> void:
 	if enemy == null or not is_instance_valid(enemy):
 		return
-	var combo := RunManager.combo_mult()
 	var wither_mult := 1.0
 	# Withering: refresh stacks on every pulse this enemy gets, scale damage with the post-refresh count.
 	if withering_per_stack > 0.0 and enemy.has_method("apply_wither"):
 		var stacks: int = enemy.apply_wither(WITHER_REFRESH_SEC)
 		wither_mult = 1.0 + withering_per_stack * float(stacks)
-	var dmg := base_damage * damage_mult * combo * wither_mult
+	var dmg := base_damage * damage_mult * wither_mult
 	enemy.take_damage(dmg, is_crit)
 	if dot_dps > 0.0 and enemy.has_method("apply_dot"):
 		enemy.apply_dot(dot_dps, DOT_DURATION)
