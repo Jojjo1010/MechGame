@@ -44,22 +44,43 @@ func _ready() -> void:
 	_viewport.own_world_3d = true
 	vc.add_child(_viewport)
 
-	# Soft fill so the back-side mechs don't go pitch-black.
+	# Soft fill so the back-side mechs don't go pitch-black. Kept dim so the
+	# spotlight's pool of light reads clearly against the rest.
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-25.0, 25.0, 0.0)
-	fill.light_energy = 0.45
+	fill.light_energy = 0.28
 	_viewport.add_child(fill)
 
-	# Spotlight aimed down at the front-of-disk position. Anything that lands
-	# there gets the warm "selected" pool of light.
+	# Spotlight: positioned almost directly above the front-of-disk slot so its
+	# beam washes the full height of whichever mech is in the chosen position.
 	_spot = SpotLight3D.new()
-	_spot.position = Vector3(0.0, 5.5, DISK_RADIUS + 0.5)
-	_spot.rotation_degrees = Vector3(-72.0, 0.0, 0.0)
-	_spot.spot_range = 9.0
-	_spot.spot_angle = 22.0
-	_spot.light_energy = 5.5
+	_spot.position = Vector3(0.0, 7.5, DISK_RADIUS + 1.0)
+	_spot.rotation_degrees = Vector3(-80.0, 0.0, 0.0)
+	_spot.spot_range = 12.0
+	_spot.spot_angle = 20.0
+	_spot.light_energy = 7.5
 	_spot.light_color = Color(1.0, 0.92, 0.78)
 	_viewport.add_child(_spot)
+
+	# Floor marker — a soft emissive ring on the disk under the front slot.
+	# Stays put while the turntable spins, so it reads as "this is the chosen
+	# slot" before/during/after the spin lands.
+	var ring := MeshInstance3D.new()
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 0.78
+	ring_mesh.outer_radius = 1.05
+	ring_mesh.ring_segments = 6
+	ring_mesh.rings = 48
+	ring.mesh = ring_mesh
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.albedo_color = Color(1.0, 0.88, 0.7)
+	ring_mat.emission_enabled = true
+	ring_mat.emission = Color(1.0, 0.78, 0.45)
+	ring_mat.emission_energy_multiplier = 2.4
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring.material_override = ring_mat
+	ring.position = Vector3(0.0, 0.02, DISK_RADIUS)
+	_viewport.add_child(ring)
 
 	# The disk itself.
 	var disk := MeshInstance3D.new()
@@ -99,8 +120,10 @@ func _ready() -> void:
 		# Place around the disk.
 		mech.position.x = sin(theta) * DISK_RADIUS
 		mech.position.z = cos(theta) * DISK_RADIUS
-		# FBX's authored front is +X. Rotate so +X points outward radially.
-		mech.rotation.y = theta - PI * 0.5
+		# FBX's authored front is -X (Mech.gd applies a -90° y-rotation so that
+		# -X aligns with -Z, the marching direction). Rotate so -X points
+		# outward radially — the front-slot mech then faces the camera.
+		mech.rotation.y = theta + PI * 0.5
 		# Tint with the slot's archetype color.
 		var tint: Color = _colors[i] if i < _colors.size() else Color.WHITE
 		for child in mech.find_children("*", "MeshInstance3D", true, false):
@@ -116,12 +139,13 @@ func _ready() -> void:
 		_turntable.add_child(mech)
 		_slot_mechs.append(mech)
 
-	# Camera looks down a bit at the front of the disk. Distance is far enough
-	# that a 4-unit-tall mech in the front position fits the vertical FOV.
+	# Camera looks down a bit at the front of the disk. Distance + FOV are
+	# tuned so a 4-unit-tall mech in the front position fits with headroom
+	# above the head and the disk visible below the feet.
 	var cam := Camera3D.new()
-	cam.position = Vector3(0.0, 2.6, DISK_RADIUS + 7.0)
-	cam.rotation_degrees.x = -10.0
-	cam.fov = 38.0
+	cam.position = Vector3(0.0, 3.0, DISK_RADIUS + 10.0)
+	cam.rotation_degrees.x = -12.0
+	cam.fov = 40.0
 	cam.current = true
 	_viewport.add_child(cam)
 
