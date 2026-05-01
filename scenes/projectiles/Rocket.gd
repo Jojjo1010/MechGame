@@ -169,17 +169,19 @@ func _apply_ult_blast(center: Vector3) -> void:
 func _spawn_explosion_vfx(pos: Vector3) -> void:
 	var scene := get_tree().current_scene
 	if _is_ult:
-		BurstVFX.spawn(pos, Color(1.0, 0.65, 0.18), 72, 13.0, 0.85, scene)
-		BurstVFX.spawn(pos + Vector3(0.0, 0.4, 0.0), Color(1.0, 0.85, 0.35), 28, 9.0, 0.55, scene)
-		_spawn_blast_flash(pos, 1.9, 28.0, 14.0)
+		# Ult holds visibly ~1s longer than passive — the strike is the player's
+		# committed call, the explosion needs time to read.
+		BurstVFX.spawn(pos, Color(1.0, 0.65, 0.18), 72, 13.0, 1.85, scene)
+		BurstVFX.spawn(pos + Vector3(0.0, 0.4, 0.0), Color(1.0, 0.85, 0.35), 28, 9.0, 1.55, scene)
+		_spawn_blast_flash(pos, 1.9, 28.0, 14.0, 1.32)
 		AudioManager.play("garlic_ult", pos, -2.0, 0.85)
 		AudioManager.play("gun_ult",    pos, -4.0, 0.70)
 	else:
 		BurstVFX.spawn(pos, Color(1.0, 0.6, 0.15), 32, 8.5, 0.55, scene)
-		_spawn_blast_flash(pos, 1.0, 14.0, 7.0)
+		_spawn_blast_flash(pos, 1.0, 14.0, 7.0, 0.32)
 		AudioManager.play("garlic_ult", pos, -10.0, randf_range(1.05, 1.18))
 
-func _spawn_blast_flash(pos: Vector3, sphere_radius: float, light_energy: float, light_range: float) -> void:
+func _spawn_blast_flash(pos: Vector3, sphere_radius: float, light_energy: float, light_range: float, fade_time: float) -> void:
 	var flash := MeshInstance3D.new()
 	var sph := SphereMesh.new()
 	sph.radius = sphere_radius
@@ -203,8 +205,8 @@ func _spawn_blast_flash(pos: Vector3, sphere_radius: float, light_energy: float,
 	light.shadow_enabled = false
 	flash.add_child(light)
 	var tw := flash.create_tween()
-	tw.tween_property(mat, "albedo_color:a", 0.0, 0.32)
-	tw.parallel().tween_property(flash, "scale", Vector3.ONE * 1.65, 0.32)
+	tw.tween_property(mat, "albedo_color:a", 0.0, fade_time)
+	tw.parallel().tween_property(flash, "scale", Vector3.ONE * 1.65, fade_time)
 	tw.tween_callback(flash.queue_free)
 
 func _spawn_cluster(center: Vector3) -> void:

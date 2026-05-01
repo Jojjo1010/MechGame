@@ -55,20 +55,24 @@ var passive_spread_per_bullet: float = 4.0
 func _passive_fire() -> void:
 	if _aiming:
 		return   # pause passive fire while player aims
-	# Drone-as-spotter: every other passive shot picks the nearest enemy to the drone
-	# instead of the mech, letting the player redirect half the gun's DPS.
+	# Drone-as-spotter: every other passive shot fires straight through the
+	# drone's XZ at the enemy hit plane, turning the drone into a usable laser
+	# pointer. Bullets pass through whatever's clustered near the drone — the
+	# old "nearest enemy to drone" picker missed the actual aim intent.
 	_spotter_toggle = not _spotter_toggle
-	var nearest: Node3D = null
+	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
+	var target_pos: Vector3
+	var spotted := false
 	if _spotter_toggle:
 		var drone := get_tree().get_first_node_in_group("drones") as Node3D
 		if drone != null and is_instance_valid(drone):
-			nearest = _nearest_from(drone.global_position)
-	if nearest == null:
-		nearest = _nearest_enemy()
-	if nearest == null:
-		return
-	var muzzle := _mech.global_position + Vector3(0.0, 2.0, 0.0)
-	var target_pos := nearest.global_position + Vector3(0.0, 0.8, 0.0)
+			target_pos = Vector3(drone.global_position.x, ENEMY_HIT_Y, drone.global_position.z)
+			spotted = true
+	if not spotted:
+		var nearest := _nearest_enemy()
+		if nearest == null:
+			return
+		target_pos = nearest.global_position + Vector3(0.0, 0.8, 0.0)
 	var dir := (target_pos - muzzle).normalized()
 
 	# Headshot: every Nth shot crits at CRIT_MULT damage. Stack 1 → every 3rd,
