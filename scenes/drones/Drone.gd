@@ -17,6 +17,7 @@ const KNOCKBACK_FORCE := 18.0  # impulse strength away from the enemy
 const DASH_FORCE     := 40.0    # ~2.85× walk speed — clearly faster, not a teleport
 const DASH_DURATION  := 0.16    # short burst
 const DASH_COOLDOWN  := 0.7     # snappy — re-dash twice per second-ish, not rationed
+const DASH_IFRAMES   := 0.35    # daze-immune for the dash + brief grace, so landing on an enemy doesn't instantly stun
 const DASH_HIT_RADIUS    := 1.6     # enemies inside this get punched through
 const DASH_DAMAGE        := 18.0    # damage per enemy passed through (one hit per dash)
 const DASH_KNOCKBACK     := 24.0    # impulse magnitude on enemies passed through
@@ -33,6 +34,7 @@ var _blob_shadow: MeshInstance3D = null
 var _blob_shadow_mat: StandardMaterial3D = null
 var _dash_active:    float = 0.0
 var _dash_cooldown:  float = 0.0
+var _dash_iframe:    float = 0.0              # daze-immune window — covers dash + brief landing grace
 var _dash_ghost_t:   float = 0.0
 var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
 var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
@@ -143,6 +145,8 @@ func _process(delta: float) -> void:
 	# Tick dash cooldown always (so it ticks down even while dazed)
 	if _dash_cooldown > 0.0:
 		_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
+	if _dash_iframe > 0.0:
+		_dash_iframe = maxf(0.0, _dash_iframe - delta)
 
 	# Dashing: i-frames (skip enemy contact) + steerable. Re-read WASD each
 	# frame so the player can curve mid-dash; if no input, we keep the last dash
@@ -236,6 +240,7 @@ func _try_dash() -> void:
 	velocity = input.normalized() * DASH_FORCE
 	_dash_active   = DASH_DURATION
 	_dash_cooldown = DASH_COOLDOWN
+	_dash_iframe   = DASH_IFRAMES
 	_dash_dir      = input.normalized()
 	_dash_ghost_t  = 0.0
 	_dash_hit_set.clear()
@@ -304,6 +309,8 @@ func _spawn_dash_ghost() -> void:
 func _check_enemy_contact() -> void:
 	if _daze_timer > 0.0:
 		return  # already dazed, don't reset timer per-frame
+	if _dash_iframe > 0.0:
+		return  # post-dash grace — landing on an enemy mid-recovery shouldn't punish
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		var e := enemy as Node3D
 		if e == null or not is_instance_valid(e):
