@@ -1,7 +1,8 @@
 extends Node
 
 const ENEMY_SCENE    := preload("res://scenes/enemies/Enemy.tscn")
-const SPAWN_RADIUS   := 20.0   # safely outside camera view
+const SPAWN_RADIUS_MIN := 22.0  # floor for the dynamic radius — at min zoom we still want a reasonable approach distance
+const SPAWN_MARGIN     := 6.0   # extra padding past the visible edge so spawns never pop in on-screen
 const BASE_ENEMIES   := 5
 const WAVE_INTERVAL  := 12.0
 const SPAWN_SPREAD   := 4.0    # seconds over which a wave staggers its spawns
@@ -36,10 +37,23 @@ func _spawn_one() -> void:
 	# is -PI/2. A ±2PI/3 window gives a 240° arc covering front and both sides
 	# while excluding the ~120° cone directly behind the conga line.
 	var angle := -PI / 2.0 + randf_range(-2.0 * PI / 3.0, 2.0 * PI / 3.0)
-	var offset := Vector3(cos(angle), 0.0, sin(angle)) * SPAWN_RADIUS
+	var offset := Vector3(cos(angle), 0.0, sin(angle)) * _spawn_radius()
 	var enemy: Node3D = ENEMY_SCENE.instantiate()
 	enemies_container.add_child(enemy)
 	enemy.global_position = center + offset
+
+# Spawn distance scales with the orthographic camera size + viewport aspect so
+# enemies always pop in just past the visible edge — regardless of zoom level
+# or monitor (ultrawide sees ~50% more world horizontally than the design
+# machine, and the radius needs to follow).
+func _spawn_radius() -> float:
+	var cam := get_viewport().get_camera_3d()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	if cam == null or cam.projection != Camera3D.PROJECTION_ORTHOGONAL or vp_size.y <= 0.0:
+		return SPAWN_RADIUS_MIN
+	var aspect: float = vp_size.x / vp_size.y
+	var visible_half: float = cam.size * maxf(1.0, aspect) * 0.5
+	return maxf(SPAWN_RADIUS_MIN, visible_half + SPAWN_MARGIN)
 
 # Use the lead mech as the reference so front-spawned enemies actually land
 # ahead of the line rather than behind the average position.

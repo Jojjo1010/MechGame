@@ -73,11 +73,11 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hbox.add_child(chip)
 
-	# Action icon is supporting iconography, not a highlight — neutral grey so
-	# the eye lands on the lime key chip first, then reads the icon as context.
+	# Without the panel backdrop the legend sits over the world — push everything
+	# to white with a black outline so it stays legible against any terrain.
 	var icon := ActionIcon.new()
 	icon.action_id            = icon_id
-	icon.accent               = UITheme.COLOR_TEXT_SECONDARY
+	icon.accent               = UITheme.COLOR_TEXT_PRIMARY
 	icon.custom_minimum_size  = Vector2(ICON_SIZE, ICON_SIZE)
 	icon.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	icon.mouse_filter         = Control.MOUSE_FILTER_IGNORE
@@ -86,9 +86,9 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 	var lbl := Label.new()
 	lbl.text = action_text
 	lbl.add_theme_font_size_override("font_size", ACTION_FONT)
-	lbl.add_theme_color_override("font_color",         UITheme.COLOR_TEXT_SECONDARY)
+	lbl.add_theme_color_override("font_color",         UITheme.COLOR_TEXT_PRIMARY)
 	lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_BODY)
+	lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_LABEL)
 	lbl.set_v_size_flags(Control.SIZE_SHRINK_CENTER)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(lbl)
@@ -131,7 +131,7 @@ func _make_key_cap(text: String, w: float, h: float, font_size: int) -> PanelCon
 	cap.custom_minimum_size  = Vector2(w, h)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color            = UITheme.COLOR_PANEL_ALPHA
-	sb.border_color        = UITheme.COLOR_ACCENT_LIME
+	sb.border_color        = UITheme.COLOR_TEXT_PRIMARY
 	sb.border_width_left   = 2
 	sb.border_width_right  = 2
 	sb.border_width_top    = 2
@@ -140,7 +140,7 @@ func _make_key_cap(text: String, w: float, h: float, font_size: int) -> PanelCon
 	cap.add_theme_stylebox_override("panel", sb)
 	var lbl := Label.new()
 	lbl.text = text.to_upper()
-	UITheme.style_label_caps(lbl, font_size, UITheme.COLOR_ACCENT_LIME)
+	UITheme.style_label_caps(lbl, font_size, UITheme.COLOR_TEXT_PRIMARY)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
@@ -150,4 +150,6 @@ func _make_key_cap(text: String, w: float, h: float, font_size: int) -> PanelCon
 func _make_mouse_chip() -> Control:
 	var m := MouseIcon.new()
 	m.custom_minimum_size = Vector2(MOUSE_W, MOUSE_H)
+	m.body_color = UITheme.COLOR_TEXT_PRIMARY
+	m.accent     = UITheme.COLOR_TEXT_PRIMARY
 	return m
