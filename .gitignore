@@ -6,6 +6,7 @@
 
 # Exported projects
 /export/
+/build/
 
 # OS junk
 .DS_Store
