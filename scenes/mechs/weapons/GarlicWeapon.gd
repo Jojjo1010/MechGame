@@ -4,8 +4,8 @@ const FIRE_RATE       := 0.65
 const ULT_COOLDOWN    := 14.0
 const AURA_RADIUS     := 4.5
 const DAMAGE_PER_TICK := 10.0
-const ULT_RADIUS      := 12.0
-const ULT_DAMAGE      := 110.0
+const ULT_RADIUS      := 10.0
+const ULT_DAMAGE      := 75.0
 const KNOCKBACK_FORCE := 38.0
 
 var _aura_ring: MeshInstance3D = null
