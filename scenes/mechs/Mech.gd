@@ -23,6 +23,7 @@ var _fire_particles:    GPUParticles3D = null
 var _burn_audio:        AudioStreamPlayer3D = null
 var _burn_damage_timer: float         = 1.0
 var _flash_timer: float = 0.0
+var _repair_grace_timer: float = 0.0   # brief HP-immunity window when F is pressed, so the mech can't die before the minigame helps
 var _ult_flash_timer: float = 0.0
 var _ult_flash_color: Color = Color.WHITE
 const ULT_FLASH_DURATION := 0.35
@@ -126,6 +127,9 @@ func _process(delta: float) -> void:
 	# Only process flash while alive
 	if not is_alive:
 		return
+
+	if _repair_grace_timer > 0.0:
+		_repair_grace_timer = maxf(0.0, _repair_grace_timer - delta)
 
 	if _ult_flash_timer > 0.0:
 		_ult_flash_timer -= delta
@@ -317,6 +321,9 @@ func stop_burning() -> void:
 		_burn_audio.queue_free()
 		_burn_audio = null
 
+func start_repair_grace(seconds: float) -> void:
+	_repair_grace_timer = maxf(_repair_grace_timer, seconds)
+
 func repair() -> void:
 	health = max_health
 	health_changed.emit(health, max_health)
@@ -376,6 +383,11 @@ func take_damage(amount: float) -> void:
 	# Without this guard, enemies still wailing on the corpse would each fire
 	# mech_died → run-end counter drops past zero on the first real death.
 	if not is_alive:
+		return
+	# Repair grace: F-press grants a brief HP-immunity window so a 1-HP mech
+	# can't die before the minigame even gets going. Burn DPS routes through
+	# take_damage too, so it's covered automatically.
+	if _repair_grace_timer > 0.0:
 		return
 	# Bulwark: any nearby Garlic mech with the upgrade reduces incoming damage.
 	var shielded := _bulwark_reduction > 0.0

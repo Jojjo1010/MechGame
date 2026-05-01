@@ -492,7 +492,11 @@ func _on_wrong() -> void:
 	_shake_tween.tween_property(_root, "position:x", orig_x - 6.0,  0.03)
 	_shake_tween.tween_property(_root, "position:x", orig_x,        0.03)
 	_shake_tween.tween_callback(func() -> void:
-		_step = 0
+		# Fail = reroll the whole sequence so the player can't just memorize one
+		# pattern and brute-force it. Step counter resets too.
+		_generate_sequence()
+		for i in _box_labels.size():
+			_box_labels[i].text = ARROW_CHARS[_sequence[i]]
 		_highlight_step(0)
 	)
 

@@ -266,6 +266,9 @@ func _try_start_repair() -> void:
 			continue
 		# Start repair minigame
 		_repair_active = true
+		# Brief HP-immunity so a 1-HP mech can't die before the minigame helps.
+		if mech.has_method("start_repair_grace"):
+			mech.start_repair_grace(1.5)
 		var mg := CanvasLayer.new()
 		mg.set_script(REPAIR_MINIGAME_SCRIPT)
 		add_child(mg)
