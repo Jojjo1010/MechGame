@@ -86,9 +86,8 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 	var lbl := Label.new()
 	lbl.text = action_text
 	lbl.add_theme_font_size_override("font_size", ACTION_FONT)
-	lbl.add_theme_color_override("font_color",         UITheme.COLOR_TEXT_PRIMARY)
-	lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_LABEL)
+	lbl.add_theme_color_override("font_color",      UITheme.COLOR_TEXT_PRIMARY)
+	lbl.add_theme_constant_override("outline_size", 0)
 	lbl.set_v_size_flags(Control.SIZE_SHRINK_CENTER)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(lbl)

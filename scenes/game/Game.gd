@@ -12,6 +12,7 @@ const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
 const UPGRADE_PICKER_SCRIPT := preload("res://scenes/ui/UpgradePicker.gd")
 const DEATH_SCREEN_SCRIPT   := preload("res://scenes/ui/DeathScreen.gd")
 const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
+const LEFT_CLICK_HINT_SCRIPT := preload("res://scenes/ui/LeftClickHint.gd")
 const PAUSE_MENU_SCRIPT     := preload("res://scenes/ui/PauseMenu.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
@@ -59,6 +60,7 @@ const DRONE_HIDE_THRESH_PX := 70.0   # screen-space mech↔drone distance below 
 const DRONE_HIDE_REVEAL    := 0.4    # seconds occluded before hint appears
 const DRONE_HIDE_DISMISS   := 0.25   # seconds clear before hint fades back out
 var _drone_hint:        CanvasLayer = null
+var _left_click_hint:   CanvasLayer = null
 var _drone_hidden_t:    float = 0.0
 var _drone_clear_t:     float = 0.0
 var _drone_hint_shown:  bool  = false
@@ -80,12 +82,20 @@ func _ready() -> void:
 	_spawn_ult_bar()
 	_spawn_upgrade_picker()
 	_spawn_drone_hint()
+	_spawn_left_click_hint()
 	AudioManager.play_music("bgm_main", -12.0)
 
 func _spawn_drone_hint() -> void:
 	_drone_hint = CanvasLayer.new()
 	_drone_hint.set_script(DRONE_HINT_SCRIPT)
 	add_child(_drone_hint)
+
+func _spawn_left_click_hint() -> void:
+	_left_click_hint = CanvasLayer.new()
+	_left_click_hint.set_script(LEFT_CLICK_HINT_SCRIPT)
+	add_child(_left_click_hint)
+	if not drones.is_empty() and is_instance_valid(drones[0]):
+		_left_click_hint.setup(drones[0], camera)
 
 func _open_pause_menu() -> void:
 	var menu := CanvasLayer.new()
@@ -235,7 +245,7 @@ func _setup_environment() -> void:
 
 	sun.light_color = Color(1.0, 0.94, 0.78)
 	sun.light_energy = 1.3
-	sun.shadow_enabled = false
+	sun.shadow_enabled = true
 	sun.rotation_degrees = Vector3(-52.0, 42.0, 0.0)
 
 # --- Drone proximity ---
@@ -256,10 +266,15 @@ func _check_drone_proximity() -> void:
 	mech_options.notify_proximity(closest)
 
 	# Notify each mech's weapon whether the drone is nearby
+	var any_aiming := false
 	for mech in mechs:
 		var w := mech.get("weapon") as Node3D
 		if w != null and w.has_method("notify_drone_nearby"):
 			w.notify_drone_nearby(mech == closest)
+		if w != null and w.has_method("is_aim_mode") and w.is_aim_mode():
+			any_aiming = true
+	if _left_click_hint != null:
+		_left_click_hint.set_hint_visible(any_aiming)
 
 func _on_mech_repair_pressed(_mech: Node3D) -> void:
 	_try_start_repair()

@@ -88,9 +88,8 @@ func _build_ui() -> void:
 	_ult_action_lbl = Label.new()
 	_ult_action_lbl.text = "Ultimate"
 	_ult_action_lbl.add_theme_font_size_override("font_size", 20)
-	_ult_action_lbl.add_theme_color_override("font_color",        Color(1.0, 1.0, 1.0, 0.95))
-	_ult_action_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
-	_ult_action_lbl.add_theme_constant_override("outline_size",   2)
+	_ult_action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
+	_ult_action_lbl.add_theme_constant_override("outline_size", 0)
 	_ult_action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ult_text_col.add_child(_ult_action_lbl)
 
@@ -161,9 +160,8 @@ func _build_ui() -> void:
 	var repair_action_lbl := Label.new()
 	repair_action_lbl.text = "Repair"
 	repair_action_lbl.add_theme_font_size_override("font_size", 20)
-	repair_action_lbl.add_theme_color_override("font_color",        Color(1.0, 1.0, 1.0, 0.95))
-	repair_action_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
-	repair_action_lbl.add_theme_constant_override("outline_size",   2)
+	repair_action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
+	repair_action_lbl.add_theme_constant_override("outline_size", 0)
 	repair_action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	repair_text_col.add_child(repair_action_lbl)
 

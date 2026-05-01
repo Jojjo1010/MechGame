@@ -56,8 +56,7 @@ func _ready() -> void:
 	_label.text = "0"
 	_label.add_theme_font_size_override("font_size", FONT_SIZE)
 	_label.add_theme_color_override("font_color",         Color(1.0, 0.92, 0.30))
-	_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	_label.add_theme_constant_override("outline_size",    3)
+	_label.add_theme_constant_override("outline_size",    0)
 	_label.add_theme_color_override("font_shadow_color",  Color(0.0, 0.0, 0.0, 0.85))
 	_label.add_theme_constant_override("shadow_offset_x", 2)
 	_label.add_theme_constant_override("shadow_offset_y", 2)

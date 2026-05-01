@@ -103,10 +103,6 @@ func _build(waves: int, gold: int, earned: int, total: int) -> void:
 	var title := Label.new()
 	title.text = "MECHS FALLEN"
 	UITheme.style_heading(title, UITheme.FONT_HEADING_XL, UITheme.COLOR_TEXT_PRIMARY)
-	# Strong outline tinted with the warn color so the title carries the
-	# somber-loss accent without going full red.
-	title.add_theme_color_override("font_outline_color", UITheme.COLOR_ACCENT_WARN)
-	title.add_theme_constant_override("outline_size",    UITheme.OUTLINE_HEADING)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_block.add_child(title)
 
@@ -187,31 +183,13 @@ func _make_stat_row(label_text: String, value_text: String) -> Control:
 	hbox.add_child(val)
 	return hbox
 
-# Primary button: solid hot-pink fill, white caps label, hairline border.
-# Hover brightens the fill and gently scales up. Pressed flashes white and
-# does a small scale punch.
+# Primary button — see UITheme.apply_primary_button. Solid hot-pink, no
+# border, darker on hover.
 func _make_primary_button(text: String) -> Button:
-	var btn := _make_button_base(text, UITheme.COLOR_TEXT_PRIMARY)
-
-	var normal := StyleBoxFlat.new()
-	normal.bg_color     = UITheme.COLOR_ACCENT_HOT
-	normal.border_color = UITheme.COLOR_BORDER_HAIR
-	normal.set_border_width_all(int(UITheme.PANEL_BORDER_W))
-	normal.set_corner_radius_all(PANEL_CORNER_R)
-	btn.add_theme_stylebox_override("normal", normal)
-
-	var hover := normal.duplicate()
-	# Slightly brighter pink on hover — lerp toward white at a low ratio so the
-	# brand color stays dominant.
-	hover.bg_color     = UITheme.COLOR_ACCENT_HOT.lerp(UITheme.COLOR_TEXT_PRIMARY, 0.18)
-	hover.border_color = UITheme.COLOR_BORDER_BRIGHT
-	btn.add_theme_stylebox_override("hover", hover)
-
-	var pressed := normal.duplicate()
-	pressed.bg_color     = UITheme.COLOR_TEXT_PRIMARY  # white flash
-	pressed.border_color = UITheme.COLOR_BORDER_BRIGHT
-	btn.add_theme_stylebox_override("pressed", pressed)
-
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(BTN_W, BTN_H)
+	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
+	UITheme.apply_primary_button(btn, text, PANEL_CORNER_R)
 	_wire_button_motion(btn)
 	return btn
 
@@ -245,18 +223,16 @@ func _make_secondary_button(text: String) -> Button:
 	_wire_button_motion(btn)
 	return btn
 
-# Shared button skeleton — sizing, font, outline, focus. `font_color` is the
-# resting label color (white for primary, lime for secondary).
+# Shared button skeleton — sizing, font, focus. `font_color` is the resting
+# label color (white for primary, lime for secondary).
 func _make_button_base(text: String, font_color: Color) -> Button:
 	var btn := Button.new()
 	btn.text = text.to_upper()
 	btn.custom_minimum_size = Vector2(BTN_W, BTN_H)
 	btn.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
-	btn.add_theme_color_override("font_color",         font_color)
-	btn.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	btn.add_theme_constant_override("outline_size",    UITheme.OUTLINE_LABEL)
+	btn.add_theme_color_override("font_color",      font_color)
+	btn.add_theme_constant_override("outline_size", 0)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	# Pivot at center so scale punches stay centered on the button.
 	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
 	return btn
 

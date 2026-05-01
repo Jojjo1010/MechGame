@@ -57,12 +57,19 @@ func _build_mesh() -> void:
 		sph.radius = 0.34
 		sph.height = 0.68
 	else:
-		mat.albedo_color = Color(1.0, 0.9, 0.2)
+		# Tint passive bullets with the firing mech's archetype color so the
+		# trace reads back to the source. Brighten the albedo for visibility.
+		var tint: Color = Color(1.0, 0.85, 0.3)
+		if _source_weapon != null and is_instance_valid(_source_weapon):
+			var mc: Variant = _source_weapon.get("_mech_color")
+			if mc != null:
+				tint = mc as Color
+		mat.albedo_color = tint.lerp(Color.WHITE, 0.45)
 		mat.emission_enabled = true
-		mat.emission = Color(1.0, 0.55, 0.0)
-		mat.emission_energy_multiplier = 3.0
+		mat.emission = tint
+		mat.emission_energy_multiplier = 4.0
 	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(mi)
 
 	var light := OmniLight3D.new()

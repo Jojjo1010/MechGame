@@ -32,9 +32,8 @@ func _build() -> void:
 	var title := Label.new()
 	title.text = "GARAGE"
 	title.add_theme_font_size_override("font_size", 56)
-	title.add_theme_color_override("font_color",         Color(1.0, 0.95, 0.75, 1.0))
-	title.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	title.add_theme_constant_override("outline_size",    4)
+	title.add_theme_color_override("font_color",      Color(1.0, 0.95, 0.75, 1.0))
+	title.add_theme_constant_override("outline_size", 0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 
@@ -170,8 +169,7 @@ func _make_button(text: String, accent: Color) -> Button:
 	btn.add_theme_font_size_override("font_size", 22)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", Color.WHITE)
-	btn.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	btn.add_theme_constant_override("outline_size", 2)
+	btn.add_theme_constant_override("outline_size", 0)
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.06, 0.05, 0.10, 0.95)

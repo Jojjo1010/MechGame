@@ -89,27 +89,48 @@ static func panel_stylebox(accent: Color = COLOR_BORDER_HAIR) -> StyleBoxFlat:
 	sb.content_margin_bottom = PAD_M
 	return sb
 
-# Apply the OW heading style to a Label in one call.
+# Apply the heading style to a Label in one call. No text outline.
 static func style_heading(label: Label, font_size: int = FONT_HEADING_L,
 		color: Color = COLOR_TEXT_PRIMARY) -> void:
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color",         color)
-	label.add_theme_color_override("font_outline_color", COLOR_OUTLINE)
-	label.add_theme_constant_override("outline_size",    OUTLINE_HEADING)
+	label.add_theme_color_override("font_color",    color)
+	label.add_theme_constant_override("outline_size", 0)
 	label.text = label.text.to_upper()
 
-# Apply the OW caps-label style — uppercase, tracked, hairline outline.
+# Apply the caps-label style — uppercase, tracked. No text outline.
 static func style_label_caps(label: Label, font_size: int = FONT_LABEL_CAPS,
 		color: Color = COLOR_TEXT_PRIMARY) -> void:
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color",         color)
-	label.add_theme_color_override("font_outline_color", COLOR_OUTLINE)
-	label.add_theme_constant_override("outline_size",    OUTLINE_LABEL)
+	label.add_theme_color_override("font_color",    color)
+	label.add_theme_constant_override("outline_size", 0)
 	label.text = label.text.to_upper()
 
-# Apply the OW body text style — mixed case, soft outline.
+# Apply the body text style — mixed case. No text outline.
 static func style_body(label: Label, color: Color = COLOR_TEXT_SECONDARY) -> void:
 	label.add_theme_font_size_override("font_size", FONT_BODY)
-	label.add_theme_color_override("font_color",         color)
-	label.add_theme_color_override("font_outline_color", COLOR_OUTLINE)
-	label.add_theme_constant_override("outline_size",    OUTLINE_BODY)
+	label.add_theme_color_override("font_color",    color)
+	label.add_theme_constant_override("outline_size", 0)
+
+# Primary button styling — solid hot-pink fill, no border, darker on hover.
+# Uppercase white caps label. The caller owns sizing, pivot, and motion wiring.
+static func apply_primary_button(btn: Button, label_text: String,
+		corner_radius: int = PANEL_CORNER_R) -> void:
+	btn.text = label_text.to_upper()
+	btn.add_theme_font_size_override("font_size", FONT_LABEL_CAPS)
+	btn.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+	btn.add_theme_constant_override("outline_size", 0)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = COLOR_ACCENT_HOT
+	normal.set_border_width_all(0)
+	normal.set_corner_radius_all(corner_radius)
+	btn.add_theme_stylebox_override("normal", normal)
+
+	var hover := normal.duplicate()
+	hover.bg_color = COLOR_ACCENT_HOT.lerp(COLOR_DEEP, 0.22)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	var pressed := normal.duplicate()
+	pressed.bg_color = COLOR_ACCENT_HOT.lerp(COLOR_DEEP, 0.40)
+	btn.add_theme_stylebox_override("pressed", pressed)

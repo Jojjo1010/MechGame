@@ -5,10 +5,10 @@ const BurstVFX      = preload("res://scenes/vfx/BurstVFX.gd")
 
 const FIRE_RATE         := 1.6
 const ULT_COOLDOWN      := 12.0
-const BASE_DAMAGE       := 50.0
-const INNATE_SPLASH     := 3.0     # passive rocket splash radius (also scaled by Bigger Boom upgrade)
-const ULT_DAMAGE_MULT   := 5.0     # single big rocket — heavy hit
-const ULT_SPLASH_RADIUS := 5.5     # matches the marker ring
+const BASE_DAMAGE       := 75.0    # high-impact slow rocket — splash catches the still ones
+const INNATE_SPLASH     := 4.0     # passive rocket splash radius (also scaled by Bigger Boom upgrade)
+const ULT_DAMAGE_MULT   := 7.0     # single big rocket — devastating hit
+const ULT_SPLASH_RADIUS := 7.0     # matches the marker ring
 
 var _marking:    bool   = false
 var _ring_root:  Node3D = null
@@ -19,6 +19,9 @@ func _on_setup() -> void:
 	weapon_name = "ROCKET"
 	# Built-in splash so every rocket explodes — Bigger Boom upgrade scales this.
 	splash_radius = INNATE_SPLASH
+
+func is_aim_mode() -> bool:
+	return _marking
 
 func get_fire_rate() -> float:
 	return FIRE_RATE
@@ -88,7 +91,12 @@ func _fire_strike(target: Vector3) -> void:
 	if _mech == null or not is_instance_valid(_mech) or not _mech.is_alive:
 		return
 	var muzzle := _mech.global_position + Vector3(0.0, 1.6, 0.0)
-	_launch_rocket(muzzle, target, BASE_DAMAGE * ULT_DAMAGE_MULT, true, ULT_SPLASH_RADIUS)
+	# Orbital drop: the rocket appears in the sky above the marked spot and
+	# falls nearly straight down — reads cleanly without an across-the-map arc.
+	# Slight XZ offset gives the dive a tiny diagonal so it's not pure vertical.
+	var sky_origin := target + Vector3(0.6, 25.0, 0.6)
+	_launch_rocket(sky_origin, target, BASE_DAMAGE * ULT_DAMAGE_MULT, true, ULT_SPLASH_RADIUS)
+	# Flash on the firing mech anyway — it's the "called in the strike" cue.
 	_ult_muzzle_flash(muzzle, (target - muzzle).normalized())
 	_mech.trigger_flash()
 	AudioManager.play("gun_ult", muzzle, -1.0, 0.85)

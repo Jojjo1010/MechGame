@@ -33,6 +33,9 @@ func notify_drone_nearby(nearby: bool) -> void:
 	_gun_drone_nearby = nearby
 	super.notify_drone_nearby(nearby)
 
+func is_aim_mode() -> bool:
+	return _aiming
+
 func get_fire_rate() -> float:
 	return FIRE_RATE
 

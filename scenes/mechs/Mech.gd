@@ -343,6 +343,40 @@ func needs_repair() -> bool:
 
 
 
+func start_ult_windup(color: Color, duration: float) -> void:
+	# Pre-fire windup: model swells slightly + a tinted halo sphere blooms and
+	# fades from the mech base, telegraphing "this mech is firing its ult NOW."
+	var model := get_node_or_null("Model")
+	if model:
+		var base_scale: Vector3 = model.scale
+		var tw := create_tween()
+		tw.tween_property(model, "scale", base_scale * 1.10, duration * 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(model, "scale", base_scale, duration * 0.3).set_ease(Tween.EASE_IN)
+
+	var halo := MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = 1.4
+	sph.height = 2.8
+	halo.mesh = sph
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var hmat := StandardMaterial3D.new()
+	hmat.albedo_color              = Color(color.r, color.g, color.b, 0.0)
+	hmat.emission_enabled          = true
+	hmat.emission                  = color
+	hmat.emission_energy_multiplier = 6.0
+	hmat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+	hmat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	halo.material_override = hmat
+	halo.position = Vector3(0.0, 1.3, 0.0)
+	add_child(halo)
+	var htw := halo.create_tween()
+	htw.tween_property(halo, "scale", Vector3.ONE * 1.6, duration).set_ease(Tween.EASE_OUT)
+	htw.parallel().tween_property(hmat, "albedo_color:a", 0.55, duration * 0.5).set_ease(Tween.EASE_OUT)
+	htw.tween_property(hmat, "albedo_color:a", 0.0, duration * 0.5).set_ease(Tween.EASE_IN)
+	htw.tween_callback(halo.queue_free)
+
+	AudioManager.play("ult_ready", global_position, -6.0, 0.7)
+
 func ult_fired(color: Color) -> void:
 	# Bright color flash using mech's own color
 	_ult_flash_color = Color(
@@ -554,6 +588,28 @@ func set_color(color: Color) -> void:
 		mi.material_override = mat
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_mesh_instances.append(mi)
+	_add_permanent_outline()
+
+# Permanent dark inverse-hull outline so the mech reads as a clear silhouette
+# against busy environment colors. Smaller than the selection outline (0.14) so
+# the hot-pink selection still visually overrides it when toggled on.
+func _add_permanent_outline() -> void:
+	for ol in find_children("_perm_outline", "MeshInstance3D", true, false):
+		ol.queue_free()
+	for src in _mesh_instances:
+		if not is_instance_valid(src) or src.mesh == null:
+			continue
+		var ol := MeshInstance3D.new()
+		ol.name = "_perm_outline"
+		ol.mesh = src.mesh
+		ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var sm := ShaderMaterial.new()
+		sm.shader = OUTLINE_SHADER
+		sm.set_shader_parameter("outline_color", Color(0.0, 0.0, 0.0, 1.0))
+		sm.set_shader_parameter("outline_size", 0.08)
+		ol.material_override = sm
+		src.add_child(ol)
+		ol.transform = Transform3D.IDENTITY
 
 func _on_died() -> void:
 	is_alive = false

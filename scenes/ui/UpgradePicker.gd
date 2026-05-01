@@ -145,17 +145,15 @@ func _build() -> void:
 	var title := Label.new()
 	title.text = "LEVEL UP"
 	title.add_theme_font_size_override("font_size", 88)
-	title.add_theme_color_override("font_color",         Color(0.98, 0.92, 0.65, 1.0))
-	title.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	title.add_theme_constant_override("outline_size",    6)
+	title.add_theme_color_override("font_color",      Color(0.98, 0.92, 0.65, 1.0))
+	title.add_theme_constant_override("outline_size", 0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 
 	_subtitle_label = Label.new()
 	_subtitle_label.add_theme_font_size_override("font_size", 38)
-	_subtitle_label.add_theme_color_override("font_color",         TEXT_DIM)
-	_subtitle_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))
-	_subtitle_label.add_theme_constant_override("outline_size",    2)
+	_subtitle_label.add_theme_color_override("font_color",      TEXT_DIM)
+	_subtitle_label.add_theme_constant_override("outline_size", 0)
 	_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_subtitle_label)
 

@@ -312,8 +312,7 @@ func _build_ui() -> void:
 	title.text = "REPAIR SEQUENCE"
 	title.add_theme_font_size_override("font_size", 38)
 	title.add_theme_color_override("font_color", Color(1.0, 0.65, 0.1, 1.0))
-	title.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	title.add_theme_constant_override("outline_size", 4)
+	title.add_theme_constant_override("outline_size", 0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size         = Vector2(panel_w, 50.0)
 	title.position     = Vector2(px, py + 14.0)
@@ -325,8 +324,7 @@ func _build_ui() -> void:
 	hint.text = "use  W  A  S  D"
 	hint.add_theme_font_size_override("font_size", 26)
 	hint.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85, 0.95))
-	hint.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
-	hint.add_theme_constant_override("outline_size", 3)
+	hint.add_theme_constant_override("outline_size", 0)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.size         = Vector2(panel_w, 36.0)
 	hint.position     = Vector2(px, py + panel_h - 42.0)
@@ -361,8 +359,7 @@ func _build_ui() -> void:
 		var lbl := Label.new()
 		lbl.text = ARROW_CHARS[_sequence[i]]
 		lbl.add_theme_font_size_override("font_size", 96)
-		lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-		lbl.add_theme_constant_override("outline_size", 4)
+		lbl.add_theme_constant_override("outline_size", 0)
 		lbl.add_theme_color_override("font_color", Color(0.7, 0.65, 0.85, 1.0))
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER

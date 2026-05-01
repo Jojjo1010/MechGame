@@ -3,6 +3,7 @@ extends Node3D
 signal charge_changed(value: float)  # 0.0 = just fired, 1.0 = ready
 
 const SHOOT_RANGE := 22.0
+const ULT_WINDUP_DURATION := 0.45  # pre-fire telegraph so the ult reads as a moment
 
 var weapon_name:    String = "WEAPON"
 var _mech:          Node3D = null
@@ -102,7 +103,13 @@ func activate_ult() -> bool:
 	if not is_ready():
 		return false
 	_reset_cooldown()
-	_fire_ult()
+	# Telegraph windup on the firing mech so the player can read where the ult
+	# is coming from, then resolve the actual fire after the windup elapses.
+	if is_instance_valid(_mech) and _mech.has_method("start_ult_windup"):
+		_mech.start_ult_windup(_mech_color, ULT_WINDUP_DURATION)
+		get_tree().create_timer(ULT_WINDUP_DURATION).timeout.connect(_fire_ult)
+	else:
+		_fire_ult()
 	return true
 
 func _fire_ult() -> void:
@@ -127,6 +134,11 @@ func is_ready() -> bool:
 
 func notify_drone_nearby(nearby: bool) -> void:
 	_drone_nearby = nearby
+
+# True while the weapon is in an interactive aim/mark mode that needs the
+# player to commit with left click. Game.gd polls this to show the click hint.
+func is_aim_mode() -> bool:
+	return false
 
 # ── Ready / consumed hooks ────────────────────────────────────────────────────
 
@@ -171,25 +183,9 @@ func _hide_e_label() -> void:
 # ── Build ring ────────────────────────────────────────────────────────────────
 
 func _build_ready_visuals() -> void:
-	_ready_ring = MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius  = 1.30
-	torus.outer_radius  = 1.75
-	torus.rings         = 48
-	torus.ring_segments = 12
-	_ready_ring.mesh = torus
-	_ready_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_ring_mat = StandardMaterial3D.new()
-	_ring_mat.albedo_color               = Color(_mech_color.r, _mech_color.g, _mech_color.b, 0.0)
-	_ring_mat.emission_enabled           = true
-	_ring_mat.emission                   = _mech_color
-	_ring_mat.emission_energy_multiplier = 4.0
-	_ring_mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_ring_mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_ready_ring.material_override = _ring_mat
-	_ready_ring.position.y = 0.12
-	_ready_ring.visible    = false
-	add_child(_ready_ring)
+	# Ult-ready ring removed — ult bar UI + audio cue signal readiness without
+	# the on-floor pulse. _show_ring / _hide_ring stay safe via null guards.
+	pass
 
 # ── Enemy helpers ─────────────────────────────────────────────────────────────
 

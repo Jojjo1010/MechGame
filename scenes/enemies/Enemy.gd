@@ -4,6 +4,7 @@ const BurstVFX     = preload("res://scenes/vfx/BurstVFX.gd")
 const HealthBar3D  = preload("res://scenes/ui/HealthBar3D.gd")
 const DamageNumber = preload("res://scenes/ui/DamageNumber.gd")
 const Pickup       = preload("res://scenes/pickups/Pickup.gd")
+const OUTLINE_SHADER = preload("res://scenes/vfx/mech_outline.gdshader")
 
 const SPEED := 4.5
 const ATTACK_RANGE := 1.4
@@ -60,6 +61,7 @@ func _ready() -> void:
 		if mi:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_mesh_instances.append(mi)
+	_add_permanent_outline()
 	_add_blob_shadow(0.5, 2.5)
 	# HP bar — hidden until first hit
 	_health_bar = Node3D.new()
@@ -67,6 +69,21 @@ func _ready() -> void:
 	_health_bar.position = Vector3(0.0, 2.9, 0.0)
 	_health_bar.visible = false
 	add_child(_health_bar)
+
+func _add_permanent_outline() -> void:
+	for src in _mesh_instances:
+		if not is_instance_valid(src) or src.mesh == null:
+			continue
+		var ol := MeshInstance3D.new()
+		ol.mesh = src.mesh
+		ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var sm := ShaderMaterial.new()
+		sm.shader = OUTLINE_SHADER
+		sm.set_shader_parameter("outline_color", Color(0.0, 0.0, 0.0, 1.0))
+		sm.set_shader_parameter("outline_size", 0.08)
+		ol.material_override = sm
+		src.add_child(ol)
+		ol.transform = Transform3D.IDENTITY
 
 func _add_shadow_decal(width: float, depth: float, char_height: float) -> void:
 	const SUN_Y_DEG := 42.0

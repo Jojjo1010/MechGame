@@ -21,9 +21,8 @@ func _ensure_label() -> void:
 	lbl.name = "Label"
 	lbl.text = icon_text
 	lbl.add_theme_font_size_override("font_size", icon_size)
-	lbl.add_theme_color_override("font_color",         icon_color)
-	lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))
-	lbl.add_theme_constant_override("outline_size",    3)
+	lbl.add_theme_color_override("font_color",      icon_color)
+	lbl.add_theme_constant_override("outline_size", 0)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

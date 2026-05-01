@@ -5,7 +5,7 @@ extends Node3D
 # committed strike spot); the rocket commits to that point and explodes there
 # regardless of whether the original target moved. Mid-air enemy contact also
 # triggers detonation.
-const HORIZONTAL_SPEED   := 16.0   # governs flight time over horizontal distance
+const HORIZONTAL_SPEED   := 7.0    # slow enough that fast enemies can dodge — splash catches the still ones
 const HIT_RADIUS         := 0.9
 const PEAK_HEIGHT_FRAC   := 0.32   # arc apex above midpoint = horiz dist × this
 const PEAK_HEIGHT_MIN    := 1.8
@@ -34,6 +34,7 @@ var _napalm_burn_dps: float = 0.0
 var _napalm_radius:   float = 0.0
 var _napalm_duration: float = 0.0
 var _mesh_node:    MeshInstance3D = null
+var _ground_shadow: MeshInstance3D = null
 
 func launch(from: Vector3, to: Vector3, source_weapon: Node3D, base_damage: float, is_ult: bool = false, ult_splash: float = 0.0) -> void:
 	_start_pos     = from
@@ -43,10 +44,18 @@ func launch(from: Vector3, to: Vector3, source_weapon: Node3D, base_damage: floa
 	_is_ult        = is_ult
 	_ult_splash    = ult_splash
 	var horiz := Vector2(to.x - from.x, to.z - from.z).length()
-	_flight_time = maxf(horiz / HORIZONTAL_SPEED, MIN_FLIGHT_TIME)
-	_peak_height = clampf(horiz * PEAK_HEIGHT_FRAC, PEAK_HEIGHT_MIN, PEAK_HEIGHT_MAX)
-	if _is_ult:
-		_peak_height += ULT_PEAK_BONUS
+	var vert  := from.y - to.y   # positive when launching from above (orbital drop)
+	# Orbital drop: launch is well above target with little horizontal travel.
+	# Use vertical drop to govern flight time (constant descent feel) and skip
+	# the parabolic lift since the rocket is already starting overhead.
+	if vert > 8.0 and horiz < vert * 0.5:
+		_flight_time = maxf(vert / 22.0, 0.7)   # ~22 u/s descent → ~1.1s for 25u drop
+		_peak_height = 0.0
+	else:
+		_flight_time = maxf(horiz / HORIZONTAL_SPEED, MIN_FLIGHT_TIME)
+		_peak_height = clampf(horiz * PEAK_HEIGHT_FRAC, PEAK_HEIGHT_MIN, PEAK_HEIGHT_MAX)
+		if _is_ult:
+			_peak_height += ULT_PEAK_BONUS
 	if source_weapon != null:
 		_cluster_count   = int(source_weapon.get("cluster_count"))
 		_napalm_burn_dps = float(source_weapon.get("napalm_burn_dps"))
@@ -64,28 +73,115 @@ func _arc_pos(t: float) -> Vector3:
 	return flat
 
 func _build_mesh() -> void:
+	# Rocket geometry: gray body cylinder + red nose cone + 3 radial fins +
+	# a glowing exhaust at the back. The whole assembly is a child Node3D
+	# rotated +90° X so its local Y aligns with parent forward (-Z) — look_at
+	# in _orient_along then aims the nose along travel.
 	_mesh_node = MeshInstance3D.new()
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.20 if _is_ult else 0.18
-	cap.height = 1.10 if _is_ult else 0.80
-	_mesh_node.mesh = cap
-	_mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Capsule's long axis is local Y; the per-frame look_at handles aim.
+	_mesh_node.mesh = null
+	_mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	_mesh_node.rotation_degrees = Vector3(90.0, 0.0, 0.0)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color               = Color(1.0, 0.75, 0.25)
-	mat.emission_enabled           = true
-	mat.emission                   = Color(1.0, 0.45, 0.05)
-	mat.emission_energy_multiplier = 5.5 if _is_ult else 4.0
-	_mesh_node.material_override = mat
 	add_child(_mesh_node)
 
+	var body_radius: float = 0.28 if _is_ult else 0.22
+	var body_height: float = 1.15 if _is_ult else 0.90
+	var nose_height: float = 0.55 if _is_ult else 0.42
+	var fin_h: float = 0.36 if _is_ult else 0.28
+	var fin_w: float = 0.06
+	var fin_d: float = 0.34 if _is_ult else 0.26
+
+	# Body — gray metal cylinder
+	var body_mi := MeshInstance3D.new()
+	var body_cyl := CylinderMesh.new()
+	body_cyl.top_radius = body_radius
+	body_cyl.bottom_radius = body_radius
+	body_cyl.height = body_height
+	body_mi.mesh = body_cyl
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = Color(0.55, 0.55, 0.60)
+	body_mat.metallic = 0.5
+	body_mat.roughness = 0.4
+	body_mi.material_override = body_mat
+	_mesh_node.add_child(body_mi)
+
+	# Nose cone — red warhead at the front (forward = +Y in local space here)
+	var nose_mi := MeshInstance3D.new()
+	var nose_cyl := CylinderMesh.new()
+	nose_cyl.top_radius = 0.0
+	nose_cyl.bottom_radius = body_radius
+	nose_cyl.height = nose_height
+	nose_mi.mesh = nose_cyl
+	var nose_mat := StandardMaterial3D.new()
+	nose_mat.albedo_color = Color(0.95, 0.18, 0.10)
+	nose_mat.metallic = 0.2
+	nose_mat.roughness = 0.6
+	nose_mi.material_override = nose_mat
+	nose_mi.position.y = body_height * 0.5 + nose_height * 0.5
+	_mesh_node.add_child(nose_mi)
+
+	# Three fins at the back, 120° apart
+	for i in 3:
+		var fin_mi := MeshInstance3D.new()
+		var fin_box := BoxMesh.new()
+		fin_box.size = Vector3(fin_w, fin_h, fin_d)
+		fin_mi.mesh = fin_box
+		fin_mi.material_override = body_mat
+		fin_mi.rotation.y = TAU * float(i) / 3.0
+		# Push fin out from body axis along its local +X
+		var ang := TAU * float(i) / 3.0
+		var radial := Vector3(cos(ang), 0.0, sin(ang)) * (body_radius + fin_h * 0.5)
+		fin_mi.position = Vector3(radial.x, -body_height * 0.40, radial.z)
+		_mesh_node.add_child(fin_mi)
+
+	# Archetype tint for trail/light/explosion VFX so the rocket reads back to
+	# its source mech. Body/nose stay silver/red so it still reads as a rocket.
+	var tint: Color = Color(1.0, 0.55, 0.15)
+	if _source_weapon != null and is_instance_valid(_source_weapon):
+		var mc: Variant = _source_weapon.get("_mech_color")
+		if mc != null:
+			tint = mc as Color
+
+	# Exhaust glow ball at the rear
+	var exhaust_mi := MeshInstance3D.new()
+	var exhaust_sph := SphereMesh.new()
+	exhaust_sph.radius = body_radius * 1.6
+	exhaust_sph.height = body_radius * 3.2
+	exhaust_mi.mesh = exhaust_sph
+	exhaust_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var exhaust_mat := StandardMaterial3D.new()
+	exhaust_mat.albedo_color = tint.lerp(Color(1.0, 0.7, 0.3), 0.4)
+	exhaust_mat.emission_enabled = true
+	exhaust_mat.emission = tint
+	exhaust_mat.emission_energy_multiplier = 5.5 if _is_ult else 4.0
+	exhaust_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	exhaust_mi.material_override = exhaust_mat
+	exhaust_mi.position.y = -body_height * 0.55
+	_mesh_node.add_child(exhaust_mi)
+
 	var light := OmniLight3D.new()
-	light.light_color    = Color(1.0, 0.55, 0.15)
+	light.light_color    = tint
 	light.light_energy   = 6.5 if _is_ult else 4.5
 	light.omni_range     = 6.5 if _is_ult else 5.0
 	light.shadow_enabled = false
 	add_child(light)
+
+	# Ground blob shadow that tracks the rocket's XZ — gives a clear "where will
+	# this land" cue independent of the sun-cast shadow at altitude.
+	_ground_shadow = MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	var shadow_r: float = 0.85 if _is_ult else 0.60
+	disc.top_radius = shadow_r
+	disc.bottom_radius = shadow_r
+	disc.height = 0.01
+	_ground_shadow.mesh = disc
+	_ground_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var smat := StandardMaterial3D.new()
+	smat.albedo_color = Color(0.0, 0.0, 0.0, 0.45)
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ground_shadow.material_override = smat
+	get_tree().current_scene.add_child(_ground_shadow)
+	_ground_shadow.global_position = Vector3(global_position.x, 0.04, global_position.z)
 
 func _process(delta: float) -> void:
 	_age += delta
@@ -104,17 +200,11 @@ func _process(delta: float) -> void:
 	_orient_along(new_pos - _last_pos)
 	global_position = new_pos
 	_last_pos       = new_pos
+	if is_instance_valid(_ground_shadow):
+		_ground_shadow.global_position = Vector3(new_pos.x, 0.04, new_pos.z)
 
-	# Mid-air enemy contact still detonates — passive shots usually intercept
-	# the target this way; the explicit landing only matters when the target
-	# moved out of the splash.
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(enemy):
-			continue
-		var dist := global_position.distance_to(enemy.global_position + Vector3(0.0, 0.8, 0.0))
-		if dist < HIT_RADIUS:
-			_detonate(enemy)
-			return
+	# No mid-air interception: rockets commit to launch-time target XZ. Fast
+	# enemies dodge by walking out of splash; slow/grouped enemies eat the hit.
 
 func _orient_along(dir: Vector3) -> void:
 	if dir.length_squared() < 0.0001:
@@ -146,6 +236,8 @@ func _detonate(primary: Object) -> void:
 		_spawn_napalm(hit_pos)
 
 	_spawn_explosion_vfx(hit_pos)
+	if is_instance_valid(_ground_shadow):
+		_ground_shadow.queue_free()
 	queue_free()
 
 func _apply_ult_blast(center: Vector3) -> void:

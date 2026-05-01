@@ -28,10 +28,21 @@ const HOVER_SCALE     := 1.03
 const HOVER_DUR       := 0.10
 const PRESS_FLASH_DUR := 0.08
 
-var _root:        Control = null
-var _main_view:   Control = null
-var _debug_view:  Control = null
-var _stat_labels: Dictionary = {}   # label_key -> Label
+var _root:           Control = null
+var _main_view:      Control = null
+var _debug_view:     Control = null
+var _settings_view:  Control = null
+var _stat_labels:    Dictionary = {}   # label_key -> Label
+
+# Resolution presets shown in the settings dropdown. (0,0) is the
+# "Fullscreen" entry — handled specially.
+const RESOLUTION_OPTIONS := [
+	{"label": "Fullscreen",     "size": Vector2i(0, 0),       "fullscreen": true},
+	{"label": "1280 × 720",     "size": Vector2i(1280, 720),  "fullscreen": false},
+	{"label": "1600 × 900",     "size": Vector2i(1600, 900),  "fullscreen": false},
+	{"label": "1920 × 1080",    "size": Vector2i(1920, 1080), "fullscreen": false},
+	{"label": "2560 × 1440",    "size": Vector2i(2560, 1440), "fullscreen": false},
+]
 
 func _ready() -> void:
 	layer = 55
@@ -60,11 +71,14 @@ func _build() -> void:
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(backdrop)
 
-	_main_view  = _build_main_view()
-	_debug_view = _build_debug_view()
+	_main_view     = _build_main_view()
+	_debug_view    = _build_debug_view()
+	_settings_view = _build_settings_view()
 	_root.add_child(_main_view)
 	_root.add_child(_debug_view)
-	_debug_view.visible = false
+	_root.add_child(_settings_view)
+	_debug_view.visible    = false
+	_settings_view.visible = false
 
 func _build_main_view() -> Control:
 	var center := CenterContainer.new()
@@ -99,13 +113,16 @@ func _build_main_view() -> Control:
 	btns.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(btns)
 
-	var resume := _make_primary_button("RESUME")
-	var debug  := _make_secondary_button("DEBUG")
-	var quit   := _make_secondary_button("QUIT TO GARAGE")
+	var resume   := _make_primary_button("RESUME")
+	var settings := _make_secondary_button("SETTINGS")
+	var debug    := _make_secondary_button("DEBUG")
+	var quit     := _make_secondary_button("QUIT TO GARAGE")
 	resume.pressed.connect(_resume)
+	settings.pressed.connect(_show_settings)
 	debug.pressed.connect(_show_debug)
 	quit.pressed.connect(_quit_to_garage)
 	btns.add_child(resume)
+	btns.add_child(settings)
 	btns.add_child(debug)
 	btns.add_child(quit)
 
@@ -183,6 +200,122 @@ func _build_debug_view() -> Control:
 
 	return center
 
+func _build_settings_view() -> Control:
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(PANEL_MIN_W, 0.0)
+	var sb := UITheme.panel_stylebox(UITheme.COLOR_BORDER_HAIR)
+	sb.bg_color              = UITheme.COLOR_PANEL
+	sb.set_corner_radius_all(PANEL_CORNER_R)
+	sb.content_margin_left   = PANEL_PAD_H
+	sb.content_margin_right  = PANEL_PAD_H
+	sb.content_margin_top    = PANEL_PAD_V
+	sb.content_margin_bottom = PANEL_PAD_V
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", COL_GAP)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = "SETTINGS"
+	UITheme.style_heading(title, UITheme.FONT_HEADING_L, UITheme.COLOR_ACCENT_LIME)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", STAT_GAP)
+	col.add_child(rows)
+
+	rows.add_child(_make_resolution_row())
+	rows.add_child(_make_volume_row("MUSIC", SaveData.music_volume,
+		func(v: float) -> void: SaveData.set_music_volume(v)))
+	rows.add_child(_make_volume_row("SFX", SaveData.sfx_volume,
+		func(v: float) -> void: SaveData.set_sfx_volume(v)))
+
+	col.add_child(_divider())
+
+	var back := _make_primary_button("BACK")
+	back.pressed.connect(_show_main)
+	col.add_child(back)
+
+	return center
+
+func _make_resolution_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(STAT_ROW_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_M)
+
+	var lbl := Label.new()
+	lbl.text = "RESOLUTION"
+	UITheme.style_label_caps(lbl, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_SECONDARY)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(lbl)
+
+	var opt := OptionButton.new()
+	opt.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+	opt.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_LIME)
+	opt.add_theme_constant_override("outline_size", 0)
+	var current_idx := 0
+	for i in RESOLUTION_OPTIONS.size():
+		var entry: Dictionary = RESOLUTION_OPTIONS[i]
+		opt.add_item(entry["label"], i)
+		if SaveData.fullscreen and bool(entry["fullscreen"]):
+			current_idx = i
+		elif (not SaveData.fullscreen) and (not bool(entry["fullscreen"])) \
+				and Vector2i(entry["size"]) == SaveData.window_size:
+			current_idx = i
+	opt.select(current_idx)
+	opt.item_selected.connect(_on_resolution_selected)
+	hbox.add_child(opt)
+	return hbox
+
+func _on_resolution_selected(idx: int) -> void:
+	AudioManager.play("ui_click")
+	if idx < 0 or idx >= RESOLUTION_OPTIONS.size():
+		return
+	var entry: Dictionary = RESOLUTION_OPTIONS[idx]
+	SaveData.set_resolution(Vector2i(entry["size"]), bool(entry["fullscreen"]))
+
+func _make_volume_row(label_text: String, initial: float, on_change: Callable) -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(STAT_ROW_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_M)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	UITheme.style_label_caps(lbl, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_SECONDARY)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(lbl)
+
+	var slider := HSlider.new()
+	slider.custom_minimum_size = Vector2(160.0, 0.0)
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step      = 0.05
+	slider.value     = initial
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var pct := Label.new()
+	pct.text = "%d%%" % roundi(initial * 100.0)
+	UITheme.style_label_caps(pct, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_ACCENT_LIME)
+	pct.custom_minimum_size = Vector2(64.0, 0.0)
+	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	slider.value_changed.connect(func(v: float) -> void:
+		pct.text = "%d%%" % roundi(v * 100.0)
+		on_change.call(v)
+	)
+
+	hbox.add_child(slider)
+	hbox.add_child(pct)
+	return hbox
+
 # ── ESC handling ─────────────────────────────────────────────────────────────
 
 func _input(event: InputEvent) -> void:
@@ -190,7 +323,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if event.keycode != KEY_ESCAPE:
 		return
-	if _debug_view.visible:
+	if _debug_view.visible or _settings_view.visible:
 		_show_main()
 	else:
 		_resume()
@@ -200,14 +333,22 @@ func _input(event: InputEvent) -> void:
 
 func _show_main() -> void:
 	AudioManager.play("ui_click")
-	_main_view.visible  = true
-	_debug_view.visible = false
+	_main_view.visible     = true
+	_debug_view.visible    = false
+	_settings_view.visible = false
 
 func _show_debug() -> void:
 	AudioManager.play("ui_click")
-	_main_view.visible  = false
-	_debug_view.visible = true
+	_main_view.visible     = false
+	_settings_view.visible = false
+	_debug_view.visible    = true
 	_refresh_stats()
+
+func _show_settings() -> void:
+	AudioManager.play("ui_click")
+	_main_view.visible     = false
+	_debug_view.visible    = false
+	_settings_view.visible = true
 
 func _resume() -> void:
 	AudioManager.play("ui_click")
@@ -305,21 +446,10 @@ func _divider() -> Control:
 # ── Buttons (mirrors DeathScreen styling) ────────────────────────────────────
 
 func _make_primary_button(text: String) -> Button:
-	var btn := _make_button_base(text, UITheme.COLOR_TEXT_PRIMARY)
-	var normal := StyleBoxFlat.new()
-	normal.bg_color     = UITheme.COLOR_ACCENT_HOT
-	normal.border_color = UITheme.COLOR_BORDER_HAIR
-	normal.set_border_width_all(int(UITheme.PANEL_BORDER_W))
-	normal.set_corner_radius_all(PANEL_CORNER_R)
-	btn.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate()
-	hover.bg_color     = UITheme.COLOR_ACCENT_HOT.lerp(UITheme.COLOR_TEXT_PRIMARY, 0.18)
-	hover.border_color = UITheme.COLOR_BORDER_BRIGHT
-	btn.add_theme_stylebox_override("hover", hover)
-	var pressed := normal.duplicate()
-	pressed.bg_color     = UITheme.COLOR_TEXT_PRIMARY
-	pressed.border_color = UITheme.COLOR_BORDER_BRIGHT
-	btn.add_theme_stylebox_override("pressed", pressed)
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(BTN_W, BTN_H)
+	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
+	UITheme.apply_primary_button(btn, text, PANEL_CORNER_R)
 	_wire_button_motion(btn)
 	return btn
 
@@ -349,9 +479,8 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 	btn.text = text.to_upper()
 	btn.custom_minimum_size = Vector2(BTN_W, BTN_H)
 	btn.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
-	btn.add_theme_color_override("font_color",         font_color)
-	btn.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	btn.add_theme_constant_override("outline_size",    UITheme.OUTLINE_LABEL)
+	btn.add_theme_color_override("font_color",      font_color)
+	btn.add_theme_constant_override("outline_size", 0)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
 	return btn

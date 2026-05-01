@@ -58,6 +58,9 @@ const SOUND_MAP := {
 const POOL_SIZE_3D := 24
 const POOL_SIZE_2D := 8
 
+const BUS_MUSIC := "Music"
+const BUS_SFX   := "SFX"
+
 var _variants_cache: Dictionary = {}   # id → Array[AudioStream]
 var _pool_3d: Array[AudioStreamPlayer3D] = []
 var _pool_2d: Array[AudioStreamPlayer]   = []
@@ -65,24 +68,66 @@ var _pool_idx_3d: int = 0
 var _pool_idx_2d: int = 0
 var _music_player: AudioStreamPlayer = null
 
+var _music_volume: float = 1.0   # 0..1 linear
+var _sfx_volume:   float = 1.0   # 0..1 linear
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_ensure_bus(BUS_MUSIC)
+	_ensure_bus(BUS_SFX)
 	for i in POOL_SIZE_3D:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 14.0
 		p.max_distance = 60.0
+		p.bus = BUS_SFX
 		add_child(p)
 		_pool_3d.append(p)
 	for i in POOL_SIZE_2D:
 		var p := AudioStreamPlayer.new()
+		p.bus = BUS_SFX
 		add_child(p)
 		_pool_2d.append(p)
 	_music_player = AudioStreamPlayer.new()
-	_music_player.bus = "Master"
+	_music_player.bus = BUS_MUSIC
 	add_child(_music_player)
 	# Restart music when the stream ends so the bgm loops regardless of whether
 	# the imported file has a loop point set.
 	_music_player.finished.connect(_on_music_finished)
+
+# ── Volume control ────────────────────────────────────────────────────────
+# Linear 0..1. 0 mutes; otherwise converted via linear_to_db on the bus.
+
+func set_music_volume(linear: float) -> void:
+	_music_volume = clampf(linear, 0.0, 1.0)
+	_apply_bus_volume(BUS_MUSIC, _music_volume)
+
+func set_sfx_volume(linear: float) -> void:
+	_sfx_volume = clampf(linear, 0.0, 1.0)
+	_apply_bus_volume(BUS_SFX, _sfx_volume)
+
+func get_music_volume() -> float:
+	return _music_volume
+
+func get_sfx_volume() -> float:
+	return _sfx_volume
+
+func _apply_bus_volume(bus_name: String, linear: float) -> void:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx < 0:
+		return
+	if linear <= 0.0001:
+		AudioServer.set_bus_mute(idx, true)
+	else:
+		AudioServer.set_bus_mute(idx, false)
+		AudioServer.set_bus_volume_db(idx, linear_to_db(linear))
+
+func _ensure_bus(bus_name: String) -> void:
+	if AudioServer.get_bus_index(bus_name) >= 0:
+		return
+	var idx := AudioServer.bus_count
+	AudioServer.add_bus(idx)
+	AudioServer.set_bus_name(idx, bus_name)
+	AudioServer.set_bus_send(idx, "Master")
 
 # ── Public API ────────────────────────────────────────────────────────────
 
@@ -130,6 +175,7 @@ func play_loop_on(id: String, parent: Node3D, volume_db: float = -6.0) -> AudioS
 	p.unit_size   = 14.0
 	p.max_distance = 60.0
 	p.volume_db   = volume_db
+	p.bus         = BUS_SFX
 	p.autoplay    = true
 	parent.add_child(p)
 	return p

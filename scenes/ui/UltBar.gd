@@ -10,6 +10,7 @@ const SLOT_W              := 380.0
 const SLOT_H              := 130.0
 const SLOT_GAP            := 16.0
 const MARGIN_BOT          := 24.0
+const MARGIN_LEFT         := 24.0
 const PORTRAIT_SIZE       := 96.0
 const PORTRAIT_BORDER     := 4.0
 const UPGRADE_SLOT_SIZE   := 36.0
@@ -81,16 +82,16 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 
 	var total_w := SLOT_W * slot_count + SLOT_GAP * maxi(slot_count - 1, 0)
 
-	# Pin bottom-center via anchors so the bar always sits there even if the
+	# Pin bottom-left via anchors so the bar always sits there even if the
 	# viewport hasn't fully laid out by the time setup() runs.
 	_root = Control.new()
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.anchor_left   = 0.5
-	_root.anchor_right  = 0.5
+	_root.anchor_left   = 0.0
+	_root.anchor_right  = 0.0
 	_root.anchor_top    = 1.0
 	_root.anchor_bottom = 1.0
-	_root.offset_left   = -total_w * 0.5
-	_root.offset_right  = total_w * 0.5
+	_root.offset_left   = MARGIN_LEFT
+	_root.offset_right  = MARGIN_LEFT + total_w
 	_root.offset_top    = -SLOT_H - MARGIN_BOT
 	_root.offset_bottom = -MARGIN_BOT
 	add_child(_root)
@@ -136,9 +137,8 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	# mech color. Matching against upgrades still uses weapon_name (data).
 	name_lbl.text = MechArchetypes.name_for(String(weapon.weapon_name))
 	name_lbl.add_theme_font_size_override("font_size", NAME_FONT)
-	name_lbl.add_theme_color_override("font_color",         color)
-	name_lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	name_lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_HEADING)
+	name_lbl.add_theme_color_override("font_color",      color)
+	name_lbl.add_theme_constant_override("outline_size", 0)
 	name_lbl.position     = Vector2(header_x, 14.0)
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(name_lbl)
@@ -172,9 +172,8 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var ready_lbl := Label.new()
 	ready_lbl.text = "READY"
 	ready_lbl.add_theme_font_size_override("font_size", 14)
-	ready_lbl.add_theme_color_override("font_color",        UITheme.COLOR_ACCENT_HOT)
-	ready_lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	ready_lbl.add_theme_constant_override("outline_size",    UITheme.OUTLINE_BODY)
+	ready_lbl.add_theme_color_override("font_color",      UITheme.COLOR_ACCENT_HOT)
+	ready_lbl.add_theme_constant_override("outline_size", 0)
 	ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ready_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	ready_lbl.size      = Vector2(bar_w, BAR_H)
@@ -373,8 +372,7 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	icon.text = code
 	icon.add_theme_font_size_override("font_size", 14)
 	icon.add_theme_color_override("font_color", UITheme.COLOR_TEXT_PRIMARY)
-	icon.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	icon.add_theme_constant_override("outline_size", UITheme.OUTLINE_BODY)
+	icon.add_theme_constant_override("outline_size", 0)
 	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -386,8 +384,7 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	count_lbl.text = "1"
 	count_lbl.add_theme_font_size_override("font_size", 12)
 	count_lbl.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_LIME)
-	count_lbl.add_theme_color_override("font_outline_color", UITheme.COLOR_OUTLINE)
-	count_lbl.add_theme_constant_override("outline_size", UITheme.OUTLINE_BODY)
+	count_lbl.add_theme_constant_override("outline_size", 0)
 	count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_TOP
 	count_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
