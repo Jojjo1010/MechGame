@@ -11,22 +11,22 @@ const _DATA := {
 	"GUN": {
 		name    = "VOLLEY",
 		tagline = "Sustained precision fire",
-		color   = Color("#b35a2c"),   # rust-orange
+		color   = Color("#e07338"),   # orange-red
 	},
 	"GARLIC": {
 		name    = "AEGIS",
 		tagline = "Aura support, damage shield",
-		color   = Color("#2ea25d"),   # emerald
+		color   = Color("#3acb74"),   # teal-green
 	},
 	"BEAM": {
 		name    = "ARC",
 		tagline = "Chained beam strikes",
-		color   = Color("#2e85b8"),   # azure
+		color   = Color("#3aa6e6"),   # electric blue
 	},
 	"ROCKET": {
 		name    = "SALVO",
 		tagline = "Heavy splash ordnance",
-		color   = Color("#b8872e"),   # bronze-saffron
+		color   = Color("#e6a93a"),   # saffron
 	},
 }
 

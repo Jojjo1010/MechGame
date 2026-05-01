@@ -35,7 +35,7 @@ func _add_floor(origin: Vector3) -> void:
 	plane.size = Vector2(CHUNK_SIZE, CHUNK_SIZE)
 	mi.mesh = plane
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.30, 0.42, 0.24)
+	mat.albedo_color = Color(0.22, 0.46, 0.16)
 	mat.roughness = 0.95
 	mi.material_override = mat
 	mi.position = origin
