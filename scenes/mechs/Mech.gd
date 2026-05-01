@@ -45,6 +45,13 @@ const BOB_FREQ  := 9.0   # rad/s  (~1.4 steps/sec)
 const BOB_AMP   := 0.38  # world units vertical travel
 const LEAN_AMP  := 0.12  # radians (~7°) forward/back tilt
 
+# Death + corpse + jump-over choreography
+const CORPSE_LINGER := 6.0   # seconds the body stays on the ground before freeing
+const FALL_DURATION := 0.55  # how long the mech takes to topple
+const JUMP_HEIGHT   := 1.4   # peak Y offset added to the model when arcing over a corpse
+const JUMP_WINDOW   := 1.2   # half-width (Z meters) of the jump arc around a corpse
+const JUMP_LANE_TOL := 1.5   # only jump over corpses within this lateral distance
+
 signal health_changed(current: float, maximum: float)
 signal mech_died()
 
@@ -123,7 +130,9 @@ func _process(delta: float) -> void:
 		if model:
 			# abs(sin) gives a sharp bounce-off-ground feel
 			var bounce: float = abs(sin(_bob_time)) * BOB_AMP
-			model.position.y = _model_base_y + bounce
+			# Auto-jump over any corpse in our path — adds an arc on top of bob.
+			var jump_y := _compute_jump_offset()
+			model.position.y = _model_base_y + bounce + jump_y
 			# Lean forward on downstroke, back on upstroke
 			model.rotation.x = -cos(_bob_time) * LEAN_AMP
 
@@ -613,9 +622,55 @@ func _add_permanent_outline() -> void:
 
 func _on_died() -> void:
 	is_alive = false
+	ability_active = false
+	# Stop being targeted as an ally / aura source. Joining mech_corpses lets
+	# alive mechs detect us as something to jump over.
+	if is_in_group("mechs"):
+		remove_from_group("mechs")
+	add_to_group("mech_corpses")
+
+	# Gray out the body so the corpse reads as inert.
 	for mi in _mesh_instances:
 		if is_instance_valid(mi) and mi.material_override:
 			var mat := mi.material_override as StandardMaterial3D
 			mat.albedo_color = Color(0.35, 0.35, 0.35)
 			mat.metallic = 0.1
 			mat.roughness = 1.0
+
+	# Hide the HP bar; freeze the weapon so it stops firing from a corpse.
+	if is_instance_valid(_health_bar):
+		_health_bar.visible = false
+	if weapon != null and is_instance_valid(weapon):
+		weapon.process_mode = Node.PROCESS_MODE_DISABLED
+
+	# Fall forward — model.rotation.x toward -PI/2 tips the head along the
+	# march direction. Quad ease-in for a "stiff slap" landing.
+	var model := get_node_or_null("Model")
+	if model != null:
+		model.position.y = _model_base_y   # reset bob offset before the fall
+		var fall := create_tween()
+		fall.tween_property(model, "rotation:x", -PI * 0.5, FALL_DURATION) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+	# Self-cleanup after the linger window so the line has time to walk over.
+	var t := get_tree().create_timer(CORPSE_LINGER)
+	t.timeout.connect(queue_free)
+
+# Returns extra Y offset for the model so the mech arcs over any nearby corpse
+# in its march path. Parabolic — peak when directly over the corpse, zero
+# outside ±JUMP_WINDOW.
+func _compute_jump_offset() -> float:
+	var best_h := 0.0
+	for c in get_tree().get_nodes_in_group("mech_corpses"):
+		if not is_instance_valid(c) or c == self:
+			continue
+		var dz: float = global_position.z - (c as Node3D).global_position.z
+		if absf(dz) > JUMP_WINDOW:
+			continue
+		if absf(global_position.x - (c as Node3D).global_position.x) > JUMP_LANE_TOL:
+			continue
+		var t := dz / JUMP_WINDOW
+		var h := JUMP_HEIGHT * (1.0 - t * t)
+		if h > best_h:
+			best_h = h
+	return best_h

@@ -129,12 +129,12 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_weapon_names.append(weapon.weapon_name)
 	_slot_colors.append(color)
 
-	var chip := _make_key_chip("E")
+	var chip := _make_ult_chip()
 	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, 14.0)
 	root.add_child(chip)
 
-	# Charge bar — directly below the name, spanning to before the chip
-	var bar_y := 14.0 + NAME_FONT + 4.0
+	# Charge bar — under the name with a comfortable gap
+	var bar_y := 14.0 + NAME_FONT + 14.0
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + 14.0) - KEY_CHIP_SIZE - 14.0 - 14.0
 
 	var bar_bg := ColorRect.new()
@@ -184,7 +184,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 
 # ── Portrait construction ─────────────────────────────────────────────────────
 func _build_portrait(color: Color) -> Control:
-	var p: PanelContainer = MechPortraitCS.new()
+	var p: Control = MechPortraitCS.new()
 	p.call("setup", color, PORTRAIT_SIZE, PORTRAIT_BORDER)
 	return p
 
@@ -219,6 +219,36 @@ func _make_key_chip(text: String) -> PanelContainer:
 	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.add_child(lbl)
+	return chip
+
+# Same chip frame as _make_key_chip but the content is the ult starburst glyph
+# (ActionGlyphs.ult) instead of a key letter — communicates "this charges your
+# ult" at a glance.
+func _make_ult_chip() -> PanelContainer:
+	var chip := PanelContainer.new()
+	chip.size = Vector2(KEY_CHIP_SIZE, KEY_CHIP_SIZE)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = UITheme.COLOR_PANEL_ALPHA
+	style.border_color = UITheme.COLOR_ACCENT_LIME
+	style.border_width_left   = 2
+	style.border_width_right  = 2
+	style.border_width_top    = 2
+	style.border_width_bottom = 4
+	style.set_corner_radius_all(4)
+	style.content_margin_left   = 0.0
+	style.content_margin_right  = 0.0
+	style.content_margin_top    = 0.0
+	style.content_margin_bottom = 0.0
+	chip.add_theme_stylebox_override("panel", style)
+
+	var icon := ActionIcon.new()
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.action_id = "ult"
+	icon.accent    = UITheme.COLOR_ACCENT_LIME
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_child(icon)
 	return chip
 
 # ── Charge fill ───────────────────────────────────────────────────────────────

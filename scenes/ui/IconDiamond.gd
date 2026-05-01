@@ -1,7 +1,8 @@
 extends Control
 
-# Bad-North-style geometric icon: a flat-topped hexagon (diamond-ish) with
-# a thick border and a centered text label. Used in UpgradePicker cards.
+# Rectangular icon tile: rounded-rect frame with a thick border and a centered
+# text label or procedural UpgradeGlyphs glyph. Used in UpgradePicker cards
+# and equipped slots.
 
 var fill_color:   Color  = Color(0.65, 0.45, 0.55, 1.0)   # dusty pink default
 var border_color: Color  = Color(0.18, 0.12, 0.08, 1.0)
@@ -61,24 +62,47 @@ func set_glyph(id: String, fill: Color, glyph_col: Color = UITheme.COLOR_DEEP) -
 
 func _draw() -> void:
 	var s := size
-	# Flat-topped hexagon vertices
-	var pts := PackedVector2Array([
-		Vector2(s.x * 0.25, 0.0),
-		Vector2(s.x * 0.75, 0.0),
-		Vector2(s.x,        s.y * 0.5),
-		Vector2(s.x * 0.75, s.y),
-		Vector2(s.x * 0.25, s.y),
-		Vector2(0.0,        s.y * 0.5),
-	])
-	# Skip fill if alpha==0 — caller can use this to render an "empty slot" outline.
+	# Rounded-rect tile. Skip fill if alpha==0 so the caller can render an
+	# "empty slot" outline.
+	var radius: float = minf(s.x, s.y) * 0.18
+	var rect := Rect2(Vector2.ZERO, s)
 	if fill_color.a > 0.0:
-		draw_colored_polygon(pts, fill_color)
-	var loop := PackedVector2Array(pts)
-	loop.append(pts[0])
-	draw_polyline(loop, border_color, border_width, true)
+		_draw_rounded_rect(rect, radius, fill_color)
+	_draw_rounded_rect_outline(rect, radius, border_color, border_width)
 
 	if not upgrade_id.is_empty():
-		# Inset the glyph rect so it doesn't run into the hex border.
-		var pad := minf(s.x, s.y) * 0.20
+		# Inset the glyph rect so it doesn't run into the border.
+		var pad := minf(s.x, s.y) * 0.18
 		var inner := Rect2(Vector2(pad, pad), Vector2(s.x - pad * 2.0, s.y - pad * 2.0))
 		UpgradeGlyphs.draw(self, inner, upgrade_id, glyph_color)
+
+func _draw_rounded_rect(rect: Rect2, radius: float, color: Color) -> void:
+	# Approximate a rounded rectangle by drawing the central + edge rects and
+	# four quarter-circle corners. Cheap; works for any radius.
+	var r := minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
+	var p := rect.position
+	var sz := rect.size
+	# Center body + side strips
+	draw_rect(Rect2(p.x + r,    p.y,        sz.x - r * 2.0, sz.y),       color, true)
+	draw_rect(Rect2(p.x,        p.y + r,    r,              sz.y - r * 2.0), color, true)
+	draw_rect(Rect2(p.x + sz.x - r, p.y + r, r,             sz.y - r * 2.0), color, true)
+	# Corner caps
+	draw_circle(Vector2(p.x + r,        p.y + r),        r, color)
+	draw_circle(Vector2(p.x + sz.x - r, p.y + r),        r, color)
+	draw_circle(Vector2(p.x + r,        p.y + sz.y - r), r, color)
+	draw_circle(Vector2(p.x + sz.x - r, p.y + sz.y - r), r, color)
+
+func _draw_rounded_rect_outline(rect: Rect2, radius: float, color: Color, w: float) -> void:
+	var r := minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
+	var p := rect.position
+	var sz := rect.size
+	# Straight edges
+	draw_line(Vector2(p.x + r,        p.y),        Vector2(p.x + sz.x - r, p.y),        color, w)
+	draw_line(Vector2(p.x + r,        p.y + sz.y), Vector2(p.x + sz.x - r, p.y + sz.y), color, w)
+	draw_line(Vector2(p.x,            p.y + r),    Vector2(p.x,            p.y + sz.y - r), color, w)
+	draw_line(Vector2(p.x + sz.x,     p.y + r),    Vector2(p.x + sz.x,     p.y + sz.y - r), color, w)
+	# Corner arcs
+	draw_arc(Vector2(p.x + r,            p.y + r),            r, deg_to_rad(180.0), deg_to_rad(270.0), 8, color, w, true)
+	draw_arc(Vector2(p.x + sz.x - r,     p.y + r),            r, deg_to_rad(270.0), deg_to_rad(360.0), 8, color, w, true)
+	draw_arc(Vector2(p.x + sz.x - r,     p.y + sz.y - r),     r, deg_to_rad(0.0),   deg_to_rad(90.0),  8, color, w, true)
+	draw_arc(Vector2(p.x + r,            p.y + sz.y - r),     r, deg_to_rad(90.0),  deg_to_rad(180.0), 8, color, w, true)

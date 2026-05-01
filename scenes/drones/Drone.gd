@@ -80,24 +80,17 @@ func _add_blob_shadow() -> void:
 	_blob_shadow.cast_shadow       = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_blob_shadow)
 
-# Inverted-hull outline. Shared static material so we don't allocate one
-# StandardMaterial3D per mesh per drone — params never vary.
-static var _OUTLINE_MAT: StandardMaterial3D = null
+# Inverted-hull outline using the same shader as the mechs — black, 0.08 grow.
+const OUTLINE_SHADER := preload("res://scenes/vfx/mech_outline.gdshader")
+static var _OUTLINE_MAT: ShaderMaterial = null
 
-static func _outline_material() -> StandardMaterial3D:
+static func _outline_material() -> ShaderMaterial:
 	if _OUTLINE_MAT != null:
 		return _OUTLINE_MAT
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color  = Color(0.02, 0.02, 0.04, 1.0)
-	mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.cull_mode     = BaseMaterial3D.CULL_FRONT
-	mat.grow          = true
-	mat.grow_amount   = 0.18
-	# Glow post-processing in the scene env washes out thin strokes against the
-	# emissive drone body — disabling fog + tagging it as not-receive-shadows
-	# keeps the silhouette readable through the bloom halo.
-	mat.disable_fog              = true
-	mat.disable_receive_shadows  = true
+	var mat := ShaderMaterial.new()
+	mat.shader = OUTLINE_SHADER
+	mat.set_shader_parameter("outline_color", Color(0.0, 0.0, 0.0, 1.0))
+	mat.set_shader_parameter("outline_size", 0.08)
 	_OUTLINE_MAT = mat
 	return mat
 

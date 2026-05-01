@@ -5,6 +5,7 @@ const HealthBar3D  = preload("res://scenes/ui/HealthBar3D.gd")
 const DamageNumber = preload("res://scenes/ui/DamageNumber.gd")
 const Pickup       = preload("res://scenes/pickups/Pickup.gd")
 const OUTLINE_SHADER = preload("res://scenes/vfx/mech_outline.gdshader")
+const EnemyGridCS    = preload("res://scenes/enemies/EnemyGrid.gd")
 
 const SPEED := 4.5
 const ATTACK_RANGE := 1.4
@@ -246,8 +247,12 @@ func _process(delta: float) -> void:
 				target_mech.take_damage(ATTACK_DAMAGE)
 
 func _get_separation() -> Vector3:
+	# Query the EnemyGrid instead of the full enemies group — at high enemy
+	# counts the tree-wide O(N²) scan was the dominant frame cost. The grid
+	# is rebuilt at most once per frame (lazy on first call).
+	EnemyGridCS.ensure_fresh(get_tree())
 	var sep := Vector3.ZERO
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	for enemy in EnemyGridCS.query(global_position, SEPARATION_RADIUS):
 		var e := enemy as Node3D
 		if e == null or e == self or not is_instance_valid(e):
 			continue

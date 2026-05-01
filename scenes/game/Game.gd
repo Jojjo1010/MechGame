@@ -363,7 +363,8 @@ func _on_mech_died(mech: Node3D) -> void:
 					m.is_lead = true
 		_weapons.remove_at(dead_idx)
 		mechs.remove_at(dead_idx)
-		mech.queue_free()
+		# Mech queue_frees itself after the fall + corpse-linger sequence so the
+		# conga line can jump over the body. See Mech._on_died.
 		if _ult_bar != null and is_instance_valid(_ult_bar):
 			_ult_bar.setup(_weapons, _archetype_colors())
 		# Drop the dead mech's archetype from the upgrade picker too — no more
