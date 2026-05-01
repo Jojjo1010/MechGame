@@ -33,6 +33,9 @@ var _health_bar: Node3D = null
 var _bulwark_reduction: float = 0.0   # 0..1, refreshed each frame from nearby Garlic auras
 var _bulwark_bubble: MeshInstance3D = null
 var _bulwark_bubble_mat: StandardMaterial3D = null
+var _selection_ring: MeshInstance3D = null
+var _selection_ring_mat: StandardMaterial3D = null
+var _selection_pulse_tween: Tween = null
 var _model_base_y: float = 0.0
 var _bob_time: float = 0.0
 var _step_pitch_base: float = 1.0   # randomized per mech so the conga line has variety
@@ -416,12 +419,19 @@ func take_damage(amount: float) -> void:
 const OUTLINE_SHADER = preload("res://scenes/vfx/mech_outline.gdshader")
 
 func set_highlighted(on: bool) -> void:
-	# Outlines are parented to their source meshes — search recursively to remove them
+	# Cleanup any previous highlight visuals (outline meshes + ground ring + tween).
 	for ol in find_children("_ol_*", "MeshInstance3D", true, false):
 		ol.queue_free()
+	if _selection_pulse_tween != null and _selection_pulse_tween.is_valid():
+		_selection_pulse_tween.kill()
+	_selection_pulse_tween = null
+	if is_instance_valid(_selection_ring):
+		_selection_ring.queue_free()
+	_selection_ring = null
+	_selection_ring_mat = null
 	if not on:
 		return
-	# Parent each outline to its source mesh so it inherits all transforms (including bob)
+	# Thick hot-pink outline on each mesh — parented to the mesh so it inherits bob/lean.
 	for i in _mesh_instances.size():
 		var src := _mesh_instances[i]
 		if not is_instance_valid(src):
@@ -432,11 +442,42 @@ func set_highlighted(on: bool) -> void:
 		ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var sm := ShaderMaterial.new()
 		sm.shader = OUTLINE_SHADER
-		sm.set_shader_parameter("outline_color", Color(1.0, 0.95, 0.55, 1.0))
-		sm.set_shader_parameter("outline_size", 0.07)
+		sm.set_shader_parameter("outline_color", UITheme.COLOR_ACCENT_HOT)
+		sm.set_shader_parameter("outline_size", 0.14)
 		ol.material_override = sm
 		src.add_child(ol)
 		ol.transform = Transform3D.IDENTITY
+	# Ground selection ring — pinned at the mech's feet (doesn't bob with the
+	# body), so it acts as a stable RTS-style anchor showing exactly which mech
+	# is currently the action target.
+	_selection_ring = MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius  = 1.55
+	torus.outer_radius  = 1.95
+	torus.rings         = 48
+	torus.ring_segments = 8
+	_selection_ring.mesh = torus
+	_selection_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_selection_ring_mat = StandardMaterial3D.new()
+	_selection_ring_mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_selection_ring_mat.albedo_color               = UITheme.COLOR_ACCENT_HOT
+	_selection_ring_mat.emission_enabled           = true
+	_selection_ring_mat.emission                   = UITheme.COLOR_ACCENT_HOT
+	_selection_ring_mat.emission_energy_multiplier = 5.0
+	_selection_ring_mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_selection_ring.material_override = _selection_ring_mat
+	_selection_ring.position = Vector3(0.0, 0.06, 0.0)
+	add_child(_selection_ring)
+	# Loop pulse on scale + emission so the ring breathes.
+	_selection_pulse_tween = create_tween().set_loops()
+	_selection_pulse_tween.tween_property(_selection_ring, "scale", Vector3(1.18, 1.0, 1.18), 0.45) \
+		.set_trans(Tween.TRANS_SINE)
+	_selection_pulse_tween.parallel().tween_property(_selection_ring_mat, "emission_energy_multiplier", 9.0, 0.45) \
+		.set_trans(Tween.TRANS_SINE)
+	_selection_pulse_tween.tween_property(_selection_ring, "scale", Vector3.ONE, 0.45) \
+		.set_trans(Tween.TRANS_SINE)
+	_selection_pulse_tween.parallel().tween_property(_selection_ring_mat, "emission_energy_multiplier", 4.0, 0.45) \
+		.set_trans(Tween.TRANS_SINE)
 
 static var _shadow_tex: GradientTexture2D
 
