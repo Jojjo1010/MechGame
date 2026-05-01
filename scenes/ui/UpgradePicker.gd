@@ -563,16 +563,17 @@ func _make_card(upgrade: Dictionary) -> Control:
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(desc_lbl)
 
-	# Stacks "before → after" indicator at the bottom
+	# Level indicator at the bottom — "NEW" for fresh picks, "Level X → Level X+1"
+	# for stacking commons. Caps the post-pick number at MAX_STACKS_COMMON.
 	var stacks_lbl := Label.new()
 	var current_stacks := RunManager.upgrade_stack_count(target_str, id)
 	if bool(upgrade.get("unique", false)):
 		stacks_lbl.text = "unique slot"
+	elif current_stacks <= 0:
+		stacks_lbl.text = "NEW"
 	else:
-		stacks_lbl.text = "%d / %d  →  %d / %d" % [
-			current_stacks, RunManager.MAX_STACKS_COMMON,
-			mini(current_stacks + 1, RunManager.MAX_STACKS_COMMON), RunManager.MAX_STACKS_COMMON
-		]
+		var next_level: int = mini(current_stacks + 1, RunManager.MAX_STACKS_COMMON)
+		stacks_lbl.text = "Level %d  →  Level %d" % [current_stacks, next_level]
 	stacks_lbl.add_theme_font_size_override("font_size", 18)
 	stacks_lbl.add_theme_color_override("font_color", TEXT_DIM)
 	stacks_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
