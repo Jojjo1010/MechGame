@@ -43,8 +43,7 @@ const DIVIDER_PAD_V   := UITheme.PAD_S       # 8 above and below the hairline di
 const FADE_TITLE_DUR  := 0.35
 const FADE_STAT_DUR   := 0.20
 const FADE_STAT_STEP  := 0.08   # stagger between stat rows
-const SLIDE_BTN_DUR   := 0.30
-const SLIDE_BTN_DIST  := 24.0   # buttons slide up from this y-offset
+const FADE_BTN_DUR    := 0.30
 const HOVER_SCALE     := 1.03
 const HOVER_DUR       := 0.10
 const PRESS_FLASH_DUR := 0.08
@@ -270,14 +269,13 @@ func _wire_button_motion(btn: Button) -> void:
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_FLASH_DUR)
 	)
 
-# Title fades in, then each stat row staggers in, then the button row slides
-# up from below. Short, restrained — this is a loss screen.
+# Title fades in, then each stat row staggers in, then the button row fades in
+# last. Short, restrained — this is a loss screen.
 func _animate_entrance(title_block: Control, stat_rows: Array[Control], btn_row: Control) -> void:
 	title_block.modulate.a = 0.0
 	for row in stat_rows:
 		row.modulate.a = 0.0
 	btn_row.modulate.a = 0.0
-	btn_row.position.y += SLIDE_BTN_DIST
 
 	var t := create_tween()
 	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
@@ -287,11 +285,8 @@ func _animate_entrance(title_block: Control, stat_rows: Array[Control], btn_row:
 		t.parallel().tween_property(row, "modulate:a", 1.0, FADE_STAT_DUR) \
 			.set_delay(FADE_TITLE_DUR + float(i) * FADE_STAT_STEP)
 	var btn_delay: float = FADE_TITLE_DUR + float(stat_rows.size()) * FADE_STAT_STEP
-	t.parallel().tween_property(btn_row, "modulate:a", 1.0, SLIDE_BTN_DUR) \
+	t.parallel().tween_property(btn_row, "modulate:a", 1.0, FADE_BTN_DUR) \
 		.set_delay(btn_delay)
-	t.parallel().tween_property(btn_row, "position:y", btn_row.position.y - SLIDE_BTN_DIST, SLIDE_BTN_DUR) \
-		.set_delay(btn_delay) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _on_retry_pressed() -> void:
 	AudioManager.play("ui_click")
