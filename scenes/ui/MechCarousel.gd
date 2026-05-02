@@ -6,7 +6,9 @@ extends Control
 
 const MECH_MODEL := preload("res://assets/CongaGoober.fbx")
 
-const N_SLOTS     := 4
+# Slot count is derived from the colors array passed to setup(). Dead mechs
+# are dropped from the carousel between rounds, so the turntable shrinks to
+# match the surviving line.
 const DISK_RADIUS := 2.0
 const DISK_HEIGHT := 0.18
 const MECH_HEIGHT := 5.5          # carousel-only scale (hero-shot, not field-sized)
@@ -121,8 +123,9 @@ func _ready() -> void:
 	_turntable = Node3D.new()
 	_viewport.add_child(_turntable)
 
-	for i in N_SLOTS:
-		var theta := float(i) / float(N_SLOTS) * TAU
+	var slot_count: int = _colors.size()
+	for i in slot_count:
+		var theta := float(i) / float(slot_count) * TAU
 		var mech := MECH_MODEL.instantiate()
 		# Stop any embedded animations so the skeleton stays at rest pose.
 		for ap in mech.find_children("*", "AnimationPlayer", true, false):
@@ -186,9 +189,10 @@ func _process(_delta: float) -> void:
 # so the second spin doesn't shrink to a tiny delta if the rolled target
 # happens to be near the previous one.
 func spin_to(target_idx: int, duration: float = 2.4, revs: float = SPIN_REVS_DEFAULT) -> void:
-	if _turntable == null:
+	if _turntable == null or _slot_mechs.is_empty():
 		return
-	var theta_target: float = float(target_idx) / float(N_SLOTS) * TAU
+	var slot_count: int = _slot_mechs.size()
+	var theta_target: float = float(target_idx) / float(slot_count) * TAU
 	var current_rot: float = _turntable.rotation.y
 	var target_mod: float = fposmod(-theta_target, TAU)
 	var current_mod: float = fposmod(current_rot, TAU)
@@ -209,12 +213,15 @@ func spin_to(target_idx: int, duration: float = 2.4, revs: float = SPIN_REVS_DEF
 
 # Index of whichever slot is currently nearest the camera.
 func _front_slot_index() -> int:
+	var slot_count: int = _slot_mechs.size()
+	if slot_count <= 0:
+		return 0
 	var rot: float = _turntable.rotation.y
 	# Find i such that (i/N * TAU + rot) mod TAU is closest to 0.
 	var best_i := 0
 	var best_d := INF
-	for i in N_SLOTS:
-		var theta_i := float(i) / float(N_SLOTS) * TAU
+	for i in slot_count:
+		var theta_i := float(i) / float(slot_count) * TAU
 		var diff: float = fposmod(theta_i + rot, TAU)
 		var dist: float = minf(diff, TAU - diff)
 		if dist < best_d:

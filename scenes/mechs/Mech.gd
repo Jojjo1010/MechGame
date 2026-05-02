@@ -180,7 +180,7 @@ func _process(delta: float) -> void:
 	# Burning tick
 	if _is_burning and is_alive:
 		if is_instance_valid(_burn_light):
-			_burn_light.light_energy = randf_range(2.5, 5.5)
+			_burn_light.light_energy = randf_range(1.0, 2.2)
 		_burn_damage_timer -= delta
 		if _burn_damage_timer <= 0.0:
 			_burn_damage_timer = 1.0
@@ -272,10 +272,12 @@ func start_burning() -> void:
 	_burn_audio = AudioManager.play_loop_on("mech_burn_loop", self, -10.0)
 
 	# Flickering fire light
+	# Dimmer burn light: the previous 4.0 energy was bathing the mech in
+	# bright orange and erasing the dark flame silhouette we just tuned.
 	_burn_light = OmniLight3D.new()
-	_burn_light.light_color    = Color(1.0, 0.45, 0.05)
-	_burn_light.light_energy   = 4.0
-	_burn_light.omni_range     = 6.0
+	_burn_light.light_color    = Color(1.0, 0.35, 0.03)
+	_burn_light.light_energy   = 1.6
+	_burn_light.omni_range     = 4.5
 	_burn_light.shadow_enabled = false
 	_burn_light.position       = Vector3(0.0, 2.0, 0.0)
 	add_child(_burn_light)
@@ -292,12 +294,15 @@ func start_burning() -> void:
 	pp.emission_shape         = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	pp.emission_sphere_radius = 0.25
 
-	# deep red → orange → bright yellow → transparent
+	# Near-black ember → deep crimson → muted orange → transparent. The bright
+	# yellow midpoint was washing out against the lime/teal/blue mech tints —
+	# pulling the palette down keeps the flame readable as a dark silhouette
+	# rather than a bloom on top of the body.
 	var grad := Gradient.new()
-	grad.set_color(0, Color(0.9, 0.15, 0.0,  1.0))
-	grad.set_color(1, Color(0.6, 0.05, 0.0,  0.0))
-	grad.add_point(0.30, Color(1.0, 0.55, 0.05, 0.95))
-	grad.add_point(0.65, Color(1.0, 0.88, 0.20, 0.70))
+	grad.set_color(0, Color(0.10, 0.02, 0.00, 1.0))
+	grad.set_color(1, Color(0.40, 0.05, 0.00, 0.0))
+	grad.add_point(0.30, Color(0.55, 0.10, 0.02, 0.95))
+	grad.add_point(0.65, Color(0.85, 0.32, 0.05, 0.70))
 	var gtex := GradientTexture1D.new()
 	gtex.gradient = grad
 	pp.color_ramp = gtex
