@@ -82,14 +82,14 @@ func _ready() -> void:
 	mech_options.setup(camera)
 	mech_options.repair_pressed.connect(_on_mech_repair_pressed)
 	if RunManager.tutorial_only:
-		# Tutorial sandbox: static world (line paused) and passive fire off so
-		# practice dummies stay positioned and the mechs don't auto-clear them
-		# before the player gets to demo each ult. Wave spawner is also off so
-		# real enemies never enter the picture during the lesson. ControlsLegend
-		# and UltBar are spawned but tagged "tutorial_late_ui" so the tutorial
-		# can keep them hidden during WASD/CAMERA/SHIFT and reveal them once
-		# the ult phase begins.
-		RunManager.line_speed_mult = 0.0
+		# Tutorial sandbox: passive fire off so the mechs don't auto-clear the
+		# practice dummies before the player gets to demo each ult, and wave
+		# spawner off so real enemies never enter the picture during the lesson.
+		# The conga line still marches normally — dummies are parented to their
+		# anchor mech in TutorialPrompts so they move with the line and stay
+		# aligned. ControlsLegend and UltBar are spawned but tagged
+		# "tutorial_late_ui" so the tutorial can keep them hidden during
+		# WASD/CAMERA/SHIFT and reveal them once the ult phase begins.
 		for w in _weapons:
 			w.set("tutorial_passive_disabled", true)
 		wave_spawner.process_mode = Node.PROCESS_MODE_DISABLED

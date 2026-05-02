@@ -531,68 +531,68 @@ func _spawn_shift_dummy() -> void:
 	var lead: Node3D = _mechs[0]
 	if not is_instance_valid(lead):
 		return
-	var pos := lead.global_position + Vector3(0.0, 0.0, -DUMMY_FORWARD_DIST)
-	pos.y = 0.0
-	_spawn_dummy(pos)
+	_spawn_dummy(lead, Vector3(0.0, 0.0, -DUMMY_FORWARD_DIST))
 
 # Per-mech formations sized to showcase each weapon's ult shape — fan for
 # GUN, aura cluster for GARLIC, line for the chained beam, tight cluster for
-# rocket splash.
+# rocket splash. Offsets are world-space relative to the mech; parenting the
+# dummy to the mech makes them carry along as the conga line marches.
 func _spawn_dummies_for(mech: Node3D) -> void:
 	if mech == null or not is_instance_valid(mech):
 		return
-	var origin := mech.global_position
-	origin.y = 0.0
-	var positions: Array[Vector3] = []
+	var offsets: Array[Vector3] = []
 	match _weapon_name_for(mech):
 		"GUN":
-			positions = [
-				origin + Vector3(-3.0, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 0.0, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 3.0, 0.0, -DUMMY_FORWARD_DIST),
+			offsets = [
+				Vector3(-3.0, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 0.0, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 3.0, 0.0, -DUMMY_FORWARD_DIST),
 			]
 		"GARLIC":
 			# Close in around the mech so the aura tags them; ult bursts.
-			positions = [
-				origin + Vector3(-3.0, 0.0, -3.0),
-				origin + Vector3( 3.0, 0.0, -3.0),
-				origin + Vector3( 0.0, 0.0,  3.0),
+			offsets = [
+				Vector3(-3.0, 0.0, -3.0),
+				Vector3( 3.0, 0.0, -3.0),
+				Vector3( 0.0, 0.0,  3.0),
 			]
 		"BEAM":
 			# Spaced in a near-line so the chained beam hops between them.
-			positions = [
-				origin + Vector3(-2.5, 0.0, -7.0),
-				origin + Vector3( 1.0, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 4.5, 0.0, -11.0),
+			offsets = [
+				Vector3(-2.5, 0.0, -7.0),
+				Vector3( 1.0, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 4.5, 0.0, -11.0),
 			]
 		"ROCKET":
 			# Tight cluster so a single rocket splash takes the group.
-			positions = [
-				origin + Vector3(-1.5, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 1.5, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 0.0, 0.0, -7.5),
-				origin + Vector3( 0.0, 0.0, -10.5),
+			offsets = [
+				Vector3(-1.5, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 1.5, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 0.0, 0.0, -7.5),
+				Vector3( 0.0, 0.0, -10.5),
 			]
 		_:
 			# Unknown weapon — fall back to a small single-line group so the
 			# step still has something to fire at.
-			positions = [
-				origin + Vector3(-2.0, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 0.0, 0.0, -DUMMY_FORWARD_DIST),
-				origin + Vector3( 2.0, 0.0, -DUMMY_FORWARD_DIST),
+			offsets = [
+				Vector3(-2.0, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 0.0, 0.0, -DUMMY_FORWARD_DIST),
+				Vector3( 2.0, 0.0, -DUMMY_FORWARD_DIST),
 			]
-	for p in positions:
-		_spawn_dummy(p)
+	for off in offsets:
+		_spawn_dummy(mech, off)
 
-func _spawn_dummy(at: Vector3) -> void:
-	var enemies_root := get_parent().get_node_or_null("Enemies") as Node3D
-	if enemies_root == null:
+# Parent the dummy to `anchor` and place it at `anchor.global_position +
+# world_offset`. Godot computes the local position once, so as the anchor
+# marches forward each frame the dummy travels with it and the world-space
+# offset stays constant — formation reads as fixed relative to the mech.
+func _spawn_dummy(anchor: Node3D, world_offset: Vector3) -> void:
+	if anchor == null or not is_instance_valid(anchor):
 		return
 	var d: Node3D = ENEMY_SCENE.instantiate()
 	d.set("is_dummy", true)
 	d.set("max_health", TUTORIAL_DUMMY_HP)
-	enemies_root.add_child(d)
-	d.global_position = at
+	anchor.add_child(d)
+	d.global_position = anchor.global_position + world_offset
 	_dummies.append(d)
 
 func _clear_dummies() -> void:
