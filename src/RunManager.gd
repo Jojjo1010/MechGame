@@ -4,7 +4,7 @@ var wave:          int = 0
 var gold:          int = 0
 var xp:            int = 0
 var level:         int = 1
-var xp_to_next:    int = 14   # XP needed for next level (scales up each level)
+var xp_to_next:    int = 18   # XP needed for next level (scales up each level)
 
 # Run-wide multipliers applied by upgrades
 var line_speed_mult: float = 1.0
@@ -62,10 +62,10 @@ func add_xp(amount: int) -> void:
 	while xp >= xp_to_next:
 		xp        -= xp_to_next
 		level     += 1
-		# Multiplicative curve: 14, 22, 33, 51, 79, 123, 191, 296, 458, 711 …
-		# Tuned so a 30-wave run yields ~10–11 picks, roughly one every 3 waves
-		# by mid-game. Earlier 10/1.45 curve produced ~14 picks and felt constant.
-		xp_to_next = roundi(14.0 * pow(1.55, level - 1))
+		# Multiplicative curve: 18, 30, 49, 81, 134, 221, 365, 602, 994 …
+		# Tuned so a 30-wave run yields ~9 picks with 2–4-wave gaps mid-run, so
+		# each upgrade has time to play out before the next one arrives.
+		xp_to_next = roundi(18.0 * pow(1.65, level - 1))
 		level_up.emit(level)
 		AudioManager.play("level_up")
 	xp_changed.emit(xp, xp_to_next)
@@ -110,7 +110,7 @@ func reset_run() -> void:
 	gold       = 0
 	xp         = 0
 	level      = 1
-	xp_to_next = 14
+	xp_to_next = 18
 	line_speed_mult = 1.0
 	taken_unique_upgrades.clear()
 	taken_upgrades.clear()
