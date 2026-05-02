@@ -1,15 +1,27 @@
 extends CanvasLayer
 
-# Title screen. Black backdrop, oversized game title, lime tagline, and a
-# vertical column of buttons. PLAY routes through the lore crawl into the
+# Title screen. Black backdrop, oversized game title, lime tagline, lore
+# paragraph, and a vertical column of buttons. PLAY routes straight into the
 # game; HOW TO PLAY opens a modal panel; GARAGE is a placeholder pinned to
 # "COMING SOON" until the meta-progression flow is wired into the main loop;
 # QUIT exits the application. Visual language matches DeathScreen / WinScreen
 # so the three modal-style screens read as siblings.
 
-const LORE_SCENE_PATH := "res://scenes/ui/LoreCrawl.tscn"
 const GAME_SCENE_PATH := "res://scenes/game/Game.tscn"
-const HOW_TO_PLAY_SCRIPT := preload("res://scenes/ui/HowToPlayPanel.gd")
+
+# World/run flavor that used to live on its own crawl page. Reads above the
+# button column so the player gets the setup before they hit PLAY.
+const LORE_TEXT := \
+	"A century ago, the line lost lateral movement.\n" + \
+	"Firmware locked. Servos welded. Forward only.\n\n" + \
+	"The last directive from Logistics:\n" + \
+	"\"Deliver the cargo. Confirm at drop-off.\n" + \
+	"Await further instructions.\"\n\n" + \
+	"Logistics never spoke again.\n\n" + \
+	"The mechs marched anyway. They march still —\n" + \
+	"to the drop-off, back for the next contract,\n" + \
+	"forward again. Forever forward.\n\n" + \
+	"You are the drone."
 
 # Layout tokens — same 8 px grid the rest of the UI uses.
 const PANEL_CORNER_R := 16
@@ -46,21 +58,20 @@ func _build() -> void:
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(backdrop)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(center)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", SECTION_GAP)
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(col)
-
-	# ── Title block ──────────────────────────────────────────────────────────
+	# ── Title block (anchored above the centered buttons) ────────────────────
+	# Anchored relative to screen center so the title sits just above the
+	# button area, not pinned to the very top of the screen.
 	var title_block := VBoxContainer.new()
 	title_block.add_theme_constant_override("separation", TITLE_GAP)
-	title_block.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_child(title_block)
+	title_block.alignment = BoxContainer.ALIGNMENT_BEGIN
+	title_block.anchor_left   = 0.0
+	title_block.anchor_right  = 1.0
+	title_block.anchor_top    = 0.5
+	title_block.anchor_bottom = 0.5
+	title_block.offset_top    = -310.0
+	title_block.offset_bottom = -180.0
+	title_block.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	root.add_child(title_block)
 
 	var title := Label.new()
 	title.text = "CONGA MECHS"
@@ -74,11 +85,44 @@ func _build() -> void:
 	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_block.add_child(tagline)
 
-	# ── Button column ────────────────────────────────────────────────────────
+	# ── Button column (true screen center) ───────────────────────────────────
+	# SIZE_SHRINK_CENTER pins the column to its BTN_W minimum so the buttons
+	# don't stretch to the wider container; combined with CenterContainer this
+	# puts the buttons at exactly screen_center ± BTN_W/2.
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(center)
+
 	var btn_col := VBoxContainer.new()
 	btn_col.add_theme_constant_override("separation", BTN_GAP)
 	btn_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_child(btn_col)
+	btn_col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	center.add_child(btn_col)
+
+	# ── Lore paragraph (floats just right of the centered button column) ─────
+	# Top edge aligns with the top of the button column; left edge sits
+	# LORE_GAP px right of the BTN_W-wide buttons.
+	const LORE_W := 600.0
+	const LORE_GAP := 48.0
+	const BTN_COL_HALF_H := (BTN_H * 4.0 + BTN_GAP * 3.0) * 0.5
+	var lore := Label.new()
+	lore.text = LORE_TEXT
+	UITheme.style_body(lore, UITheme.COLOR_TEXT_SECONDARY)
+	lore.add_theme_font_size_override("font_size", 24)
+	lore.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lore.vertical_alignment   = VERTICAL_ALIGNMENT_TOP
+	lore.autowrap_mode        = TextServer.AUTOWRAP_OFF
+	lore.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	lore.anchor_left   = 0.5
+	lore.anchor_right  = 0.5
+	lore.anchor_top    = 0.5
+	lore.anchor_bottom = 0.5
+	lore.offset_left   = BTN_W * 0.5 + LORE_GAP
+	lore.offset_right  = lore.offset_left + LORE_W
+	lore.offset_top    = -BTN_COL_HALF_H
+	lore.offset_bottom = -BTN_COL_HALF_H + 480.0
+	root.add_child(lore)
 
 	var play_btn := _make_primary_button("PLAY")
 	var how_btn  := _make_secondary_button("HOW TO PLAY")
@@ -94,7 +138,7 @@ func _build() -> void:
 	btn_col.add_child(grg_btn)
 	btn_col.add_child(quit_btn)
 
-	_animate_entrance(title_block, [play_btn, how_btn, grg_btn, quit_btn])
+	_animate_entrance(title_block, lore, [play_btn, how_btn, grg_btn, quit_btn])
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
@@ -180,14 +224,16 @@ func _wire_button_motion(btn: Button) -> void:
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_DUR)
 	)
 
-# Title fades in first, then each button staggers in below.
-func _animate_entrance(title_block: Control, btns: Array) -> void:
+# Title fades in first, lore follows, then each button staggers in below.
+func _animate_entrance(title_block: Control, lore: Control, btns: Array) -> void:
 	title_block.modulate.a = 0.0
+	lore.modulate.a = 0.0
 	for b in btns:
 		(b as Control).modulate.a = 0.0
 
 	var t := create_tween()
 	t.tween_property(title_block, "modulate:a", 1.0, FADE_DUR)
+	t.parallel().tween_property(lore, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 0.5)
 	for i in btns.size():
 		var c: Control = btns[i]
 		t.parallel().tween_property(c, "modulate:a", 1.0, FADE_DUR) \
@@ -197,13 +243,13 @@ func _animate_entrance(title_block: Control, btns: Array) -> void:
 
 func _on_play_pressed() -> void:
 	AudioManager.play("ui_click")
-	get_tree().change_scene_to_file(LORE_SCENE_PATH)
+	RunManager.tutorial_only = false
+	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 func _on_how_to_play_pressed() -> void:
 	AudioManager.play("ui_click")
-	var panel := CanvasLayer.new()
-	panel.set_script(HOW_TO_PLAY_SCRIPT)
-	add_child(panel)
+	RunManager.tutorial_only = true
+	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 func _on_quit_pressed() -> void:
 	AudioManager.play("ui_click")

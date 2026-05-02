@@ -166,12 +166,12 @@ func _ready() -> void:
 		_turntable.add_child(mech)
 		_slot_mechs.append(mech)
 
-	# Camera looks down a bit at the front of the disk. Distance + FOV are
-	# tuned so a MECH_HEIGHT-tall mech in the front position fits with headroom
-	# above the head and the disk visible below the feet.
+	# Camera looks down at the front of the disk. Pitch is tuned so the mech's
+	# head sits at the top of the viewport — matches the top edge of the
+	# upgrade cards next to it in the picker layout.
 	var cam := Camera3D.new()
 	cam.position = Vector3(0.0, 3.2, DISK_RADIUS + 13.0)
-	cam.rotation_degrees.x = -10.0
+	cam.rotation_degrees.x = -13.0
 	cam.fov = 46.0
 	cam.current = true
 	_viewport.add_child(cam)

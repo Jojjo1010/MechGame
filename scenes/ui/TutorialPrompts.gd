@@ -128,12 +128,15 @@ func _enter_state(new_state: State) -> void:
 		State.DONE:
 			_hide_modal()
 			_set_paused(false)
-			SaveData.mark_tutorial_seen()
-			# Wait for the fade to finish before freeing.
+			# Tutorial only runs via HOW TO PLAY now, so DONE always returns to
+			# the start screen. Clear the flag first so re-entering Game.tscn
+			# from PLAY doesn't re-spawn the tutorial.
+			RunManager.tutorial_only = false
 			var t := create_tween()
 			t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 			t.tween_interval(FADE_DUR + 0.1)
-			t.tween_callback(queue_free)
+			t.tween_callback(func() -> void:
+				get_tree().change_scene_to_file("res://scenes/ui/StartScreen.tscn"))
 
 func _show_modal(chip_text: String, action_text: String, pause_tree: bool) -> void:
 	_chip_label.text   = chip_text.to_upper()

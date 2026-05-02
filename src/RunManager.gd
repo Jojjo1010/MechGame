@@ -9,6 +9,13 @@ var xp_to_next:    int = 10   # XP needed for next level (scales up each level)
 # Run-wide multipliers applied by upgrades
 var line_speed_mult: float = 1.0
 
+# Set true when the player launches Game.tscn from HOW TO PLAY (tutorial-only
+# mode). Game.gd uses it to spawn TutorialPrompts; TutorialPrompts uses it to
+# change scene back to StartScreen on DONE instead of dropping into a normal
+# wave loop. Transient — not reset by reset_run() since that runs in Game._ready
+# *after* the flag is consumed.
+var tutorial_only: bool = false
+
 # (Combo system removed in playtest — see git history for the prior wiring.)
 
 # Tracks which one-shot (unique) upgrades have been taken so they drop from the pool.

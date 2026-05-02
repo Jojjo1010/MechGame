@@ -85,16 +85,15 @@ func _ready() -> void:
 	_spawn_upgrade_picker()
 	_spawn_drone_hint()
 	_spawn_left_click_hint()
-	_spawn_tutorial_prompts()
+	if RunManager.tutorial_only:
+		_spawn_tutorial_prompts()
 	RunManager.run_won.connect(_on_run_won)
 	AudioManager.play_music("bgm_main", -12.0)
 
-# First-run on-boarding: a small hint stack on the right edge that fades each
-# row when the matching action is performed. SaveData persists the seen flag,
-# so this is a no-op on subsequent runs.
+# Tutorial overlay — only spawned when launched via HOW TO PLAY (caller gates
+# on RunManager.tutorial_only). Walks the player through WASD / SHIFT / LMB /
+# repair, then changes scene back to the start screen.
 func _spawn_tutorial_prompts() -> void:
-	if SaveData.tutorial_seen:
-		return
 	if drones.is_empty():
 		return
 	var prompts := CanvasLayer.new()

@@ -22,7 +22,7 @@ Identity lives in `scenes/mechs/MechArchetypes.gd` — `name_for(weapon_name)`, 
 
 - Godot **4.6.2** (match the version exactly — different minor versions will re-import assets and shift `.uid` files).
 - GDScript with strict typing.
-- UI is hand-built in `.gd` files inside `_ready()` / `_build()`. The two `.tscn` files in `scenes/ui/` (`StartScreen.tscn`, `LoreCrawl.tscn`) are minimal — root node + script ref — because they're top-level scenes that get loaded via `change_scene_to_file`. Update the script, not the scene.
+- UI is hand-built in `.gd` files inside `_ready()` / `_build()`. `StartScreen.tscn` is minimal — root node + script ref — because it's a top-level scene loaded via `change_scene_to_file`. Update the script, not the scene.
 - Autoloads (in `project.godot`): `RunManager`, `AudioManager`, `SaveData`.
 - **Main scene** is `scenes/ui/StartScreen.tscn`, not `Game.tscn`.
 
@@ -39,11 +39,9 @@ Identity lives in `scenes/mechs/MechArchetypes.gd` — `name_for(weapon_name)`, 
 | `scenes/drones/Drone.gd` | Player-controlled. Dash uses **polled** Shift (not event), steerable with held WASD |
 | `src/RunManager.gd` | XP/level, gold, upgrade tracking, signals (`xp_changed`, `level_up`, `gold_changed`, `upgrade_taken`, `run_won`). `WIN_WAVE = 30` |
 | `src/Upgrades.gd` | Upgrade catalog (`ALL` array), weighted picker, `apply()` per-id wiring. 3 commons + 1 uncommon + 1 rare per weapon |
-| `src/SaveData.gd` | Meta progression — scrap currency, plus `tutorial_seen` flag for the first-run on-boarding overlay |
-| `scenes/ui/StartScreen.gd` + `.tscn` | Boot screen. PLAY → LoreCrawl → Game. HOW TO PLAY opens HowToPlayPanel. GARAGE is "COMING SOON" placeholder |
-| `scenes/ui/LoreCrawl.gd` + `.tscn` | Typewriter intro that plays before each run. Click/keypress skips current stage; second click advances |
-| `scenes/ui/HowToPlayPanel.gd` | Modal overlay launched from StartScreen. Intro paragraph + controls list |
-| `scenes/ui/TutorialPrompts.gd` | First-run only (gated by `SaveData.tutorial_seen`). Right-edge stack of 4 hint rows that fade as actions are performed |
+| `src/SaveData.gd` | Meta progression — scrap currency, settings, mech-slot unlocks |
+| `scenes/ui/StartScreen.gd` + `.tscn` | Boot screen with title, lore paragraph, and button column. PLAY → Game. HOW TO PLAY → Game with `RunManager.tutorial_only=true` (TutorialPrompts walks the player through actions, then changes scene back here). GARAGE is "COMING SOON" placeholder |
+| `scenes/ui/TutorialPrompts.gd` | Modal director gated by `RunManager.tutorial_only`. Pauses the game until each of WASD / SHIFT / LMB is performed, then watches for damage to teach repair. Returns to StartScreen on DONE |
 | `scenes/ui/{DeathScreen,WinScreen}.gd` | End-of-run modals. RESTART/PLAY AGAIN → Game; QUIT → StartScreen |
 | `scenes/game/WaveSpawner.gd` | Stops spawning at `WIN_WAVE`, polls for empty field, then emits `RunManager.run_won` |
 | `scenes/ui/style/UITheme.gd` | **Single source of truth** for colors / fonts / spacing tokens |
@@ -72,9 +70,11 @@ Helpers: `UITheme.panel_stylebox()`, `style_heading()`, `style_label_caps()`, `s
 ### Boot flow
 
 ```
-StartScreen ─► LoreCrawl ─► Game ─► (DeathScreen | WinScreen) ─► StartScreen
-                                          │
-                                          └─► RESTART / PLAY AGAIN ─► Game
+StartScreen ─PLAY─► Game ─► (DeathScreen | WinScreen) ─► StartScreen
+            │                       │
+            │                       └─► RESTART / PLAY AGAIN ─► Game
+            │
+            └─HOW TO PLAY (RunManager.tutorial_only=true)─► Game ─► TutorialPrompts ─► StartScreen
 ```
 
 First run only: `TutorialPrompts` overlays `Game`. Once dismissed, persists in SaveData.
