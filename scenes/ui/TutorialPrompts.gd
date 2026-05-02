@@ -111,6 +111,10 @@ var _ult_mech_idx:   int    = -1
 # Practice dummies for the current phase. Cleared between phases so each
 # weapon's lesson starts on a clean stage.
 var _dummies:        Array[Node3D] = []
+# Set of WASD keys the player has pressed at least once during the WASD
+# prompt. Advance only when all four are present — pressing W alone shouldn't
+# end the lesson when the prompt is teaching the whole cluster.
+var _wasd_seen:      Dictionary = {}
 
 func setup(p_drone: Node3D, p_mechs: Array) -> void:
 	_drone = p_drone
@@ -217,16 +221,18 @@ func _enter_state(new_state: State) -> void:
 	_set_late_ui_visible(late_ui_visible)
 	match new_state:
 		State.WASD_SHOWING:
+			_wasd_seen.clear()
 			_show_prompt(KeyChip.make_wasd_cluster(KEY_FONT), "move", "MOVE THE DRONE")
 		State.CAMERA_SHOWING:
 			_show_prompt(KeyChip.make_key_cap("Q", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "camera", "TOGGLE CAMERA")
 		State.SHIFT_SHOWING:
-			_spawn_shift_dummy()
-			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH")
+			_spawn_shift_dummies()
+			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH THROUGH ENEMIES")
 		State.ULT_INTRO:
 			# _target_mech / _ult_mech_idx are set by _advance_to_next_ult()
 			# before this state is entered.
 			_spawn_dummies_for(_target_mech)
+			_force_target_ult_ready()
 			_show_intro_for(_target_mech)
 		State.ULT_SHOWING_E:
 			_show_prompt(KeyChip.make_key_cap("E", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
@@ -367,12 +373,54 @@ func _make_lmb_chip() -> Control:
 func _process(delta: float) -> void:
 	_state_timer += delta
 	_animate_marker(delta)
+	# Pause the conga line while the target weapon is aiming. The aim point is
+	# in world space but practice dummies are parented to the marching mech —
+	# without pausing, the row drifts out from under the player's crosshair
+	# between the first click (place) and the second (fire). Tutorial-only;
+	# the main game keeps moving during aim mode by design.
+	RunManager.line_speed_mult = 0.0 if _target_mech_in_aim_mode() else 1.0
+	# Cross-state kill-check: any of the ult phases advances the moment all
+	# practice dummies are dead. Catches the case where the in-world
+	# MechOptionsPanel fires the ult on its own range check (looser than the
+	# tutorial's APPROACH_RADIUS), so the player demonstrably did the lesson
+	# but the tutorial's E-near-target gate never tripped — previously this
+	# left the prompt stuck until the 12 s timeout rescued it.
+	if _state == State.ULT_SHOWING_E or _state == State.ULT_SHOWING_LMB or _state == State.ULT_FADING:
+		if not _dummies.is_empty() and _alive_dummy_count() == 0:
+			_advance_to_next_ult()
+			return
+	# Poll the target mech's weapon directly — the tutorial's own E listener
+	# requires drone-near-target, but the panel's E binding fires on whichever
+	# mech is closest. If the player presses E while standing closer to a
+	# non-target mech, the panel triggers the *wrong* mech's ult and our
+	# state gate never trips. Watching the target weapon's aim/cooldown state
+	# advances the tutorial whenever the target mech actually fires, no matter
+	# which keystroke caused it.
+	if _state == State.ULT_SHOWING_E:
+		if _target_uses_aim_mode():
+			if _target_mech_in_aim_mode():
+				_enter_state(State.ULT_SHOWING_LMB)
+				return
+		elif _target_mech_ult_on_cooldown():
+			_enter_state(State.ULT_FADING)
+			return
+	elif _state == State.ULT_SHOWING_LMB:
+		# Aim-mode weapons leave is_aim_mode() once they fire (cooldown set on
+		# the same call). Right-click cancels also clear is_aim_mode() but
+		# don't start the cooldown — checking both fields distinguishes a
+		# real fire from a bail.
+		if _target_mech_ult_on_cooldown() and not _target_mech_in_aim_mode():
+			_enter_state(State.ULT_FADING)
+			return
 	match _state:
 		State.WASD_SHOWING:
 			# MIN_PROMPT_TIME gate: a player who's already pressing W when this
 			# state enters would otherwise satisfy the trigger on the same
-			# frame and skip the prompt entirely.
-			if _state_timer >= MIN_PROMPT_TIME and _wasd_pressed():
+			# frame and skip the prompt entirely. Player must press all four
+			# WASD keys at least once before advancing — pressing only W
+			# shouldn't end the lesson on the whole cluster.
+			_track_wasd_seen()
+			if _state_timer >= MIN_PROMPT_TIME and _wasd_all_seen():
 				_enter_state(State.WASD_FADING)
 		State.WASD_FADING:
 			if _state_timer >= PRACTICE_DUR:
@@ -463,6 +511,24 @@ func _weapon_name_for(mech: Node3D) -> String:
 		return ""
 	return String(w.weapon_name)
 
+func _weapon_for(mech: Node3D) -> Node3D:
+	if mech == null or not is_instance_valid(mech):
+		return null
+	return mech.get("weapon") as Node3D
+
+func _target_mech_in_aim_mode() -> bool:
+	var w := _weapon_for(_target_mech)
+	return w != null and w.has_method("is_aim_mode") and w.is_aim_mode()
+
+func _target_mech_ult_on_cooldown() -> bool:
+	var w := _weapon_for(_target_mech)
+	return w != null and w.has_method("is_ready") and not w.is_ready()
+
+func _force_target_ult_ready() -> void:
+	var w := _weapon_for(_target_mech)
+	if w != null and w.has_method("force_ult_ready"):
+		w.force_ult_ready()
+
 func _archetype_name_for(mech: Node3D) -> String:
 	return MechArchetypes.name_for(_weapon_name_for(mech))
 
@@ -522,16 +588,23 @@ func _animate_marker(delta: float) -> void:
 
 # ── Practice dummies ─────────────────────────────────────────────────────────
 
-# One slow dummy in front of the lead mech for the SHIFT/dash step. Player
-# can dash past or through it; the gate to advance is still pressing SHIFT,
-# the dummy is just a "thing in space" to dash relative to.
-func _spawn_shift_dummy() -> void:
+# Three dummies in a forward column for the SHIFT/dash step so the player
+# punches through all of them with one dash. They're cosmetic now — dash no
+# longer damages — so they stay standing once the player passes through.
+# SHIFT_FADING clears them before the ult phase begins.
+func _spawn_shift_dummies() -> void:
 	if _mechs.is_empty():
 		return
 	var lead: Node3D = _mechs[0]
 	if not is_instance_valid(lead):
 		return
-	_spawn_dummy(lead, Vector3(0.0, 0.0, -DUMMY_FORWARD_DIST))
+	var offsets := [
+		Vector3(0.0, 0.0, -5.0),
+		Vector3(0.0, 0.0, -7.5),
+		Vector3(0.0, 0.0, -10.0),
+	]
+	for off in offsets:
+		_spawn_dummy(lead, off)
 
 # Per-mech formations sized to showcase each weapon's ult shape — fan for
 # GUN, aura cluster for GARLIC, line for the chained beam, tight cluster for
@@ -556,19 +629,26 @@ func _spawn_dummies_for(mech: Node3D) -> void:
 				Vector3( 0.0, 0.0,  3.0),
 			]
 		"BEAM":
-			# Spaced in a near-line so the chained beam hops between them.
+			# Row off to the +X side, matching the rocket layout — aiming
+			# laterally is much easier than threading enemies forward through
+			# the line of mechs. Three dummies along the same Z, spaced inside
+			# the 12-unit beam length so a click near the mech + a click toward
+			# the row threads all three.
 			offsets = [
-				Vector3(-2.5, 0.0, -7.0),
-				Vector3( 1.0, 0.0, -DUMMY_FORWARD_DIST),
-				Vector3( 4.5, 0.0, -11.0),
+				Vector3( 5.0, 0.0, -3.0),
+				Vector3( 8.0, 0.0, -3.0),
+				Vector3(11.0, 0.0, -3.0),
 			]
 		"ROCKET":
-			# Tight cluster so a single rocket splash takes the group.
+			# Cluster off to the +X side so the player has to clearly aim
+			# laterally — earlier forward placement made the rocket appear
+			# to launch from the front of the conga line and crossed the
+			# other mechs on its way out.
 			offsets = [
-				Vector3(-1.5, 0.0, -DUMMY_FORWARD_DIST),
-				Vector3( 1.5, 0.0, -DUMMY_FORWARD_DIST),
-				Vector3( 0.0, 0.0, -7.5),
-				Vector3( 0.0, 0.0, -10.5),
+				Vector3(7.5, 0.0, -2.0),
+				Vector3(7.5, 0.0,  0.0),
+				Vector3(7.5, 0.0,  2.0),
+				Vector3(9.0, 0.0,  0.0),
 			]
 		_:
 			# Unknown weapon — fall back to a small single-line group so the
@@ -647,9 +727,14 @@ func _force_damage_for_repair() -> Node3D:
 
 # ── Conditions ───────────────────────────────────────────────────────────────
 
-func _wasd_pressed() -> bool:
-	return Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) \
-		or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D)
+func _track_wasd_seen() -> void:
+	if Input.is_key_pressed(KEY_W): _wasd_seen[KEY_W] = true
+	if Input.is_key_pressed(KEY_A): _wasd_seen[KEY_A] = true
+	if Input.is_key_pressed(KEY_S): _wasd_seen[KEY_S] = true
+	if Input.is_key_pressed(KEY_D): _wasd_seen[KEY_D] = true
+
+func _wasd_all_seen() -> bool:
+	return _wasd_seen.size() >= 4
 
 # Whether the in-world MechOptionsPanel (E ult / F repair prompts) should be
 # allowed to surface during this state. Off during pure-input phases so it

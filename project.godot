@@ -32,3 +32,4 @@ window/size/mode=2
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/size/mode.editor=0
+window/dpi/allow_hidpi=true
