@@ -34,6 +34,7 @@ var _debug_view:     Control = null
 var _settings_view:  Control = null
 var _stat_labels:    Dictionary = {}   # label_key -> Label
 var _level_target:   SpinBox = null
+var _wave_target:    SpinBox = null
 
 # Resolution presets shown in the settings dropdown. (0,0) is the
 # "Fullscreen" entry — handled specially.
@@ -180,6 +181,7 @@ func _build_debug_view() -> Control:
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(actions)
 
+	actions.add_child(_make_wave_jump_row())
 	actions.add_child(_make_level_jump_row())
 	var gold_btn  := _make_secondary_button("+500 GOLD")
 	var heal_btn  := _make_secondary_button("HEAL ALL MECHS")
@@ -360,6 +362,43 @@ func _quit_to_menu() -> void:
 	get_tree().change_scene_to_file(START_SCENE_PATH)
 
 # ── Debug actions ────────────────────────────────────────────────────────────
+
+func _make_wave_jump_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(BTN_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_S)
+
+	_wave_target = SpinBox.new()
+	_wave_target.min_value = 1
+	_wave_target.max_value = float(RunManager.WIN_WAVE)
+	_wave_target.step      = 1
+	_wave_target.value     = float(mini(RunManager.wave + 1, RunManager.WIN_WAVE))
+	_wave_target.custom_minimum_size = Vector2(96.0, BTN_H)
+	_wave_target.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+	_wave_target.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(_wave_target)
+
+	var btn := _make_secondary_button("JUMP TO WAVE")
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0.0, BTN_H)
+	btn.pressed.connect(_dbg_jump_to_wave)
+	hbox.add_child(btn)
+	return hbox
+
+func _dbg_jump_to_wave() -> void:
+	AudioManager.play("ui_click")
+	var target: int = int(_wave_target.value)
+	# WaveSpawner is parked at the Game scene root. Find it via group lookup so
+	# we don't hard-couple to the scene path — Game.gd holds the only @onready
+	# reference and we can't reach it from the pause menu cleanly otherwise.
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var spawner := scene.get_node_or_null("WaveSpawner")
+	if spawner == null or not spawner.has_method("set_wave"):
+		return
+	spawner.set_wave(target)
+	queue_free()
 
 func _make_level_jump_row() -> Control:
 	var hbox := HBoxContainer.new()

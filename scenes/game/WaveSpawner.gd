@@ -30,6 +30,19 @@ var _win_emitted:        bool = false
 func setup(p_enemies_container: Node3D) -> void:
 	enemies_container = p_enemies_container
 
+# Debug: jump the wave counter so the next spawn lands on `target`. Existing
+# enemies are not removed (use the KILL ALL ENEMIES debug for that). Resets the
+# end-of-run flags so jumping backwards from WIN_WAVE re-arms spawning.
+func set_wave(target: int) -> void:
+	if target < 1:
+		return
+	wave_number = target - 1
+	RunManager.wave = wave_number
+	_final_wave_spawned = false
+	_final_check_timer  = 0.0
+	_win_emitted        = false
+	timer = 0.0
+
 func _process(delta: float) -> void:
 	if _final_wave_spawned:
 		_final_check_timer -= delta
