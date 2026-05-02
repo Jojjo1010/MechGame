@@ -20,15 +20,20 @@ var _mech_color: Color = Color.WHITE
 var _size_px:    float = 96.0
 var _border_w:   float = 4.0
 var _pop_out:    bool  = true
+# Default 90° matches the original behavior — mech front (+X authored) rotates
+# to face the camera. Pass 0.0 for a side profile with front pointing +X
+# (screen right), 180.0 for front pointing -X (screen left).
+var _facing_deg: float = 90.0
 var _frame:        PanelContainer = null
 var _style:        StyleBoxFlat = null
 var _texture_rect: TextureRect = null
 
-func setup(color: Color, size_px: float, border_w: float = 4.0, pop_out: bool = true) -> void:
+func setup(color: Color, size_px: float, border_w: float = 4.0, pop_out: bool = true, facing_deg: float = 90.0) -> void:
 	_mech_color = color
 	_size_px    = size_px
 	_border_w   = border_w
 	_pop_out    = pop_out
+	_facing_deg = facing_deg
 	custom_minimum_size = Vector2(size_px, size_px)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = false
@@ -64,7 +69,7 @@ func _ready() -> void:
 
 	var bake_w := int(tex_w)
 	var bake_h := int(tex_h)
-	var key := "%d|%d|%s" % [bake_w, bake_h, _mech_color.to_html(false)]
+	var key := "%d|%d|%s|%d" % [bake_w, bake_h, _mech_color.to_html(false), int(round(_facing_deg))]
 	if _cache.has(key):
 		_texture_rect.texture = _cache[key]
 	else:
@@ -102,8 +107,9 @@ func _bake(bake_w: int, bake_h: int, cache_key: String) -> void:
 		aabb = _aabb_of(mech_visual)
 		mech_visual.position.y = -aabb.position.y
 	# Authored front of the FBX is +X (in-game Mech rotates -90° to face -Z, the
-	# march direction). Camera looks toward -Z, so we want +X → +Z, i.e. +90°.
-	mech_visual.rotation_degrees.y = 90.0
+	# march direction). Camera looks toward -Z, so 90° puts the front toward
+	# the camera; 0° / 180° give side-profile silhouettes.
+	mech_visual.rotation_degrees.y = _facing_deg
 	vp.add_child(mech_visual)
 
 	# Tint with the archetype color — same params as Mech.set_color() so the

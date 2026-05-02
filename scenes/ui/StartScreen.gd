@@ -8,6 +8,7 @@ extends CanvasLayer
 # so the three modal-style screens read as siblings.
 
 const GAME_SCENE_PATH := "res://scenes/game/Game.tscn"
+const MechPortraitScript := preload("res://scenes/ui/MechPortrait.gd")
 
 # World/run flavor that used to live on its own crawl page. Reads above the
 # button column so the player gets the setup before they hit PLAY.
@@ -31,6 +32,22 @@ const HOVER_DUR      := 0.10
 const PRESS_DUR      := 0.08
 const FADE_DUR       := 0.45
 const FADE_STAGGER   := 0.08
+
+# Marching mech parade along the bottom of the screen. Cosmetic only — mouse
+# filter is IGNORE so clicks pass through to the buttons. Reuses MechPortrait,
+# which caches the baked texture per (size, color), so all GUN portraits share
+# one texture, all GARLIC share one, etc., regardless of how many march.
+const PARADE_MECH_SIZE     := 96.0
+const PARADE_MARGIN_BOTTOM := 32.0
+const PARADE_SPACING       := 240.0
+const PARADE_SPEED         := 50.0   # px/sec, left → right
+const PARADE_BOB_AMP       := 4.0    # px
+const PARADE_BOB_FREQ      := 2.0    # cycles/sec
+const PARADE_WEAPONS       := ["GUN", "GARLIC", "BEAM"]
+
+var _parade_mechs:  Array = []  # Array[Control] — MechPortrait instances
+var _parade_phases: Array = []  # Array[float]   — bob phase offset per mech
+var _parade_loop_w: float = 0.0 # width of the formation loop for wraparound
 
 func _ready() -> void:
 	layer = 0
@@ -134,7 +151,9 @@ func _build() -> void:
 	btn_col.add_child(grg_btn)
 	btn_col.add_child(quit_btn)
 
-	_animate_entrance(title_block, lore, [play_btn, how_btn, grg_btn, quit_btn])
+	var parade_band := _build_mech_parade(root)
+
+	_animate_entrance(title_block, lore, parade_band, [play_btn, how_btn, grg_btn, quit_btn])
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
@@ -202,38 +221,107 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 	return btn
 
 func _wire_button_motion(btn: Button) -> void:
+	# Mouse signals can fire while the scene is tearing down (PLAY/HOW TO PLAY
+	# pressed → change_scene → btn queued for free). The captured `btn` reads
+	# as freed inside the lambda, so guard each tween creation.
 	btn.mouse_entered.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		AudioManager.play("ui_hover")
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DUR)
 	)
 	btn.mouse_exited.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2.ONE, HOVER_DUR)
 	)
 	btn.button_down.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(0.96, 0.96), PRESS_DUR)
 	)
 	btn.button_up.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_DUR)
 	)
 
 # Title fades in first, lore follows, then each button staggers in below.
-func _animate_entrance(title_block: Control, lore: Control, btns: Array) -> void:
+func _animate_entrance(title_block: Control, lore: Control, parade: Control, btns: Array) -> void:
 	title_block.modulate.a = 0.0
 	lore.modulate.a = 0.0
+	parade.modulate.a = 0.0
 	for b in btns:
 		(b as Control).modulate.a = 0.0
 
 	var t := create_tween()
 	t.tween_property(title_block, "modulate:a", 1.0, FADE_DUR)
 	t.parallel().tween_property(lore, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 0.5)
+	t.parallel().tween_property(parade, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 0.5)
 	for i in btns.size():
 		var c: Control = btns[i]
 		t.parallel().tween_property(c, "modulate:a", 1.0, FADE_DUR) \
 			.set_delay(FADE_DUR + float(i) * FADE_STAGGER)
+
+# ── Mech parade ──────────────────────────────────────────────────────────────
+
+# Builds a strip pinned to the bottom of the screen and fills it with mech
+# portraits cycling through the three archetype tints. The portraits are
+# positioned manually (no container) so we can drive them from _process.
+func _build_mech_parade(root: Control) -> Control:
+	var band := Control.new()
+	band.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	band.offset_top    = -PARADE_MECH_SIZE - PARADE_MARGIN_BOTTOM
+	band.offset_bottom = -PARADE_MARGIN_BOTTOM
+	band.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# MechPortrait pop-out renders the mech 1.9× the layout box height, anchored
+	# to the bottom — so heads extend above the band into the lore area. That's
+	# fine, but the band itself must not clip them.
+	band.clip_contents = false
+	root.add_child(band)
+
+	var screen_w := float(get_viewport().get_visible_rect().size.x)
+	# +1 spare so the leftmost mech can sit just off-screen at all times,
+	# keeping the wraparound seam invisible.
+	var slots := int(ceil(screen_w / PARADE_SPACING)) + 1
+	_parade_loop_w = float(slots) * PARADE_SPACING
+
+	for i in slots:
+		var weapon: String = PARADE_WEAPONS[i % PARADE_WEAPONS.size()]
+		var color: Color = MechArchetypes.color_for(weapon)
+		var portrait: Control = MechPortraitScript.new()
+		# facing_deg=0 → front faces +X (screen right), matching the walk direction.
+		portrait.call("setup", color, PARADE_MECH_SIZE, 0.0, true, 0.0)
+		# Whole formation starts off-screen to the left, so the title opens
+		# empty and the line walks in. i=0 is the front of the conga (closest
+		# to the screen edge); higher i sits further off-screen back.
+		portrait.position = Vector2(-float(i + 1) * PARADE_SPACING, 0.0)
+		band.add_child(portrait)
+		_parade_mechs.append(portrait)
+		# Stagger bob phase so the mechs don't bob in lockstep — reads as a
+		# walking conga line rather than a single bouncing block.
+		_parade_phases.append(float(i) * 0.35)
+
+	return band
+
+func _process(delta: float) -> void:
+	if _parade_mechs.is_empty() or _parade_loop_w <= 0.0:
+		return
+	var screen_w := float(get_viewport().get_visible_rect().size.x)
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in _parade_mechs.size():
+		var portrait: Control = _parade_mechs[i]
+		if not is_instance_valid(portrait):
+			continue
+		portrait.position.x += PARADE_SPEED * delta
+		if portrait.position.x > screen_w:
+			portrait.position.x -= _parade_loop_w
+		var phase: float = _parade_phases[i]
+		portrait.position.y = sin((t + phase) * PARADE_BOB_FREQ * TAU) * PARADE_BOB_AMP
 
 # ── Handlers ─────────────────────────────────────────────────────────────────
 
