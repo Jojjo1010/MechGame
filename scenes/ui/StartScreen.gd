@@ -9,6 +9,8 @@ extends CanvasLayer
 
 const GAME_SCENE_PATH := "res://scenes/game/Game.tscn"
 const MechPortraitScript := preload("res://scenes/ui/MechPortrait.gd")
+const StartScreenDroneScript := preload("res://scenes/ui/StartScreenDrone.gd")
+const StartScreenYouArrowScript := preload("res://scenes/ui/StartScreenYouArrow.gd")
 
 # World/run flavor that used to live on its own crawl page. Reads above the
 # button column so the player gets the setup before they hit PLAY.
@@ -137,6 +139,40 @@ func _build() -> void:
 	lore.offset_bottom = -BTN_COL_HALF_H + 480.0
 	root.add_child(lore)
 
+	# Mascot drone, sitting under the lore — the visual answer to "You're the
+	# drone." Centered within the lore column so it reads as part of that block.
+	# 3D SubViewport, so the body actually tilts toward the cursor instead of
+	# faking depth with 2D drawing.
+	const DRONE_W := 280.0
+	const DRONE_H := 220.0
+	const DRONE_TOP_OFFSET := 250.0   # below the lore text
+	var drone := StartScreenDroneScript.new()
+	var lore_center_x: float = (lore.offset_left + lore.offset_right) * 0.5
+	drone.anchor_left   = 0.5
+	drone.anchor_right  = 0.5
+	drone.anchor_top    = 0.5
+	drone.anchor_bottom = 0.5
+	drone.offset_left   = lore_center_x - DRONE_W * 0.5
+	drone.offset_right  = lore_center_x + DRONE_W * 0.5
+	drone.offset_top    = lore.offset_top + DRONE_TOP_OFFSET
+	drone.offset_bottom = drone.offset_top + DRONE_H
+	root.add_child(drone)
+
+	# "YOU" arrow annotation pointing at the drone — sits to the right of the
+	# drone, overlapping its right edge so the arrowhead lands on the body.
+	const ARROW_W := 280.0
+	const ARROW_H := 200.0
+	var you_arrow := StartScreenYouArrowScript.new()
+	you_arrow.anchor_left   = 0.5
+	you_arrow.anchor_right  = 0.5
+	you_arrow.anchor_top    = 0.5
+	you_arrow.anchor_bottom = 0.5
+	you_arrow.offset_left   = lore_center_x + DRONE_W * 0.18
+	you_arrow.offset_right  = you_arrow.offset_left + ARROW_W
+	you_arrow.offset_top    = drone.offset_top - 20.0
+	you_arrow.offset_bottom = you_arrow.offset_top + ARROW_H
+	root.add_child(you_arrow)
+
 	var play_btn := _make_primary_button("PLAY")
 	var how_btn  := _make_secondary_button("HOW TO PLAY")
 	var grg_btn  := _make_disabled_button("GARAGE — COMING SOON")
@@ -153,7 +189,7 @@ func _build() -> void:
 
 	var parade_band := _build_mech_parade(root)
 
-	_animate_entrance(title_block, lore, parade_band, [play_btn, how_btn, grg_btn, quit_btn])
+	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [play_btn, how_btn, grg_btn, quit_btn])
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
@@ -251,9 +287,11 @@ func _wire_button_motion(btn: Button) -> void:
 	)
 
 # Title fades in first, lore follows, then each button staggers in below.
-func _animate_entrance(title_block: Control, lore: Control, parade: Control, btns: Array) -> void:
+func _animate_entrance(title_block: Control, lore: Control, drone: Control, you_arrow: Control, parade: Control, btns: Array) -> void:
 	title_block.modulate.a = 0.0
 	lore.modulate.a = 0.0
+	drone.modulate.a = 0.0
+	you_arrow.modulate.a = 0.0
 	parade.modulate.a = 0.0
 	for b in btns:
 		(b as Control).modulate.a = 0.0
@@ -261,6 +299,10 @@ func _animate_entrance(title_block: Control, lore: Control, parade: Control, btn
 	var t := create_tween()
 	t.tween_property(title_block, "modulate:a", 1.0, FADE_DUR)
 	t.parallel().tween_property(lore, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 0.5)
+	t.parallel().tween_property(drone, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 0.75)
+	# Arrow drops in last so the player sees the drone first, *then* the
+	# annotation labelling it — reads like a callout being added.
+	t.parallel().tween_property(you_arrow, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 1.1)
 	t.parallel().tween_property(parade, "modulate:a", 1.0, FADE_DUR).set_delay(FADE_DUR * 0.5)
 	for i in btns.size():
 		var c: Control = btns[i]
