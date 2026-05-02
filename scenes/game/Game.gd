@@ -15,6 +15,7 @@ const WIN_SCREEN_SCRIPT     := preload("res://scenes/ui/WinScreen.gd")
 const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
 const LEFT_CLICK_HINT_SCRIPT := preload("res://scenes/ui/LeftClickHint.gd")
 const PAUSE_MENU_SCRIPT     := preload("res://scenes/ui/PauseMenu.gd")
+const TUTORIAL_PROMPTS_SCRIPT := preload("res://scenes/ui/TutorialPrompts.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
@@ -84,8 +85,22 @@ func _ready() -> void:
 	_spawn_upgrade_picker()
 	_spawn_drone_hint()
 	_spawn_left_click_hint()
+	_spawn_tutorial_prompts()
 	RunManager.run_won.connect(_on_run_won)
 	AudioManager.play_music("bgm_main", -12.0)
+
+# First-run on-boarding: a small hint stack on the right edge that fades each
+# row when the matching action is performed. SaveData persists the seen flag,
+# so this is a no-op on subsequent runs.
+func _spawn_tutorial_prompts() -> void:
+	if SaveData.tutorial_seen:
+		return
+	if drones.is_empty():
+		return
+	var prompts := CanvasLayer.new()
+	prompts.set_script(TUTORIAL_PROMPTS_SCRIPT)
+	add_child(prompts)
+	prompts.setup(drones[0], mechs)
 
 func _spawn_drone_hint() -> void:
 	_drone_hint = CanvasLayer.new()
