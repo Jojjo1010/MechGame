@@ -326,8 +326,7 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	var pill_style := StyleBoxFlat.new()
 	pill_style.bg_color = UITheme.COLOR_DEEP
 	pill_style.set_corner_radius_all(4)
-	pill_style.set_border_width_all(1)
-	pill_style.border_color = border
+	pill_style.set_border_width_all(0)
 	pill_style.content_margin_left   = 2.0
 	pill_style.content_margin_right  = 2.0
 	pill_style.content_margin_top    = 0.0
