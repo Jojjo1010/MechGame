@@ -105,7 +105,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	root.add_child(bg_panel)
 
 	# ── Portrait (Bad North-ish) ──────────────────────────────────────────────
-	var portrait := _build_portrait(color)
+	var portrait := _build_portrait(String(weapon.weapon_name))
 	portrait.position = Vector2(x + 14.0, (SLOT_H - PORTRAIT_SIZE) * 0.5)
 	root.add_child(portrait)
 
@@ -165,9 +165,9 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	weapon.charge_changed.connect(func(v: float) -> void: _on_charge(slot_idx, v))
 
 # ── Portrait construction ─────────────────────────────────────────────────────
-func _build_portrait(color: Color) -> Control:
+func _build_portrait(weapon_name: String) -> Control:
 	var p: Control = MechPortraitCS.new()
-	p.call("setup", color, PORTRAIT_SIZE, PORTRAIT_BORDER)
+	p.call("setup", weapon_name, PORTRAIT_SIZE, PORTRAIT_BORDER)
 	return p
 
 # ── Key chip matching MechOptionsPanel style ──────────────────────────────────

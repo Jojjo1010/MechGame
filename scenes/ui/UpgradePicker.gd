@@ -171,7 +171,9 @@ func _build() -> void:
 	content_hbox.add_child(carousel_col)
 
 	_carousel = MechCarouselCS.new()
-	_carousel.call("setup", _target_colors, Vector2(CAROUSEL_W, CAROUSEL_H))
+	# _targets carries the surviving mechs' weapon names; carousel pulls
+	# per-slot model + tint from MechArchetypes.
+	_carousel.call("setup", _targets, Vector2(CAROUSEL_W, CAROUSEL_H))
 	carousel_col.add_child(_carousel)
 
 	_equipped_row = HBoxContainer.new()

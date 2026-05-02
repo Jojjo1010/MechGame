@@ -3,9 +3,11 @@ extends Control
 # Reusable mech portrait. The rectangular frame stays at the panel size; the
 # baked mech texture is taller and extends above the frame so the head pops
 # out into the surrounding area. Frozen single-frame render — never animates.
-# Cached per (bake_w, bake_h, color) for the session.
-
-const MECH_MODEL := preload("res://assets/CongaGoober.fbx")
+# Cached per (bake_w, bake_h, weapon_name) for the session — different
+# archetypes get different models, so the cache key has to include weapon.
+#
+# The model + tint colour are looked up from MechArchetypes — pass the
+# weapon name and the right mech shape and tint follow automatically.
 
 # Pop-out mode: texture is rendered LARGER than the layout footprint and
 # bottom-centered so the head extends above and shoulders to the sides.
@@ -16,24 +18,28 @@ const POP_WIDTH_RATIO  := 1.35
 
 static var _cache: Dictionary = {}
 
-var _mech_color: Color = Color.WHITE
-var _size_px:    float = 96.0
-var _border_w:   float = 4.0
-var _pop_out:    bool  = true
+var _weapon_name: String = "GUN"
+var _mech_color:  Color  = Color.WHITE
+var _size_px:     float  = 96.0
+var _border_w:    float  = 4.0
+var _pop_out:     bool   = true
 # Default 90° matches the original behavior — mech front (+X authored) rotates
 # to face the camera. Pass 0.0 for a side profile with front pointing +X
 # (screen right), 180.0 for front pointing -X (screen left).
-var _facing_deg: float = 90.0
+var _facing_deg:  float  = 90.0
 var _frame:        PanelContainer = null
 var _style:        StyleBoxFlat = null
 var _texture_rect: TextureRect = null
 
-func setup(color: Color, size_px: float, border_w: float = 4.0, pop_out: bool = true, facing_deg: float = 90.0) -> void:
-	_mech_color = color
-	_size_px    = size_px
-	_border_w   = border_w
-	_pop_out    = pop_out
-	_facing_deg = facing_deg
+# `weapon_name` is the only identity hook — model and tint are pulled from
+# MechArchetypes so swapping a model in one place updates every portrait.
+func setup(weapon_name: String, size_px: float, border_w: float = 4.0, pop_out: bool = true, facing_deg: float = 90.0) -> void:
+	_weapon_name = weapon_name
+	_mech_color  = MechArchetypes.color_for(weapon_name)
+	_size_px     = size_px
+	_border_w    = border_w
+	_pop_out     = pop_out
+	_facing_deg  = facing_deg
 	custom_minimum_size = Vector2(size_px, size_px)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = false
@@ -69,7 +75,9 @@ func _ready() -> void:
 
 	var bake_w := int(tex_w)
 	var bake_h := int(tex_h)
-	var key := "%d|%d|%s|%d" % [bake_w, bake_h, _mech_color.to_html(false), int(round(_facing_deg))]
+	# Cache key includes weapon_name because each archetype has its own model;
+	# bake_w / bake_h cover layout variants; facing_deg covers parade vs portrait.
+	var key := "%s|%d|%d|%d" % [_weapon_name, bake_w, bake_h, int(round(_facing_deg))]
 	if _cache.has(key):
 		_texture_rect.texture = _cache[key]
 	else:
@@ -92,7 +100,7 @@ func _bake(bake_w: int, bake_h: int, cache_key: String) -> void:
 	vp.own_world_3d = true
 	add_child(vp)
 
-	var mech_visual := MECH_MODEL.instantiate()
+	var mech_visual := MechArchetypes.model_for(_weapon_name).instantiate()
 	# Drop any AnimationPlayer/AnimationTree before adding to the tree so
 	# autoplay never starts and the skeleton stays at rest pose.
 	for ap in mech_visual.find_children("*", "AnimationPlayer", true, false):

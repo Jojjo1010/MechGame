@@ -3,8 +3,10 @@ extends Control
 # 3D mech carousel: a turntable with N mechs standing on it, a spotlight
 # pointing at the front position. Spinning the turntable cycles which mech
 # is in the spotlight; spin lands on a chosen index.
-
-const MECH_MODEL := preload("res://assets/CongaGoober.fbx")
+#
+# Each slot's model + tint are pulled from MechArchetypes via the weapon
+# name passed in setup() — the carousel reflects the line composition,
+# unique mech-per-archetype models included.
 
 # Slot count is derived from the colors array passed to setup(). Dead mechs
 # are dropped from the carousel between rounds, so the turntable shrinks to
@@ -24,14 +26,16 @@ var _viewport:  SubViewport = null
 var _turntable: Node3D = null
 var _spot:      SpotLight3D = null
 var _spin_tween: Tween = null
-var _colors: Array = []
+var _weapon_names: Array = []
 var _slot_mechs: Array[Node3D] = []
 var _last_tick_slot: int = -1
 
 signal landed(idx: int)
 
-func setup(colors: Array, view_size: Vector2) -> void:
-	_colors = colors
+# `weapon_names` drives both per-slot model and per-slot tint via MechArchetypes
+# — slot count = weapon_names.size().
+func setup(weapon_names: Array, view_size: Vector2) -> void:
+	_weapon_names = weapon_names
 	custom_minimum_size = view_size
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = false
@@ -132,10 +136,11 @@ func _ready() -> void:
 	_turntable = Node3D.new()
 	_viewport.add_child(_turntable)
 
-	var slot_count: int = _colors.size()
+	var slot_count: int = _weapon_names.size()
 	for i in slot_count:
 		var theta := float(i) / float(slot_count) * TAU
-		var mech := MECH_MODEL.instantiate()
+		var weapon_name := String(_weapon_names[i])
+		var mech := MechArchetypes.model_for(weapon_name).instantiate()
 		# Stop any embedded animations so the skeleton stays at rest pose.
 		for ap in mech.find_children("*", "AnimationPlayer", true, false):
 			ap.queue_free()
@@ -156,8 +161,8 @@ func _ready() -> void:
 		# -X aligns with -Z, the marching direction). Rotate so -X points
 		# outward radially — the front-slot mech then faces the camera.
 		mech.rotation.y = theta + PI * 0.5
-		# Tint with the slot's archetype color.
-		var tint: Color = _colors[i] if i < _colors.size() else Color.WHITE
+		# Tint with the slot's archetype color (looked up from the weapon name).
+		var tint: Color = MechArchetypes.color_for(weapon_name)
 		for child in mech.find_children("*", "MeshInstance3D", true, false):
 			var mi := child as MeshInstance3D
 			if mi == null:
