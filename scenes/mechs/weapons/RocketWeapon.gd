@@ -148,8 +148,6 @@ func _build_ring(drone: Node3D) -> void:
 	var torus := TorusMesh.new()
 	torus.inner_radius  = ULT_SPLASH_RADIUS - 0.25
 	torus.outer_radius  = ULT_SPLASH_RADIUS
-	# Marker shows during ult aim only and is viewed top-down through the ortho
-	# camera — 32/6 is a noticeable saving with no visible quality loss.
 	torus.rings         = 32
 	torus.ring_segments = 6
 	disc.mesh = torus

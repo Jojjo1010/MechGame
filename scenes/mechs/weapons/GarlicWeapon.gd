@@ -19,8 +19,8 @@ func _build_aura_ring() -> void:
 	var torus := TorusMesh.new()
 	torus.inner_radius = AURA_RADIUS - 0.15
 	torus.outer_radius = AURA_RADIUS + 0.15
-	# 48/12 was overkill for a thin ground ring viewed from above — 24/6 reads
-	# identical at the camera's ortho zoom range.
+	# Low-poly torus reads identical at the ortho zoom range — saves geometry
+	# on a ring that sits in the scene constantly per Garlic mech.
 	torus.rings = 24
 	torus.ring_segments = 6
 	_aura_ring.mesh = torus

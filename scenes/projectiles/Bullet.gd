@@ -5,10 +5,8 @@ signal hit_enemy
 const SPEED      := 24.0
 const DAMAGE     := 20.0
 const HIT_RADIUS := 0.8
-# 1.4s covers SHOOT_RANGE (22u) at SPEED 24u/s with comfortable buffer for range
-# upgrades. Previously 3.5s, which left bullets running grid queries and
-# position updates for ~2.5s after they were already past any possible hit —
-# a constant zombie-bullet population during sustained 4-mech fire.
+# Sized to cover SHOOT_RANGE / SPEED with buffer for range upgrades. Going
+# longer wastes per-frame grid queries on bullets already past any target.
 const LIFETIME   := 1.4
 
 const BurstVFX    = preload("res://scenes/vfx/BurstVFX.gd")

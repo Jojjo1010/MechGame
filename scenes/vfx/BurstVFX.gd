@@ -1,20 +1,21 @@
 extends Node
 
-# Pooled one-shot GPUParticles3D burst. Late-game perf was dominated by allocating
-# fresh ParticleProcessMaterial / Gradient / GradientTexture1D / SphereMesh /
-# StandardMaterial3D on every bullet impact and enemy death. Two changes here:
-#   1. Hard cap on concurrent active bursts. Over the cap, new spawns are dropped
-#      silently — the visual was indistinguishable from the existing 20+ bursts
-#      already on screen, but the GPU work was very real.
-#   2. Cache the heavy resources (mesh, base material, ParticleProcessMaterial
-#      keyed by quantized color/speed/count) so repeated bursts reuse the same
-#      shader pipeline instead of triggering a fresh compile every shot.
+# Pooled one-shot GPUParticles3D burst. Active count capped so peak combat can't
+# spawn dozens of fresh particle pipelines per frame; ParticleProcessMaterial
+# cached by quantized (color, speed, count) so the shader compile happens once
+# per visual variant instead of once per shot.
 const MAX_ACTIVE := 16
 
 static var _active_count: int = 0
 static var _shared_mesh:  SphereMesh = null
 static var _shared_mat:   StandardMaterial3D = null
-static var _proc_cache:   Dictionary = {}   # String key → ParticleProcessMaterial
+static var _proc_cache:   Dictionary = {}   # int key → ParticleProcessMaterial
+
+# Game._ready calls this on each new run — _active_count is static, so a scene
+# reload while bursts are mid-flight would otherwise leave the counter stuck
+# high and silently drop bursts in the next run.
+static func reset_active_count() -> void:
+	_active_count = 0
 
 static func spawn(pos: Vector3, color: Color, count: int, speed: float, lifetime: float, scene_root: Node) -> void:
 	if _active_count >= MAX_ACTIVE:
@@ -57,11 +58,14 @@ static func _build_shared_mesh() -> void:
 	_shared_mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_shared_mesh.surface_set_material(0, _shared_mat)
 
-# Cache key quantizes color to a 10-step palette per channel — enough granularity
-# that the orange / yellow / red / blue families each get their own pipeline,
-# but not so fine that every call misses the cache.
+# Cache key packs each component into a byte slot so the lookup is an int
+# dictionary hit rather than a fresh String allocation on every spawn.
 static func _get_proc_material(color: Color, speed: float, count: int) -> ParticleProcessMaterial:
-	var key := "%d_%d_%d_%d_%d" % [int(color.r * 10), int(color.g * 10), int(color.b * 10), int(speed), count]
+	var key := int(color.r * 10) \
+		| (int(color.g * 10) << 8) \
+		| (int(color.b * 10) << 16) \
+		| (int(speed)       << 24) \
+		| (count            << 32)
 	var proc: ParticleProcessMaterial = _proc_cache.get(key)
 	if proc != null:
 		return proc

@@ -316,10 +316,8 @@ func _muzzle_flash(pos: Vector3, is_crit: bool = false) -> void:
 	flash.material_override = mat
 	get_tree().current_scene.add_child(flash)
 	flash.global_position = pos
-	# Passive shots fire constantly from up to 4 mechs — adding an OmniLight per
-	# flash was the same Forward+ cluster cost that Bullet.gd already calls out
-	# for bullets. The unshaded emissive sphere already gives the visible flash;
-	# only the ult muzzle flash keeps a light, since that's a one-shot moment.
+	# No OmniLight on passive shots — at sustained 4-mech fire the cluster
+	# cost in Forward+ is significant. Ult muzzle flash keeps its light.
 	var tw := flash.create_tween()
 	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18 if is_crit else 0.10)
 	tw.tween_callback(flash.queue_free)

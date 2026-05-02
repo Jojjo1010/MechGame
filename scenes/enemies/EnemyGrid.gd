@@ -6,10 +6,8 @@ extends RefCounted
 # same frame are no-ops). Used by Enemy._get_separation to avoid the O(N²)
 # tree-wide scan that pegs the frame budget at ~60+ enemies.
 
-# 2.5 strikes a balance: small radii (bullet 0.8u, separation 1.3u) still hit a
-# 3×3 cell window, but Gun's 22u shoot range scans 19×19 = 361 cells instead of
-# the 31×31 = 961 the previous 1.5u cell size required. Net ~62% fewer dict
-# lookups per long-range query, and per-cell candidate counts stay manageable.
+# Tuned so small radii (separation 1.3u, bullet 0.8u) still fit a 3×3 cell
+# window while long-range queries (Gun 22u) don't scan 30+ cells per axis.
 const CELL_SIZE := 2.5
 
 static var _cells:      Dictionary = {}      # Vector2i → Array[Node3D]

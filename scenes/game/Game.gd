@@ -69,15 +69,17 @@ var _left_click_hint:   CanvasLayer = null
 var _drone_hidden_t:    float = 0.0
 var _drone_clear_t:     float = 0.0
 var _drone_hint_shown:  bool  = false
-# Throttle the visibility check — full 60Hz unprojection per mech was wasted
-# work given the 0.4s reveal hysteresis. 4-frame stagger is invisible.
+# 4-frame stagger; the 0.4s reveal hysteresis hides the cadence.
 const DRONE_HIDE_CHECK_INTERVAL := 4
 var _drone_hide_dt_accum: float = 0.0
+
+const BURST_VFX = preload("res://scenes/vfx/BurstVFX.gd")
 
 func _ready() -> void:
 	# Persistent autoloads carry state across scene reloads — wipe per-run state.
 	get_tree().paused = false
 	RunManager.reset_run()
+	BURST_VFX.reset_active_count()
 	# Black-out the first frame while the camera, sun, and environment finish
 	# settling — without this you get a brief flash of the default editor
 	# clear-color / unlit sky between scene swap and the first configured render.

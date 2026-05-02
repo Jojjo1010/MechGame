@@ -48,11 +48,7 @@ var _health_bar: Node3D = null
 var _mesh_instances: Array[MeshInstance3D] = []
 var _flash_mat: StandardMaterial3D = null
 var _knockback_vel: Vector3 = Vector3.ZERO
-# Hit-flash decay handled with a per-enemy timer instead of a fresh Tween +
-# closure on every hit — DOT ticks (every 0.5s on every affected enemy) and
-# splash secondaries used to allocate a Tween per call.
 var _flash_remaining: float = 0.0
-var _flash_active:    bool  = false
 
 # Damage-over-time
 var _dot_dps:        float = 0.0
@@ -105,9 +101,8 @@ func _ready() -> void:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_mesh_instances.append(mi)
 	_add_blob_shadow(0.5, 2.5)
-	# HP bar is lazy-created on first hit — most enemies in dense waves die from
-	# splash/AOE in a single tick and never need a bar. Saves 3 nodes + 2
-	# materials per never-damaged enemy.
+	# HP bar is lazy-created on first hit — splash/AOE often kills enemies
+	# without ever damaging them solo, so the bar stays unbuilt for those.
 
 func _apply_wave_scaling() -> void:
 	# HP: linear ramp, capped. Elites are an additional flat multiplier on top.
@@ -327,12 +322,9 @@ func _process(delta: float) -> void:
 	if is_dummy:
 		return
 
-	# Re-pick target every ~10 frames (staggered per enemy) instead of every
-	# frame. Forces an immediate refresh if the current target is gone or dead
-	# so kills don't leave enemies frozen for up to 10 frames.
-	var alive: Variant = target_mech.get("is_alive") if (target_mech != null and is_instance_valid(target_mech)) else null
-	var stale: bool = target_mech == null or not is_instance_valid(target_mech) or alive == false
-	if stale or (Engine.get_process_frames() + _retarget_phase) % RETARGET_INTERVAL_FRAMES == 0:
+	# Refresh target on a staggered cadence, but always immediately if the
+	# current one is gone — otherwise kills leave enemies frozen for ~10 frames.
+	if _target_dead_or_missing() or (Engine.get_process_frames() + _retarget_phase) % RETARGET_INTERVAL_FRAMES == 0:
 		_find_target()
 
 	var sep := _get_separation()
@@ -383,6 +375,11 @@ func _get_separation() -> Vector3:
 			sep += diff.normalized() * (SEPARATION_RADIUS - dist) / SEPARATION_RADIUS
 	return sep
 
+func _target_dead_or_missing() -> bool:
+	if target_mech == null or not is_instance_valid(target_mech):
+		return true
+	return target_mech.get("is_alive") == false
+
 func _find_target() -> void:
 	var mechs := get_tree().get_nodes_in_group("mechs")
 	var nearest: Node3D = null
@@ -408,19 +405,17 @@ func _ensure_health_bar() -> void:
 	add_child(_health_bar)
 
 func _flash_hit() -> void:
-	if not _flash_active:
-		_flash_active = true
+	if _flash_remaining <= 0.0:
 		for mi in _mesh_instances:
 			if is_instance_valid(mi):
 				mi.material_overlay = _flash_mat
 	_flash_remaining = FLASH_DURATION
 
 func _tick_flash(delta: float) -> void:
-	if not _flash_active:
+	if _flash_remaining <= 0.0:
 		return
 	_flash_remaining -= delta
 	if _flash_remaining <= 0.0:
-		_flash_active = false
 		for mi in _mesh_instances:
 			if is_instance_valid(mi):
 				mi.material_overlay = null
