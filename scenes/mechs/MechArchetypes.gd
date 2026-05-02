@@ -10,12 +10,11 @@ extends RefCounted
 # place — the field unit, the start-screen parade, the upgrade carousel,
 # every UI portrait, and the equipped-slot art all follow.
 
-# Per-archetype mech model. Add a fourth FBX here and ROCKET stops sharing
-# CongaGoober — every consumer picks up the new model automatically.
+# Per-archetype mech model. All four archetypes now have their own model.
 const MODEL_GUN    := preload("res://assets/CongaGoober.fbx")
 const MODEL_GARLIC := preload("res://assets/CongaGoober_Round.fbx")
 const MODEL_BEAM   := preload("res://assets/CongaGoober_Triangle.fbx")
-const MODEL_ROCKET := preload("res://assets/CongaGoober.fbx")
+const MODEL_ROCKET := preload("res://assets/CongaGoober_Rocket.fbx")
 
 const _DATA := {
 	"GUN": {
