@@ -7,14 +7,14 @@ extends CanvasLayer
 #     show as one slot with a count number in the corner)
 
 const SLOT_W              := 380.0
-const SLOT_H              := 130.0
+const SLOT_H              := 144.0
 const SLOT_GAP            := 16.0
 const MARGIN_BOT          := 24.0
 const MARGIN_LEFT         := 24.0
 const PORTRAIT_SIZE       := 96.0
 const PORTRAIT_BORDER     := 4.0
-const UPGRADE_SLOT_SIZE   := 36.0
-const UPGRADE_SLOT_GAP    := 6.0
+const UPGRADE_SLOT_SIZE   := 48.0
+const UPGRADE_SLOT_GAP    := 8.0
 const UPGRADE_GRID_COLS   := 6
 const NAME_FONT           := 26
 const KEY_CHIP_SIZE       := 36.0
@@ -35,8 +35,6 @@ const RARITY_BORDERS := [
 var _root:          Control = null
 var _charge_fills:  Array[ColorRect] = []
 var _bar_bgs:       Array[ColorRect] = []
-var _ready_labels:  Array[Label]     = []
-var _flash_tweens:  Array            = []
 var _weapon_names:  Array[String]    = []
 var _slot_colors:   Array[Color]     = []   # archetype tint per slot, used by charge fill
 var _upgrade_grids: Array[HBoxContainer] = []
@@ -52,8 +50,6 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 		_root.queue_free()
 	_charge_fills.clear()
 	_bar_bgs.clear()
-	_ready_labels.clear()
-	_flash_tweens.clear()
 	_weapon_names.clear()
 	_slot_colors.clear()
 	_upgrade_grids.clear()
@@ -129,13 +125,14 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_weapon_names.append(weapon.weapon_name)
 	_slot_colors.append(color)
 
-	var chip := _make_ult_chip()
-	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, 14.0)
-	root.add_child(chip)
-
-	# Charge bar — under the name with a comfortable gap
+	# Charge bar — under the name with a comfortable gap. Computed first so the
+	# ult chip can be vertically centered with it.
 	var bar_y := 14.0 + NAME_FONT + 14.0
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + 14.0) - KEY_CHIP_SIZE - 14.0 - 14.0
+
+	var chip := _make_ult_chip()
+	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, bar_y + (BAR_H - KEY_CHIP_SIZE) * 0.5)
+	root.add_child(chip)
 
 	var bar_bg := ColorRect.new()
 	bar_bg.color    = UITheme.COLOR_DEEP
@@ -152,21 +149,6 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fill)
 	_charge_fills.append(fill)
-
-	var ready_lbl := Label.new()
-	ready_lbl.text = "READY"
-	ready_lbl.add_theme_font_size_override("font_size", 14)
-	ready_lbl.add_theme_color_override("font_color",      UITheme.COLOR_ACCENT_HOT)
-	ready_lbl.add_theme_constant_override("outline_size", 0)
-	ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ready_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	ready_lbl.size      = Vector2(bar_w, BAR_H)
-	ready_lbl.position  = Vector2(header_x, bar_y)
-	ready_lbl.visible   = false
-	ready_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(ready_lbl)
-	_ready_labels.append(ready_lbl)
-	_flash_tweens.append(null)
 
 	# ── Upgrade inventory grid (Ball x Pit-style row of small slots) ──────────
 	var grid := HBoxContainer.new()
@@ -256,37 +238,16 @@ func _on_charge(idx: int, value: float) -> void:
 	if idx >= _charge_fills.size():
 		return
 
-	var fill      := _charge_fills[idx]
-	var bar_bg    := _bar_bgs[idx]
-	var ready_lbl := _ready_labels[idx]
-	var bar_w     := bar_bg.size.x
+	var fill   := _charge_fills[idx]
+	var bar_bg := _bar_bgs[idx]
+	var bar_w  := bar_bg.size.x
 
-	if value >= 1.0:
-		fill.visible    = false
-		bar_bg.visible  = false
-		ready_lbl.visible = true
-		_start_flash(idx)
-	else:
-		fill.visible      = true
-		bar_bg.visible    = true
-		ready_lbl.visible = false
-		fill.size.x       = bar_w * value
-		# Charge fill lerps from archetype tint → bright lime as the ult tops off.
-		var slot_color: Color = _slot_colors[idx] if idx < _slot_colors.size() else UITheme.COLOR_ACCENT_LIME
-		fill.color = slot_color.lerp(UITheme.COLOR_BORDER_BRIGHT, value)
-		if _flash_tweens[idx] != null:
-			_flash_tweens[idx].kill()
-			_flash_tweens[idx] = null
-		ready_lbl.modulate.a = 1.0
-
-func _start_flash(idx: int) -> void:
-	var lbl := _ready_labels[idx]
-	if _flash_tweens[idx] != null:
-		_flash_tweens[idx].kill()
-	var tw := lbl.create_tween().set_loops()
-	tw.tween_property(lbl, "modulate:a", 0.2, 0.45)
-	tw.tween_property(lbl, "modulate:a", 1.0, 0.45)
-	_flash_tweens[idx] = tw
+	# Charge fill lerps from archetype tint → bright lime as the ult tops off.
+	# At full charge the bar simply stays full and bright — no blink, no label.
+	var v := clampf(value, 0.0, 1.0)
+	fill.size.x = bar_w * v
+	var slot_color: Color = _slot_colors[idx] if idx < _slot_colors.size() else UITheme.COLOR_ACCENT_LIME
+	fill.color = slot_color.lerp(UITheme.COLOR_BORDER_BRIGHT, v)
 
 # ── Upgrade grid ──────────────────────────────────────────────────────────────
 func _on_upgrade_taken(upgrade: Dictionary) -> void:
@@ -302,19 +263,22 @@ func _apply_upgrade_to_grid(upgrade: Dictionary) -> void:
 		var state: Dictionary = _upgrade_states[slot_idx]
 		var id: String = String(upgrade.id)
 		if state.has(id):
-			# Stack count
+			# Stack count — flip the level pill on and update it to "xN".
 			var entry: Dictionary = state[id]
 			entry.count = int(entry.count) + 1
 			var count_lbl: Label = entry.count_lbl
-			count_lbl.text = str(entry.count)
-			count_lbl.visible = true
+			count_lbl.text = "x%d" % int(entry.count)
+			var count_pill: Control = entry.count_pill
+			if count_pill != null:
+				count_pill.visible = true
 		else:
 			var badge := _make_upgrade_badge(upgrade)
 			_upgrade_grids[slot_idx].add_child(badge)
 			state[id] = {
-				"count":     1,
-				"badge":     badge,
-				"count_lbl": badge.get_meta("count_lbl"),
+				"count":      1,
+				"badge":      badge,
+				"count_lbl":  badge.get_meta("count_lbl"),
+				"count_pill": badge.get_meta("count_pill"),
 			}
 
 func _make_upgrade_badge(upgrade: Dictionary) -> Control:
@@ -334,29 +298,54 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	# Tooltip = full upgrade name (built-in mouse tooltip; works on PanelContainer)
 	panel.tooltip_text = "%s — %s" % [upgrade.get("title", ""), upgrade.get("description", "")]
 
+	# PanelContainer fits each direct child to the content rect, which would
+	# blow up the corner pill. Wrap the icon + pill in a plain Control so
+	# anchors work normally inside it.
+	var contents := Control.new()
+	contents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(contents)
+
 	# Center procedural glyph — same renderer used in UpgradePicker.
 	var icon: Control = UpgradeBadgeIconCS.new()
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(icon)
+	contents.add_child(icon)
 	icon.call("setup", String(upgrade.id), UITheme.COLOR_TEXT_PRIMARY)
 
-	# Count badge in top-right (hidden until count > 1)
+	# Level pill in bottom-right (hidden until count > 1). Dark fill with a
+	# hairline border keeps the "xN" legible against the icon glyph behind it.
+	var count_pill := PanelContainer.new()
+	count_pill.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	count_pill.offset_left   = -36.0
+	count_pill.offset_top    = -24.0
+	count_pill.offset_right  = -2.0
+	count_pill.offset_bottom = -2.0
+	count_pill.visible = false
+	count_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var pill_style := StyleBoxFlat.new()
+	pill_style.bg_color = UITheme.COLOR_DEEP
+	pill_style.set_corner_radius_all(4)
+	pill_style.set_border_width_all(1)
+	pill_style.border_color = border
+	pill_style.content_margin_left   = 2.0
+	pill_style.content_margin_right  = 2.0
+	pill_style.content_margin_top    = 0.0
+	pill_style.content_margin_bottom = 0.0
+	count_pill.add_theme_stylebox_override("panel", pill_style)
+
 	var count_lbl := Label.new()
-	count_lbl.text = "1"
-	count_lbl.add_theme_font_size_override("font_size", 12)
-	count_lbl.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_LIME)
+	count_lbl.text = "x1"
+	count_lbl.add_theme_font_size_override("font_size", 18)
+	count_lbl.add_theme_color_override("font_color", UITheme.COLOR_TEXT_PRIMARY)
 	count_lbl.add_theme_constant_override("outline_size", 0)
-	count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	count_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_TOP
-	count_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	count_lbl.offset_left   = -16.0
-	count_lbl.offset_top    = -1.0
-	count_lbl.offset_right  = -2.0
-	count_lbl.offset_bottom = 14.0
-	count_lbl.visible = false   # only shown when stack > 1
+	count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(count_lbl)
-	panel.set_meta("count_lbl", count_lbl)
+	count_pill.add_child(count_lbl)
+
+	contents.add_child(count_pill)
+	panel.set_meta("count_lbl",  count_lbl)
+	panel.set_meta("count_pill", count_pill)
 
 	return panel
