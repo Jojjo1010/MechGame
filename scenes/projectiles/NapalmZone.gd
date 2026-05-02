@@ -1,5 +1,7 @@
 extends Node3D
 
+const EnemyGridCS = preload("res://scenes/enemies/EnemyGrid.gd")
+
 const TICK_INTERVAL := 0.5
 
 var _burn_dps:    float = 0.0
@@ -62,7 +64,8 @@ func _process(delta: float) -> void:
 
 func _tick_damage() -> void:
 	var dmg := _burn_dps * TICK_INTERVAL
-	for e in get_tree().get_nodes_in_group("enemies"):
+	EnemyGridCS.ensure_fresh(get_tree())
+	for e in EnemyGridCS.query(global_position, _radius):
 		if not is_instance_valid(e):
 			continue
 		if global_position.distance_to(e.global_position) <= _radius:

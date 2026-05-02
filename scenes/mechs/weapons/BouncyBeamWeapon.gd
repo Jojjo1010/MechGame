@@ -1,5 +1,7 @@
 extends "res://scenes/mechs/weapons/BaseWeapon.gd"
 
+const _EnemyGrid = preload("res://scenes/enemies/EnemyGrid.gd")
+
 const FIRE_RATE         := 1.3
 const ULT_COOLDOWN      := 12.0
 const DAMAGE_PER_BOUNCE := 18.0
@@ -137,7 +139,8 @@ func _fire_beam(max_bounces: int, mode_scale: float) -> void:
 func _find_bounce_target(from_pos: Vector3, exclude: Array[Node3D]) -> Node3D:
 	var best: Node3D = null
 	var best_dist := BOUNCE_RANGE * range_mult
-	for e in get_tree().get_nodes_in_group("enemies"):
+	_EnemyGrid.ensure_fresh(get_tree())
+	for e in _EnemyGrid.query(from_pos, best_dist):
 		if not is_instance_valid(e):
 			continue
 		if e in exclude:
@@ -582,10 +585,11 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	tw.tween_callback(head.queue_free)
 
 func _check_trace_hits(head_pos: Vector3, _dir: Vector3, hit_set: Dictionary) -> void:
-	for e in get_tree().get_nodes_in_group("enemies"):
+	_EnemyGrid.ensure_fresh(get_tree())
+	for e in _EnemyGrid.query(head_pos, ULT_HIT_RADIUS):
 		if not is_instance_valid(e):
 			continue
-		var id := e.get_instance_id()
+		var id: int = e.get_instance_id()
 		if hit_set.has(id):
 			continue
 		var diff: Vector3 = e.global_position - head_pos

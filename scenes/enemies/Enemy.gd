@@ -406,13 +406,24 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 		_spawn_pickups()
 		queue_free()
 
+const _BIG_XP_VALUE := 10
+
 func _spawn_pickups() -> void:
 	var scene := get_tree().current_scene
-	# Elites drop a richer pickup bundle so the priority-target read pays off.
-	var xp_count: int = randi_range(5, 7) if is_elite else randi_range(2, 4)
-	for i in xp_count:
+	# Total XP for the kill — same averages as before (3 normal, 6 elite). The
+	# value is paid out as the *fewest* sprites possible: floor(total/10) big
+	# gems (value 10 each) plus one small gem carrying the remainder. AOE
+	# clears that used to spawn N×3 sprites in a single frame now spawn N.
+	var xp_total: int = randi_range(5, 7) if is_elite else randi_range(2, 4)
+	var big_count: int = xp_total / _BIG_XP_VALUE
+	var remainder: int = xp_total - big_count * _BIG_XP_VALUE
+	for i in big_count:
 		var off := Vector3(randf_range(-1.2, 1.2), 0.5, randf_range(-1.2, 1.2))
-		Pickup.spawn(Pickup.Type.XP, 1, global_position + off, scene)
+		Pickup.spawn(Pickup.Type.XP_BIG, _BIG_XP_VALUE, global_position + off, scene)
+	if remainder > 0:
+		var off := Vector3(randf_range(-0.8, 0.8), 0.5, randf_range(-0.8, 0.8))
+		Pickup.spawn(Pickup.Type.XP, remainder, global_position + off, scene)
+
 	if is_elite:
 		# Guaranteed multi-coin gold drop on elites.
 		for i in 3:

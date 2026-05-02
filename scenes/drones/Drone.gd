@@ -1,6 +1,7 @@
 extends Node3D
 
-const BurstVFX = preload("res://scenes/vfx/BurstVFX.gd")
+const BurstVFX    = preload("res://scenes/vfx/BurstVFX.gd")
+const EnemyGridCS = preload("res://scenes/enemies/EnemyGrid.gd")
 
 const SPEED        := 14.0
 const HEIGHT       := 2.2
@@ -263,10 +264,11 @@ func _try_dash() -> void:
 # Find any enemies within DASH_HIT_RADIUS of the drone, deal damage + knockback
 # once per enemy per dash, and spawn a hit-through VFX.
 func _dash_punch_through() -> void:
-	for e in get_tree().get_nodes_in_group("enemies"):
+	EnemyGridCS.ensure_fresh(get_tree())
+	for e in EnemyGridCS.query(global_position, DASH_HIT_RADIUS):
 		if e == null or not is_instance_valid(e):
 			continue
-		var enemy_id := e.get_instance_id()
+		var enemy_id: int = e.get_instance_id()
 		if _dash_hit_set.has(enemy_id):
 			continue
 		var diff: Vector3 = e.global_position - global_position
@@ -317,7 +319,8 @@ func _check_enemy_contact() -> void:
 		return  # already dazed, don't reset timer per-frame
 	if _dash_iframe > 0.0:
 		return  # post-dash grace — landing on an enemy mid-recovery shouldn't punish
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	EnemyGridCS.ensure_fresh(get_tree())
+	for enemy in EnemyGridCS.query(global_position, DAZE_RADIUS):
 		var e := enemy as Node3D
 		if e == null or not is_instance_valid(e):
 			continue

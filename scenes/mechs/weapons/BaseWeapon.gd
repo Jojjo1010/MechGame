@@ -2,6 +2,8 @@ extends Node3D
 
 signal charge_changed(value: float)  # 0.0 = just fired, 1.0 = ready
 
+const EnemyGridCS = preload("res://scenes/enemies/EnemyGrid.gd")
+
 const SHOOT_RANGE := 22.0
 const ULT_WINDUP_DURATION := 0.45  # pre-fire telegraph so the ult reads as a moment
 
@@ -202,7 +204,8 @@ func _build_ready_visuals() -> void:
 func _nearest_enemy() -> Node3D:
 	var nearest: Node3D = null
 	var min_dist := _effective_shoot_range()
-	for e in get_tree().get_nodes_in_group("enemies"):
+	EnemyGridCS.ensure_fresh(get_tree())
+	for e in EnemyGridCS.query(_mech.global_position, min_dist):
 		if not is_instance_valid(e):
 			continue
 		var d := _mech.global_position.distance_to(e.global_position)
@@ -214,7 +217,8 @@ func _nearest_enemy() -> Node3D:
 func _nearest_from(from_pos: Vector3) -> Node3D:
 	var nearest: Node3D = null
 	var min_dist := _effective_shoot_range()
-	for e in get_tree().get_nodes_in_group("enemies"):
+	EnemyGridCS.ensure_fresh(get_tree())
+	for e in EnemyGridCS.query(from_pos, min_dist):
 		if not is_instance_valid(e):
 			continue
 		var d := from_pos.distance_to(e.global_position)
@@ -225,7 +229,8 @@ func _nearest_from(from_pos: Vector3) -> Node3D:
 
 func _enemies_in_radius(center: Vector3, radius: float) -> Array:
 	var result: Array = []
-	for e in get_tree().get_nodes_in_group("enemies"):
+	EnemyGridCS.ensure_fresh(get_tree())
+	for e in EnemyGridCS.query(center, radius):
 		if not is_instance_valid(e):
 			continue
 		if center.distance_to(e.global_position) <= radius:
