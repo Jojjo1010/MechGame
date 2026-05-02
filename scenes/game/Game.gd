@@ -4,6 +4,14 @@ const MECH_SCENE  := preload("res://scenes/mechs/Mech.tscn")
 const MECH_SCRIPT := preload("res://scenes/mechs/Mech.gd")
 const DRONE_SCENE := preload("res://scenes/drones/Drone.tscn")
 
+# Per-archetype mech models. Swapped into the Mech instance's "Model" node
+# before add_child so Mech._scale_model in _ready picks up the right AABB.
+# ROCKET shares CongaGoober today — drop a fourth FBX here when you have one.
+const MECH_MODEL_GUN    := preload("res://assets/CongaGoober.fbx")
+const MECH_MODEL_GARLIC := preload("res://assets/CongaGoober_Round.fbx")
+const MECH_MODEL_BEAM   := preload("res://assets/CongaGoober_Triangle.fbx")
+const MECH_MODEL_ROCKET := preload("res://assets/CongaGoober.fbx")
+
 const GUN_WEAPON_SCRIPT     := preload("res://scenes/mechs/weapons/GunWeapon.gd")
 const GARLIC_WEAPON_SCRIPT  := preload("res://scenes/mechs/weapons/GarlicWeapon.gd")
 const BEAM_WEAPON_SCRIPT    := preload("res://scenes/mechs/weapons/BouncyBeamWeapon.gd")
@@ -354,8 +362,19 @@ func _archetype_colors() -> Array:
 func _spawn_mech_line(count: int) -> void:
 	_alive_mechs = count
 	var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT, ROCKET_WEAPON_SCRIPT]
+	# Same ordering as weapon_scripts so [i % 4] keys both into the right slot.
+	var archetype_models := [MECH_MODEL_GUN, MECH_MODEL_GARLIC, MECH_MODEL_BEAM, MECH_MODEL_ROCKET]
 	for i in count:
 		var mech: Node3D = MECH_SCENE.instantiate()
+		# Swap the default Model child for the archetype-specific FBX BEFORE
+		# add_child so Mech._scale_model (called in _ready) measures the right
+		# mesh and scales it to the canonical 4-unit height.
+		var model_root: Node3D = mech.get_node("Model")
+		for c in model_root.get_children():
+			model_root.remove_child(c)
+			c.free()
+		var model_inst: Node = archetype_models[i % archetype_models.size()].instantiate()
+		model_root.add_child(model_inst)
 		mech.position = Vector3(0.0, 0.0, float(i) * MECH_SCRIPT.MECH_SPACING)
 		mech.is_lead = (i == 0)
 		if i > 0:
