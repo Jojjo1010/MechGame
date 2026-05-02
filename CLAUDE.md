@@ -22,8 +22,9 @@ Identity lives in `scenes/mechs/MechArchetypes.gd` — `name_for(weapon_name)`, 
 
 - Godot **4.6.2** (match the version exactly — different minor versions will re-import assets and shift `.uid` files).
 - GDScript with strict typing.
-- No `.tscn` files in `scenes/ui/` — the entire UI is hand-built in `.gd` files inside `_ready()` / `_build()`. Update the script, not a scene.
+- UI is hand-built in `.gd` files inside `_ready()` / `_build()`. The two `.tscn` files in `scenes/ui/` (`StartScreen.tscn`, `LoreCrawl.tscn`) are minimal — root node + script ref — because they're top-level scenes that get loaded via `change_scene_to_file`. Update the script, not the scene.
 - Autoloads (in `project.godot`): `RunManager`, `AudioManager`, `SaveData`.
+- **Main scene** is `scenes/ui/StartScreen.tscn`, not `Game.tscn`.
 
 ## Architecture
 
@@ -35,10 +36,16 @@ Identity lives in `scenes/mechs/MechArchetypes.gd` — `name_for(weapon_name)`, 
 | `scenes/mechs/weapons/BaseWeapon.gd` | All shared weapon state: damage_mult, fire_rate_mult, range_mult, projectile_count_bonus, dot_dps, knockback_force, splash_radius, slow_mult/duration, headshot_count, withering_per_stack, bulwark_dmg_reduction, **pierce_count**, **aura_regen_per_sec** |
 | `scenes/mechs/weapons/{GunWeapon,GarlicWeapon,BouncyBeamWeapon}.gd` | One per archetype, extend BaseWeapon |
 | `scenes/projectiles/Bullet.gd` | Bullet with pierce mechanic (Hollow Rounds upgrade) |
-| `scenes/drones/Drone.gd` | Player-controlled. Dash uses **polled** Space (not event), steerable with held WASD |
-| `src/RunManager.gd` | XP/level, gold, upgrade tracking, signals (`xp_changed`, `level_up`, `gold_changed`, `upgrade_taken`) |
+| `scenes/drones/Drone.gd` | Player-controlled. Dash uses **polled** Shift (not event), steerable with held WASD |
+| `src/RunManager.gd` | XP/level, gold, upgrade tracking, signals (`xp_changed`, `level_up`, `gold_changed`, `upgrade_taken`, `run_won`). `WIN_WAVE = 30` |
 | `src/Upgrades.gd` | Upgrade catalog (`ALL` array), weighted picker, `apply()` per-id wiring. 3 commons + 1 uncommon + 1 rare per weapon |
-| `src/SaveData.gd` | Meta progression — scrap currency between runs |
+| `src/SaveData.gd` | Meta progression — scrap currency, plus `tutorial_seen` flag for the first-run on-boarding overlay |
+| `scenes/ui/StartScreen.gd` + `.tscn` | Boot screen. PLAY → LoreCrawl → Game. HOW TO PLAY opens HowToPlayPanel. GARAGE is "COMING SOON" placeholder |
+| `scenes/ui/LoreCrawl.gd` + `.tscn` | Typewriter intro that plays before each run. Click/keypress skips current stage; second click advances |
+| `scenes/ui/HowToPlayPanel.gd` | Modal overlay launched from StartScreen. Intro paragraph + controls list |
+| `scenes/ui/TutorialPrompts.gd` | First-run only (gated by `SaveData.tutorial_seen`). Right-edge stack of 4 hint rows that fade as actions are performed |
+| `scenes/ui/{DeathScreen,WinScreen}.gd` | End-of-run modals. RESTART/PLAY AGAIN → Game; QUIT → StartScreen |
+| `scenes/game/WaveSpawner.gd` | Stops spawning at `WIN_WAVE`, polls for empty field, then emits `RunManager.run_won` |
 | `scenes/ui/style/UITheme.gd` | **Single source of truth** for colors / fonts / spacing tokens |
 | `scenes/ui/style/{ActionGlyphs,UpgradeGlyphs}.gd` | Procedural icon rendering, no image assets |
 | `docs/gdd.html` | Canonical game design doc (HTML, dark-themed, on master) |
@@ -62,7 +69,17 @@ FONT_HEADING_XL=72 / L=48 / M=32 / FONT_LABEL_CAPS=24 / FONT_BODY=16
 
 Helpers: `UITheme.panel_stylebox()`, `style_heading()`, `style_label_caps()`, `style_body()`. Use them.
 
-### UI migration status (as of 2026-05-01)
+### Boot flow
+
+```
+StartScreen ─► LoreCrawl ─► Game ─► (DeathScreen | WinScreen) ─► StartScreen
+                                          │
+                                          └─► RESTART / PLAY AGAIN ─► Game
+```
+
+First run only: `TutorialPrompts` overlays `Game`. Once dismissed, persists in SaveData.
+
+### UI migration status (as of 2026-05-02)
 
 | File | State |
 |---|---|
@@ -91,7 +108,7 @@ Pending if asked: finish UpgradePicker labels (archetype names in subtitle/portr
 
 ## Recent gameplay fixes (don't undo these)
 
-- **Drone dash** uses `Input.is_key_pressed(KEY_SPACE)` polling in `_process`, not `_input` events. Events were dropping when WASD was already held. The dash also re-reads WASD each frame so the player can steer mid-dash.
+- **Drone dash** uses `Input.is_key_pressed(KEY_SHIFT)` polling in `_process`, not `_input` events. Events were dropping when WASD was already held. The dash also re-reads WASD each frame so the player can steer mid-dash.
 - **Gun ult** aims along a sloped vector toward `mech_pos + dir*CONE_LEN + (0, ENEMY_HIT_Y, 0)` to compensate for the muzzle being at y=2.0 vs enemies at y=0.8. Without the slope, ult bullets passed cleanly over every enemy.
 
 ## Rare upgrades — IMPLEMENTED (memory file `project_rare_upgrades.md` is now obsolete)
