@@ -19,8 +19,10 @@ func _build_aura_ring() -> void:
 	var torus := TorusMesh.new()
 	torus.inner_radius = AURA_RADIUS - 0.15
 	torus.outer_radius = AURA_RADIUS + 0.15
-	torus.rings = 48
-	torus.ring_segments = 12
+	# 48/12 was overkill for a thin ground ring viewed from above — 24/6 reads
+	# identical at the camera's ortho zoom range.
+	torus.rings = 24
+	torus.ring_segments = 6
 	_aura_ring.mesh = torus
 	_aura_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := StandardMaterial3D.new()
@@ -95,8 +97,8 @@ func _spawn_shockwave(radius: float = ULT_RADIUS) -> void:
 	var torus := TorusMesh.new()
 	torus.inner_radius = 0.1
 	torus.outer_radius = 0.55
-	torus.rings = 64
-	torus.ring_segments = 14
+	torus.rings = 32
+	torus.ring_segments = 8
 	ring.mesh = torus
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := StandardMaterial3D.new()

@@ -48,6 +48,11 @@ var _health_bar: Node3D = null
 var _mesh_instances: Array[MeshInstance3D] = []
 var _flash_mat: StandardMaterial3D = null
 var _knockback_vel: Vector3 = Vector3.ZERO
+# Hit-flash decay handled with a per-enemy timer instead of a fresh Tween +
+# closure on every hit — DOT ticks (every 0.5s on every affected enemy) and
+# splash secondaries used to allocate a Tween per call.
+var _flash_remaining: float = 0.0
+var _flash_active:    bool  = false
 
 # Damage-over-time
 var _dot_dps:        float = 0.0
@@ -100,12 +105,9 @@ func _ready() -> void:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_mesh_instances.append(mi)
 	_add_blob_shadow(0.5, 2.5)
-	# HP bar — hidden until first hit
-	_health_bar = Node3D.new()
-	_health_bar.set_script(HealthBar3D)
-	_health_bar.position = Vector3(0.0, 2.9, 0.0)
-	_health_bar.visible = false
-	add_child(_health_bar)
+	# HP bar is lazy-created on first hit — most enemies in dense waves die from
+	# splash/AOE in a single tick and never need a bar. Saves 3 nodes + 2
+	# materials per never-damaged enemy.
 
 func _apply_wave_scaling() -> void:
 	# HP: linear ramp, capped. Elites are an additional flat multiplier on top.
@@ -292,6 +294,8 @@ func _process(delta: float) -> void:
 			_dmg_pending_crit = false
 			_dmg_coalesce_frames = DMG_COALESCE_FRAMES
 
+	_tick_flash(delta)
+
 	if _knockback_vel.length_squared() > 0.01:
 		_knockback_vel = _knockback_vel.lerp(Vector3.ZERO, 10.0 * delta)
 		global_position += _knockback_vel * delta
@@ -395,16 +399,31 @@ func _find_target() -> void:
 			nearest = m
 	target_mech = nearest
 
+func _ensure_health_bar() -> void:
+	if is_instance_valid(_health_bar):
+		return
+	_health_bar = Node3D.new()
+	_health_bar.set_script(HealthBar3D)
+	_health_bar.position = Vector3(0.0, 2.9, 0.0)
+	add_child(_health_bar)
+
 func _flash_hit() -> void:
-	for mi in _mesh_instances:
-		if is_instance_valid(mi):
-			mi.material_overlay = _flash_mat
-	var tw := create_tween()
-	tw.tween_interval(FLASH_DURATION)
-	tw.tween_callback(func() -> void:
+	if not _flash_active:
+		_flash_active = true
 		for mi in _mesh_instances:
 			if is_instance_valid(mi):
-				mi.material_overlay = null)
+				mi.material_overlay = _flash_mat
+	_flash_remaining = FLASH_DURATION
+
+func _tick_flash(delta: float) -> void:
+	if not _flash_active:
+		return
+	_flash_remaining -= delta
+	if _flash_remaining <= 0.0:
+		_flash_active = false
+		for mi in _mesh_instances:
+			if is_instance_valid(mi):
+				mi.material_overlay = null
 
 # `show_number=false` suppresses the floating damage number for this hit. Used
 # by indirect damage (splash secondaries, DOT ticks, napalm, Garlic/Rocket ult
@@ -413,8 +432,9 @@ func _flash_hit() -> void:
 func take_damage(amount: float, is_crit: bool = false, show_number: bool = true) -> void:
 	health = maxf(0.0, health - amount)
 	_flash_hit()
-	if is_instance_valid(_health_bar):
-		_health_bar.visible = true
+	# Killing blows skip the bar — the enemy is about to queue_free anyway.
+	if health > 0.0:
+		_ensure_health_bar()
 		_health_bar.set_fraction(health / max_health)
 	if show_number:
 		if _dmg_coalesce_frames <= 0:

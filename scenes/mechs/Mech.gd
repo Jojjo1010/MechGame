@@ -39,6 +39,9 @@ var _selection_pulse_tween: Tween = null
 var _model_base_y: float = 0.0
 var _bob_time: float = 0.0
 var _step_pitch_base: float = 1.0   # randomized per mech so the conga line has variety
+# Per-mech phase offset so the four mechs spread their bulwark scans across the
+# 6-frame stagger window instead of all hitting the same frame.
+var _bulwark_scan_phase: int = 0
 
 const FLASH_DURATION := 0.12
 const BOB_FREQ  := 9.0   # rad/s  (~1.4 steps/sec)
@@ -55,6 +58,8 @@ const JUMP_LANE_TOL := 1.5   # only jump over corpses within this lateral distan
 signal health_changed(current: float, maximum: float)
 signal mech_died()
 
+const BULWARK_SCAN_INTERVAL := 6   # frames between aura scans (4 mechs × 60fps → 10 scans/s, plenty)
+
 func _ready() -> void:
 	add_to_group("mechs")
 	health = max_health
@@ -64,6 +69,7 @@ func _ready() -> void:
 	_bob_time = position.z * 0.55
 	# Each mech in the line gets its own pitch so steps form a chord, not a unison
 	_step_pitch_base = randf_range(0.85, 1.15)
+	_bulwark_scan_phase = randi() % BULWARK_SCAN_INTERVAL
 	# HP bar
 	_health_bar = Node3D.new()
 	_health_bar.set_script(HealthBar3D)
@@ -175,7 +181,11 @@ func _process(delta: float) -> void:
 				if is_instance_valid(mi) and mi.material_override:
 					(mi.material_override as StandardMaterial3D).albedo_color = _base_color
 
-	_update_bulwark_status(delta)
+	# Throttled aura scan — runs every BULWARK_SCAN_INTERVAL frames; on the
+	# tick that does fire, compensate by passing the accumulated dt so Sanctuary
+	# regen rate stays the same average HP/s as the per-frame version.
+	if (Engine.get_process_frames() + _bulwark_scan_phase) % BULWARK_SCAN_INTERVAL == 0:
+		_update_bulwark_status(delta * float(BULWARK_SCAN_INTERVAL))
 
 	# Burning tick
 	if _is_burning and is_alive:

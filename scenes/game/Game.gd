@@ -69,6 +69,10 @@ var _left_click_hint:   CanvasLayer = null
 var _drone_hidden_t:    float = 0.0
 var _drone_clear_t:     float = 0.0
 var _drone_hint_shown:  bool  = false
+# Throttle the visibility check — full 60Hz unprojection per mech was wasted
+# work given the 0.4s reveal hysteresis. 4-frame stagger is invisible.
+const DRONE_HIDE_CHECK_INTERVAL := 4
+var _drone_hide_dt_accum: float = 0.0
 
 func _ready() -> void:
 	# Persistent autoloads carry state across scene reloads — wipe per-run state.
@@ -221,6 +225,11 @@ func _process(delta: float) -> void:
 func _check_drone_visibility(delta: float) -> void:
 	if _drone_hint == null or drones.is_empty() or camera == null:
 		return
+	_drone_hide_dt_accum += delta
+	if Engine.get_process_frames() % DRONE_HIDE_CHECK_INTERVAL != 0:
+		return
+	delta = _drone_hide_dt_accum
+	_drone_hide_dt_accum = 0.0
 	var occluded := _is_drone_screen_occluded(drones[0])
 	if occluded:
 		_drone_hidden_t += delta
