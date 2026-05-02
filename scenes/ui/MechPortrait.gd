@@ -146,14 +146,20 @@ func _bake(bake_w: int, bake_h: int, cache_key: String) -> void:
 	if is_instance_valid(_texture_rect):
 		_texture_rect.texture = tex
 
-func _aabb_of(node: Node) -> AABB:
+func _aabb_of(root: Node) -> AABB:
 	var result := AABB()
 	var first := true
-	for child in node.find_children("*", "MeshInstance3D", true, false):
+	for child in root.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if mi == null or mi.mesh == null:
 			continue
-		var a := mi.transform * mi.get_aabb()
+		var t := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != null and n != root:
+			if n is Node3D:
+				t = (n as Node3D).transform * t
+			n = n.get_parent()
+		var a: AABB = t * mi.get_aabb()
 		if first:
 			result = a
 			first = false

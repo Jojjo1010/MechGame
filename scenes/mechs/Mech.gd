@@ -85,14 +85,23 @@ func _scale_model() -> void:
 	model.rotation_degrees.y = -90.0
 	_model_base_y = model.position.y
 
-func _get_aabb(node: Node) -> AABB:
+func _get_aabb(root: Node) -> AABB:
 	var result := AABB()
 	var first := true
-	for child in node.find_children("*", "MeshInstance3D", true, false):
+	for child in root.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if mi == null or mi.mesh == null:
 			continue
-		var a := mi.transform * mi.get_aabb()
+		# Walk parent chain to compose mesh→root transform; without this,
+		# nested skeletal FBX hierarchies produce a wrong AABB and the model
+		# is offset vertically (e.g. floats above the ground).
+		var t := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != null and n != root:
+			if n is Node3D:
+				t = (n as Node3D).transform * t
+			n = n.get_parent()
+		var a: AABB = t * mi.get_aabb()
 		if first:
 			result = a
 			first = false

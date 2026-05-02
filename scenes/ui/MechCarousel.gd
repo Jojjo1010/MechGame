@@ -9,6 +9,7 @@ const MECH_MODEL := preload("res://assets/CongaGoober.fbx")
 const N_SLOTS     := 4
 const DISK_RADIUS := 2.0
 const DISK_HEIGHT := 0.18
+const MECH_HEIGHT := 5.5          # carousel-only scale (hero-shot, not field-sized)
 
 const SPIN_REVS_DEFAULT := 3.0   # full rotations during a spin animation
 const TICK_VOLUME_DB    := -16.0
@@ -44,21 +45,39 @@ func _ready() -> void:
 	_viewport.own_world_3d = true
 	vc.add_child(_viewport)
 
-	# Soft fill so the back-side mechs don't go pitch-black. Kept dim so the
-	# spotlight's pool of light reads clearly against the rest.
+	# Environment for the carousel viewport: flat ambient so non-spot sides of
+	# the mechs are still legible, plus volumetric fog so the spotlight casts a
+	# real visible column of light (theater spotlight look).
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.05, 0.05, 0.07)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.55, 0.6, 0.7)
+	env.ambient_light_energy = 0.5
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.045
+	env.volumetric_fog_albedo = Color(1.0, 0.96, 0.88)
+	env.volumetric_fog_length = 32.0
+	var world_env := WorldEnvironment.new()
+	world_env.environment = env
+	_viewport.add_child(world_env)
+
+	# Soft directional fill so the mechs read as 3D form, not flat lit.
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-25.0, 25.0, 0.0)
-	fill.light_energy = 0.28
+	fill.light_energy = 0.45
 	_viewport.add_child(fill)
 
-	# Spotlight: positioned almost directly above the front-of-disk slot so its
-	# beam washes the full height of whichever mech is in the chosen position.
+	# Theatrical spotlight: rigged from above-front, aimed at the chosen mech's
+	# torso. High energy + reduced attenuation so the beam clearly lights the
+	# mech; volumetric fog above renders the visible column of light.
 	_spot = SpotLight3D.new()
-	_spot.position = Vector3(0.0, 7.5, DISK_RADIUS + 1.0)
-	_spot.rotation_degrees = Vector3(-80.0, 0.0, 0.0)
-	_spot.spot_range = 12.0
-	_spot.spot_angle = 20.0
-	_spot.light_energy = 7.5
+	_spot.position = Vector3(0.0, 9.0, DISK_RADIUS + 1.0)
+	_spot.rotation_degrees = Vector3(-81.0, 0.0, 0.0)
+	_spot.spot_range = 14.0
+	_spot.spot_angle = 22.0
+	_spot.spot_attenuation = 0.5
+	_spot.light_energy = 14.0
 	_spot.light_color = Color(1.0, 0.92, 0.78)
 	_viewport.add_child(_spot)
 
@@ -110,10 +129,11 @@ func _ready() -> void:
 			ap.queue_free()
 		for at in mech.find_children("*", "AnimationTree", true, false):
 			at.queue_free()
-		# Match the in-game scaling so the camera frame works regardless of FBX size.
+		# Bigger than the in-game scaling so the carousel mechs read at this
+		# viewport size — they're meant to look hero-shot, not field-sized.
 		var aabb := _aabb_of(mech)
 		if aabb.size.y > 0.0:
-			var s_factor := 4.0 / aabb.size.y
+			var s_factor := MECH_HEIGHT / aabb.size.y
 			mech.scale = Vector3.ONE * s_factor
 			aabb = _aabb_of(mech)
 			mech.position.y = -aabb.position.y
@@ -140,12 +160,12 @@ func _ready() -> void:
 		_slot_mechs.append(mech)
 
 	# Camera looks down a bit at the front of the disk. Distance + FOV are
-	# tuned so a 4-unit-tall mech in the front position fits with headroom
+	# tuned so a MECH_HEIGHT-tall mech in the front position fits with headroom
 	# above the head and the disk visible below the feet.
 	var cam := Camera3D.new()
-	cam.position = Vector3(0.0, 3.0, DISK_RADIUS + 10.0)
-	cam.rotation_degrees.x = -12.0
-	cam.fov = 40.0
+	cam.position = Vector3(0.0, 3.2, DISK_RADIUS + 13.0)
+	cam.rotation_degrees.x = -10.0
+	cam.fov = 46.0
 	cam.current = true
 	_viewport.add_child(cam)
 
@@ -161,13 +181,22 @@ func _process(_delta: float) -> void:
 			AudioManager.play("ui_hover", Vector3.INF, TICK_VOLUME_DB, randf_range(0.95, 1.10))
 
 # Spin the turntable so `target_idx` lands at the front position. Negative
-# rotation direction = clockwise viewed from above; the `revs` extra rotations
-# give visible spin before the deceleration.
+# rotation direction = clockwise viewed from above; each spin always covers
+# between `revs` and `revs+1` full rotations relative to the *current* angle,
+# so the second spin doesn't shrink to a tiny delta if the rolled target
+# happens to be near the previous one.
 func spin_to(target_idx: int, duration: float = 2.4, revs: float = SPIN_REVS_DEFAULT) -> void:
 	if _turntable == null:
 		return
-	var theta_target := float(target_idx) / float(N_SLOTS) * TAU
-	var target_rot := -theta_target - revs * TAU
+	var theta_target: float = float(target_idx) / float(N_SLOTS) * TAU
+	var current_rot: float = _turntable.rotation.y
+	var target_mod: float = fposmod(-theta_target, TAU)
+	var current_mod: float = fposmod(current_rot, TAU)
+	var delta: float = target_mod - current_mod
+	if delta > 0.0:
+		delta -= TAU
+	# delta ∈ (-TAU, 0]; subtract revs full turns to add the spin proper.
+	var target_rot: float = current_rot + delta - revs * TAU
 	if _spin_tween != null:
 		_spin_tween.kill()
 	_spin_tween = create_tween()
@@ -193,14 +222,23 @@ func _front_slot_index() -> int:
 			best_i = i
 	return best_i
 
-func _aabb_of(node: Node) -> AABB:
+func _aabb_of(root: Node) -> AABB:
 	var result := AABB()
 	var first := true
-	for child in node.find_children("*", "MeshInstance3D", true, false):
+	for child in root.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if mi == null or mi.mesh == null:
 			continue
-		var a := mi.transform * mi.get_aabb()
+		# Compose the transform from mesh-local up to root-local. mi.transform
+		# alone is only mesh→parent; for nested skeletal FBX hierarchies the
+		# AABB shifts wildly (mech ends up floating) without this chain walk.
+		var t := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != null and n != root:
+			if n is Node3D:
+				t = (n as Node3D).transform * t
+			n = n.get_parent()
+		var a: AABB = t * mi.get_aabb()
 		if first:
 			result = a
 			first = false

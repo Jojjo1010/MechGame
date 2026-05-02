@@ -162,10 +162,22 @@ func _build() -> void:
 	content_hbox.add_theme_constant_override("separation", int(CAROUSEL_GAP))
 	pv.add_child(content_hbox)
 
+	# Left column: 3D carousel on top, equipped-upgrade slots row underneath
+	# (so the slots read as "what this mech is already carrying").
+	var carousel_col := VBoxContainer.new()
+	carousel_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	carousel_col.add_theme_constant_override("separation", 14)
+	carousel_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	content_hbox.add_child(carousel_col)
+
 	_carousel = MechCarouselCS.new()
 	_carousel.call("setup", _target_colors, Vector2(CAROUSEL_W, CAROUSEL_H))
-	_carousel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	content_hbox.add_child(_carousel)
+	carousel_col.add_child(_carousel)
+
+	_equipped_row = HBoxContainer.new()
+	_equipped_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_equipped_row.add_theme_constant_override("separation", 18)
+	carousel_col.add_child(_equipped_row)
 
 	# Cards row — kept horizontal at full width on the right.
 	_cards_row = HBoxContainer.new()
@@ -181,12 +193,6 @@ func _build() -> void:
 	_equipped_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_equipped_label.visible = false
 	pv.add_child(_equipped_label)
-
-	# Equipped slots row — under the carousel/cards section.
-	_equipped_row = HBoxContainer.new()
-	_equipped_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_equipped_row.add_theme_constant_override("separation", 18)
-	pv.add_child(_equipped_row)
 
 # ── Show / hide ───────────────────────────────────────────────────────────────
 func _on_level_up(_new_level: int) -> void:
@@ -228,9 +234,10 @@ func _show_picker() -> void:
 	_root.visible = true
 	get_tree().paused = true
 
-	# Spin the 3D disk to the rolled mech, then reveal.
+	# Spin the 3D disk to the rolled mech, then reveal. Duration is paced
+	# slow enough that the player can read each mech as it passes.
 	if _carousel != null and is_instance_valid(_carousel):
-		_carousel.call("spin_to", _rolled_target_idx, 2.4)
+		_carousel.call("spin_to", _rolled_target_idx, 3.4)
 		await _carousel.landed
 
 	_refresh_subtitle()
