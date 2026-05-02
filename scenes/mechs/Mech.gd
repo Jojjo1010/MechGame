@@ -272,14 +272,15 @@ func start_burning() -> void:
 	_burn_audio = AudioManager.play_loop_on("mech_burn_loop", self, -10.0)
 
 	# Flickering fire light
-	# Dimmer burn light: the previous 4.0 energy was bathing the mech in
-	# bright orange and erasing the dark flame silhouette we just tuned.
+	# Burn light sits up by the head (just below the flame base) so the mech
+	# body gets the warm down-lit "torch" treatment instead of being lit from
+	# the feet. Energy stays modest so the flame silhouette remains readable.
 	_burn_light = OmniLight3D.new()
 	_burn_light.light_color    = Color(1.0, 0.35, 0.03)
 	_burn_light.light_energy   = 1.6
-	_burn_light.omni_range     = 4.5
+	_burn_light.omni_range     = 5.0
 	_burn_light.shadow_enabled = false
-	_burn_light.position       = Vector3(0.0, 2.0, 0.0)
+	_burn_light.position       = Vector3(0.0, 3.5, 0.0)
 	add_child(_burn_light)
 
 	# GPU fire particles
@@ -294,15 +295,15 @@ func start_burning() -> void:
 	pp.emission_shape         = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	pp.emission_sphere_radius = 0.25
 
-	# Near-black ember → deep crimson → muted orange → transparent. The bright
-	# yellow midpoint was washing out against the lime/teal/blue mech tints —
-	# pulling the palette down keeps the flame readable as a dark silhouette
-	# rather than a bloom on top of the body.
+	# Dense black-red base for a dark silhouette where the flame overlaps the
+	# mech body (lime/teal/blue tints would wash out a yellow palette), with a
+	# brighter saturated orange peak so the plume above the head still reads
+	# loud against the sky.
 	var grad := Gradient.new()
-	grad.set_color(0, Color(0.10, 0.02, 0.00, 1.0))
-	grad.set_color(1, Color(0.40, 0.05, 0.00, 0.0))
-	grad.add_point(0.30, Color(0.55, 0.10, 0.02, 0.95))
-	grad.add_point(0.65, Color(0.85, 0.32, 0.05, 0.70))
+	grad.set_color(0, Color(0.15, 0.03, 0.00, 1.0))
+	grad.set_color(1, Color(0.50, 0.10, 0.00, 0.0))
+	grad.add_point(0.30, Color(0.70, 0.15, 0.03, 0.95))
+	grad.add_point(0.65, Color(1.00, 0.50, 0.10, 0.85))
 	var gtex := GradientTexture1D.new()
 	gtex.gradient = grad
 	pp.color_ramp = gtex
@@ -328,7 +329,10 @@ func start_burning() -> void:
 	_fire_particles.process_material = pp
 	_fire_particles.draw_pass_1      = quad
 	_fire_particles.cast_shadow      = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_fire_particles.position         = Vector3(0.0, 1.2, 0.0)
+	# Position above the head (mech body is ~4 u tall, scale-applied in
+	# _scale_model). Particles drift upward against the sky from here, so the
+	# burn state reads at a glance even when the mech is partway off-screen.
+	_fire_particles.position         = Vector3(0.0, 4.0, 0.0)
 	add_child(_fire_particles)
 
 func stop_burning() -> void:
