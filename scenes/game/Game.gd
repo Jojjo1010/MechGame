@@ -82,11 +82,16 @@ func _ready() -> void:
 	mech_options.setup(camera)
 	mech_options.repair_pressed.connect(_on_mech_repair_pressed)
 	if RunManager.tutorial_only:
-		# Tutorial sandbox. Wave spawner is off (no enemies), and ContextUI that
-		# would surface things before they're taught is gated. ControlsLegend
-		# and UltBar are spawned but tagged as "tutorial_late_ui" so the tutorial
-		# can hide them during the WASD/CAMERA/SHIFT phases and reveal them once
-		# the ult phase begins — by then the player has the context to read them.
+		# Tutorial sandbox: static world (line paused) and passive fire off so
+		# practice dummies stay positioned and the mechs don't auto-clear them
+		# before the player gets to demo each ult. Wave spawner is also off so
+		# real enemies never enter the picture during the lesson. ControlsLegend
+		# and UltBar are spawned but tagged "tutorial_late_ui" so the tutorial
+		# can keep them hidden during WASD/CAMERA/SHIFT and reveal them once
+		# the ult phase begins.
+		RunManager.line_speed_mult = 0.0
+		for w in _weapons:
+			w.set("tutorial_passive_disabled", true)
 		wave_spawner.process_mode = Node.PROCESS_MODE_DISABLED
 		_spawn_controls_legend()
 		_spawn_ult_bar()

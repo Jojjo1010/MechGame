@@ -17,8 +17,27 @@ const SEPARATION_RADIUS := 1.3   # start pushing when closer than this (world un
 const SEPARATION_STRENGTH := 3.0 # multiplier on sep vector when blended with move dir
 
 @export var max_health: float = 40.0
+# Tutorial dummy: stationary, doesn't chase, doesn't attack mechs. Still takes
+# damage / DOT / wither / knockback so the player can practice the ult on it.
+@export var is_dummy:   bool  = false
 
 const FLASH_DURATION := 0.10
+
+# Wave scaling — set by WaveSpawner before add_child so Enemy._ready can
+# apply HP/visual scaling in one place. Skipped for tutorial dummies.
+#   • HP curve grows linearly from wave 1, capped — gentle so player upgrades
+#     stay ahead of enemy HP.
+#   • Three visual tiers band the curve so the toughening *reads*: same
+#     enemy mesh, deeper red as the run progresses.
+#   • Elites override tier visuals with a gold/magenta palette and are
+#     notably tougher — they read as priority targets.
+const HP_PER_WAVE   := 0.014   # +1.4% HP per wave (linear, before cap)
+const HP_MULT_CAP   := 1.40    # reaches the cap around wave 30
+const ELITE_HP_MULT := 2.0
+const ELITE_SCALE   := 1.10
+
+var wave_number: int  = 1
+var is_elite:    bool = false
 
 var health: float = max_health
 var attack_timer: float = 0.0
@@ -48,8 +67,11 @@ signal enemy_died()
 
 func _ready() -> void:
 	add_to_group("enemies")
+	if not is_dummy:
+		_apply_wave_scaling()
 	health = max_health
-	scale = Vector3(0.6, 0.6, 0.6)
+	var base_scale: float = 0.6 * (ELITE_SCALE if is_elite else 1.0)
+	scale = Vector3(base_scale, base_scale, base_scale)
 	# Build shared white overlay material for hit flash
 	_flash_mat = StandardMaterial3D.new()
 	_flash_mat.albedo_color   = Color.WHITE
@@ -70,6 +92,73 @@ func _ready() -> void:
 	_health_bar.position = Vector3(0.0, 2.9, 0.0)
 	_health_bar.visible = false
 	add_child(_health_bar)
+
+func _apply_wave_scaling() -> void:
+	# HP: linear ramp, capped. Elites are an additional flat multiplier on top.
+	var hp_mult: float = minf(1.0 + HP_PER_WAVE * float(wave_number - 1), HP_MULT_CAP)
+	if is_elite:
+		hp_mult *= ELITE_HP_MULT
+	max_health *= hp_mult
+
+	# Visual: replace the body/head material_overrides with tier-tinted (or
+	# elite-styled) ones. Tier index bands waves 1-10 / 11-20 / 21-30 so the
+	# darkening reads as discrete steps rather than an invisible gradient.
+	var body_mi: MeshInstance3D = get_node_or_null("Body") as MeshInstance3D
+	var head_mi: MeshInstance3D = get_node_or_null("Head") as MeshInstance3D
+	if body_mi == null or head_mi == null:
+		return
+	var palette: Dictionary = _palette_for(wave_number, is_elite)
+	body_mi.material_override = _make_body_mat(palette.body)
+	head_mi.material_override = _make_head_mat(palette.head, palette.emission, palette.emission_energy)
+
+func _palette_for(wave: int, elite: bool) -> Dictionary:
+	if elite:
+		# Gold body + hot-magenta head with a stronger glow — reads instantly
+		# as "different / priority target" against the red palette.
+		return {
+			body            = Color(0.85, 0.62, 0.15),
+			head            = Color(0.95, 0.20, 0.65),
+			emission        = Color(1.00, 0.30, 0.85),
+			emission_energy = 1.4,
+		}
+	var tier: int = clampi((wave - 1) / 10, 0, 2)
+	match tier:
+		1:
+			return {  # mid-run: deeper red, slight purple shift
+				body            = Color(0.65, 0.12, 0.18),
+				head            = Color(0.50, 0.08, 0.13),
+				emission        = Color(0.95, 0.10, 0.30),
+				emission_energy = 0.9,
+			}
+		2:
+			return {  # late: near-black with hot rim emission
+				body            = Color(0.40, 0.06, 0.18),
+				head            = Color(0.30, 0.05, 0.15),
+				emission        = Color(1.00, 0.20, 0.45),
+				emission_energy = 1.2,
+			}
+		_:
+			return {  # early: matches the .tscn defaults
+				body            = Color(0.85, 0.20, 0.15),
+				head            = Color(0.70, 0.15, 0.10),
+				emission        = Color(1.00, 0.10, 0.00),
+				emission_energy = 0.8,
+			}
+
+func _make_body_mat(albedo: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = albedo
+	m.roughness    = 0.7
+	m.metallic     = 0.2
+	return m
+
+func _make_head_mat(albedo: Color, emission: Color, energy: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color                  = albedo
+	m.emission_enabled              = true
+	m.emission                      = emission
+	m.emission_energy_multiplier    = energy
+	return m
 
 func _add_permanent_outline() -> void:
 	for src in _mesh_instances:
@@ -214,6 +303,12 @@ func _process(delta: float) -> void:
 			_wither_stacks = 0
 			_update_wither_visual()
 
+	# Tutorial dummies stand still and don't attack — they exist purely as
+	# practice targets. Damage / DOT / wither still apply (handled above) so
+	# the player's ult lands the same way it would on a real enemy.
+	if is_dummy:
+		return
+
 	_find_target()
 
 	var sep := _get_separation()
@@ -313,11 +408,16 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 
 func _spawn_pickups() -> void:
 	var scene := get_tree().current_scene
-	# 2–4 XP orbs scattered around death position
-	for i in randi_range(2, 4):
+	# Elites drop a richer pickup bundle so the priority-target read pays off.
+	var xp_count: int = randi_range(5, 7) if is_elite else randi_range(2, 4)
+	for i in xp_count:
 		var off := Vector3(randf_range(-1.2, 1.2), 0.5, randf_range(-1.2, 1.2))
 		Pickup.spawn(Pickup.Type.XP, 1, global_position + off, scene)
-	# ~35% chance of a gold coin
-	if randf() < 0.35:
+	if is_elite:
+		# Guaranteed multi-coin gold drop on elites.
+		for i in 3:
+			var off := Vector3(randf_range(-0.8, 0.8), 0.5, randf_range(-0.8, 0.8))
+			Pickup.spawn(Pickup.Type.GOLD, 1, global_position + off, scene)
+	elif randf() < 0.35:
 		var off := Vector3(randf_range(-0.6, 0.6), 0.5, randf_range(-0.6, 0.6))
 		Pickup.spawn(Pickup.Type.GOLD, 1, global_position + off, scene)

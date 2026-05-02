@@ -16,10 +16,24 @@ const PRACTICE_DUR       := 5.0    # seconds of free play after each prompt
 # How long the per-mech archetype intro lingers before swapping to the ult
 # prompt. Long enough to read the name + tagline, short enough not to drag.
 const INTRO_DUR          := 2.5
+# Generous timeout for the per-mech ult practice. ULT_FADING advances when
+# the dummies are all dead OR this timer elapses, whichever is first — so
+# fast players move on quickly and slow players still have room to figure
+# out the controls.
+const ULT_PRACTICE_TIMEOUT := 12.0
 # Input lockout after a prompt enters — covers FADE_DUR plus a moment to read.
 # Without this, a player who's already pressing W when WASD_SHOWING enters
 # satisfies the trigger on the same frame and skips past the prompt entirely.
 const MIN_PROMPT_TIME    := 0.45
+
+# Tutorial practice dummies — instantiated on demand, low HP so each ult
+# one-shots the formation. Reuse the standard Enemy scene with `is_dummy=true`
+# so the lesson uses the same silhouette the player will see in real combat.
+const ENEMY_SCENE         := preload("res://scenes/enemies/Enemy.tscn")
+const TUTORIAL_DUMMY_HP   := 30.0
+# Distance ahead of the marked mech (along -Z, the marching forward axis) at
+# which weapon-specific formations spawn.
+const DUMMY_FORWARD_DIST  := 9.0
 
 # Completion feedback — a brief lime tint on the modal panel + a positive
 # audio ping. Tuned short so the next prompt comes promptly, not lingering.
@@ -94,6 +108,9 @@ var _marker_t:       float  = 0.0
 # Index into _mechs of the mech we're currently teaching the ult for. Cycles
 # through every mech in line so each archetype gets named and demoed.
 var _ult_mech_idx:   int    = -1
+# Practice dummies for the current phase. Cleared between phases so each
+# weapon's lesson starts on a clean stage.
+var _dummies:        Array[Node3D] = []
 
 func setup(p_drone: Node3D, p_mechs: Array) -> void:
 	_drone = p_drone
@@ -204,10 +221,12 @@ func _enter_state(new_state: State) -> void:
 		State.CAMERA_SHOWING:
 			_show_prompt(KeyChip.make_key_cap("Q", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "camera", "TOGGLE CAMERA")
 		State.SHIFT_SHOWING:
+			_spawn_shift_dummy()
 			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH")
 		State.ULT_INTRO:
 			# _target_mech / _ult_mech_idx are set by _advance_to_next_ult()
 			# before this state is entered.
+			_spawn_dummies_for(_target_mech)
 			_show_intro_for(_target_mech)
 		State.ULT_SHOWING_E:
 			_show_prompt(KeyChip.make_key_cap("E", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
@@ -224,6 +243,7 @@ func _enter_state(new_state: State) -> void:
 			_complete_and_fade()
 		State.DONE:
 			_free_marker()
+			_clear_dummies()
 			# Player chooses when to leave — show a completion panel with a
 			# button instead of auto-routing back to the menu, so they can
 			# linger and play with the controls they just learned.
@@ -253,16 +273,15 @@ func _swap_prompt(chip: Control, icon_id: String, action_text: String) -> void:
 	_action_icon.set_action(icon_id)
 	_action_label.text = action_text
 
-# Lime flash on the panel + positive ping + a check-mark pop. Modal stays at
-# full alpha through the practice window so the player keeps seeing the prompt
-# they just satisfied — handy for re-reading mid-practice. The next state's
-# _show_prompt fades the modal out before swapping in fresh content.
+# Lime flash on the panel + positive ping + a check-mark pop, then fade out.
+# Used at every step completion so the player feels the input register before
+# the next prompt.
 func _complete_and_fade() -> void:
 	AudioManager.play(COMPLETE_SOUND, Vector3.INF, -2.0, 1.0)
 	_play_check_animation()
 	var t := create_tween()
 	t.tween_property(_modal_root, "modulate", COMPLETE_TINT, COMPLETE_FLASH_DUR)
-	t.tween_property(_modal_root, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+	t.tween_property(_modal_root, "modulate", Color(1.0, 1.0, 1.0, 0.0), FADE_DUR)
 
 # Big lime check, scale-punches in then fades. The pop reads as a clear
 # "you did it" beat even when the panel itself fades out behind it.
@@ -371,7 +390,11 @@ func _process(delta: float) -> void:
 			if _state_timer >= INTRO_DUR:
 				_enter_state(State.ULT_SHOWING_E)
 		State.ULT_FADING:
-			if _state_timer >= PRACTICE_DUR:
+			# Adaptive pacing: leave the moment the dummies are cleared, but
+			# fall through after ULT_PRACTICE_TIMEOUT if the player's still
+			# figuring it out (or missed entirely). Either way, _advance does
+			# the dummy cleanup before the next mech's intro starts.
+			if _alive_dummy_count() == 0 or _state_timer >= ULT_PRACTICE_TIMEOUT:
 				_advance_to_next_ult()
 		State.REPAIR_SHOWING:
 			# Wait for the actual repair to land, not just proximity. The
@@ -412,7 +435,10 @@ func _input(event: InputEvent) -> void:
 # Step the ult tour to the next valid mech. Skips dead / freed entries, and
 # falls through to REPAIR once we've cycled through the whole line. Sets
 # _target_mech and re-attaches the marker so the prompt has a live subject.
+# Always clears the previous phase's dummies first so each lesson starts on a
+# clean stage (covers SHIFT → ULT and ULT[i] → ULT[i+1] / REPAIR transitions).
 func _advance_to_next_ult() -> void:
+	_clear_dummies()
 	while _ult_mech_idx + 1 < _mechs.size():
 		_ult_mech_idx += 1
 		var mech: Node3D = _mechs[_ult_mech_idx]
@@ -493,6 +519,94 @@ func _animate_marker(delta: float) -> void:
 	_marker.position.y = MARKER_HEIGHT + bob * MARKER_BOB_AMP
 	var s := 1.0 + bob * MARKER_PULSE_AMP
 	_marker.scale = Vector3(s, s, s)
+
+# ── Practice dummies ─────────────────────────────────────────────────────────
+
+# One slow dummy in front of the lead mech for the SHIFT/dash step. Player
+# can dash past or through it; the gate to advance is still pressing SHIFT,
+# the dummy is just a "thing in space" to dash relative to.
+func _spawn_shift_dummy() -> void:
+	if _mechs.is_empty():
+		return
+	var lead: Node3D = _mechs[0]
+	if not is_instance_valid(lead):
+		return
+	var pos := lead.global_position + Vector3(0.0, 0.0, -DUMMY_FORWARD_DIST)
+	pos.y = 0.0
+	_spawn_dummy(pos)
+
+# Per-mech formations sized to showcase each weapon's ult shape — fan for
+# GUN, aura cluster for GARLIC, line for the chained beam, tight cluster for
+# rocket splash.
+func _spawn_dummies_for(mech: Node3D) -> void:
+	if mech == null or not is_instance_valid(mech):
+		return
+	var origin := mech.global_position
+	origin.y = 0.0
+	var positions: Array[Vector3] = []
+	match _weapon_name_for(mech):
+		"GUN":
+			positions = [
+				origin + Vector3(-3.0, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 0.0, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 3.0, 0.0, -DUMMY_FORWARD_DIST),
+			]
+		"GARLIC":
+			# Close in around the mech so the aura tags them; ult bursts.
+			positions = [
+				origin + Vector3(-3.0, 0.0, -3.0),
+				origin + Vector3( 3.0, 0.0, -3.0),
+				origin + Vector3( 0.0, 0.0,  3.0),
+			]
+		"BEAM":
+			# Spaced in a near-line so the chained beam hops between them.
+			positions = [
+				origin + Vector3(-2.5, 0.0, -7.0),
+				origin + Vector3( 1.0, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 4.5, 0.0, -11.0),
+			]
+		"ROCKET":
+			# Tight cluster so a single rocket splash takes the group.
+			positions = [
+				origin + Vector3(-1.5, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 1.5, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 0.0, 0.0, -7.5),
+				origin + Vector3( 0.0, 0.0, -10.5),
+			]
+		_:
+			# Unknown weapon — fall back to a small single-line group so the
+			# step still has something to fire at.
+			positions = [
+				origin + Vector3(-2.0, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 0.0, 0.0, -DUMMY_FORWARD_DIST),
+				origin + Vector3( 2.0, 0.0, -DUMMY_FORWARD_DIST),
+			]
+	for p in positions:
+		_spawn_dummy(p)
+
+func _spawn_dummy(at: Vector3) -> void:
+	var enemies_root := get_parent().get_node_or_null("Enemies") as Node3D
+	if enemies_root == null:
+		return
+	var d: Node3D = ENEMY_SCENE.instantiate()
+	d.set("is_dummy", true)
+	d.set("max_health", TUTORIAL_DUMMY_HP)
+	enemies_root.add_child(d)
+	d.global_position = at
+	_dummies.append(d)
+
+func _clear_dummies() -> void:
+	for d in _dummies:
+		if is_instance_valid(d):
+			d.queue_free()
+	_dummies.clear()
+
+func _alive_dummy_count() -> int:
+	var n := 0
+	for d in _dummies:
+		if is_instance_valid(d):
+			n += 1
+	return n
 
 # Force enough damage on a mech to push it below BURN_THRESHOLD so
 # `needs_repair()` returns true. Without this, REPAIR_SHOWING would point at

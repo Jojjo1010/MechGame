@@ -11,6 +11,11 @@ var _mech_color:    Color  = Color.WHITE
 var _cooldown_timer: float = 0.0   # counts down from get_ult_cooldown() to 0
 var _fire_timer:    float  = 0.0
 var _drone_nearby:  bool   = false
+# Tutorial gate: when true, _passive_fire is skipped so the mechs don't
+# auto-clear the practice dummies before the player gets to demo their ult.
+# Activating the ult (activate_ult) still fires regardless — it doesn't go
+# through this branch.
+var tutorial_passive_disabled: bool = false
 
 # ── Upgrade multipliers (modified by level-up cards) ─────────────────────────
 var damage_mult:            float = 1.0
@@ -86,7 +91,8 @@ func _process(delta: float) -> void:
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:
 		_fire_timer = _effective_fire_period()
-		_passive_fire()
+		if not tutorial_passive_disabled:
+			_passive_fire()
 
 	if _cooldown_timer > 0.0:
 		_cooldown_timer = maxf(0.0, _cooldown_timer - delta)

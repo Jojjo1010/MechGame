@@ -9,6 +9,13 @@ const SPAWN_SPREAD   := 4.0    # seconds over which a wave staggers its spawns
 
 const FINAL_CHECK_INTERVAL := 0.5
 
+# Elite spawn ramp. 0% chance below ELITE_START_WAVE, scaling linearly to
+# ELITE_MAX_CHANCE by ELITE_RAMP_END so late-run waves contain a sprinkle of
+# gold/magenta priority targets without ever feeling like an elite swarm.
+const ELITE_START_WAVE := 5
+const ELITE_RAMP_END   := 30
+const ELITE_MAX_CHANCE := 0.15
+
 var enemies_container: Node3D
 var wave_number: int = 0
 var timer: float = 3.0
@@ -63,8 +70,21 @@ func _spawn_one() -> void:
 	var angle := -PI / 2.0 + randf_range(-2.0 * PI / 3.0, 2.0 * PI / 3.0)
 	var offset := Vector3(cos(angle), 0.0, sin(angle)) * _spawn_radius()
 	var enemy: Node3D = ENEMY_SCENE.instantiate()
+	# Stamp wave + elite flag before add_child so Enemy._ready can apply scaling
+	# in one place rather than restamping after the fact.
+	enemy.wave_number = wave_number
+	enemy.is_elite    = _roll_elite()
 	enemies_container.add_child(enemy)
 	enemy.global_position = center + offset
+
+func _roll_elite() -> bool:
+	if wave_number < ELITE_START_WAVE:
+		return false
+	var t := clampf(
+		float(wave_number - ELITE_START_WAVE) / float(ELITE_RAMP_END - ELITE_START_WAVE),
+		0.0, 1.0
+	)
+	return randf() < t * ELITE_MAX_CHANCE
 
 # Spawn distance scales with the orthographic camera size + viewport aspect so
 # enemies always pop in just past the visible edge — regardless of zoom level
