@@ -73,11 +73,18 @@ var _drone_hint_shown:  bool  = false
 const DRONE_HIDE_CHECK_INTERVAL := 4
 var _drone_hide_dt_accum: float = 0.0
 
+# Slow-mo applied while any mech's weapon is in aim mode (Gun cone, Rocket
+# marker). Mouse input is real-time, so aiming feels precise while enemies
+# and the conga line crawl. Restored to 1.0 the moment aim mode exits.
+const AIM_SLOW_MO_SCALE := 0.35
+
 const BURST_VFX = preload("res://scenes/vfx/BurstVFX.gd")
 
 func _ready() -> void:
 	# Persistent autoloads carry state across scene reloads — wipe per-run state.
 	get_tree().paused = false
+	# Reset in case a previous run exited with aim-mode slow-mo still active.
+	Engine.time_scale = 1.0
 	RunManager.reset_run()
 	BURST_VFX.reset_active_count()
 	# Black-out the first frame while the camera, sun, and environment finish
@@ -362,6 +369,7 @@ func _check_drone_proximity() -> void:
 		_left_click_hint.set_hint_visible(any_aiming)
 		if any_aiming:
 			_left_click_hint.set_action_text(action_text)
+	Engine.time_scale = AIM_SLOW_MO_SCALE if any_aiming else 1.0
 
 func _on_mech_repair_pressed(_mech: Node3D) -> void:
 	_try_start_repair()
@@ -475,6 +483,7 @@ func _on_mech_died(mech: Node3D) -> void:
 
 func _trigger_run_end() -> void:
 	_run_ended = true
+	Engine.time_scale = 1.0
 	# Award scrap: 1 per wave + 1 per 3 gold collected this run
 	var earned := RunManager.wave + int(RunManager.gold / 3.0)
 	SaveData.add_scrap(earned)
@@ -492,6 +501,7 @@ func _on_run_won() -> void:
 	if _run_ended:
 		return
 	_run_ended = true
+	Engine.time_scale = 1.0
 	var earned := RunManager.wave + int(RunManager.gold / 3.0)
 	SaveData.add_scrap(earned)
 	var screen := CanvasLayer.new()
