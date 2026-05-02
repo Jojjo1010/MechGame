@@ -1,6 +1,7 @@
 extends Node3D
 
 const MECH_SCENE  := preload("res://scenes/mechs/Mech.tscn")
+const MECH_SCRIPT := preload("res://scenes/mechs/Mech.gd")
 const DRONE_SCENE := preload("res://scenes/drones/Drone.tscn")
 
 const GUN_WEAPON_SCRIPT     := preload("res://scenes/mechs/weapons/GunWeapon.gd")
@@ -355,7 +356,7 @@ func _spawn_mech_line(count: int) -> void:
 	var weapon_scripts := [GUN_WEAPON_SCRIPT, GARLIC_WEAPON_SCRIPT, BEAM_WEAPON_SCRIPT, ROCKET_WEAPON_SCRIPT]
 	for i in count:
 		var mech: Node3D = MECH_SCENE.instantiate()
-		mech.position = Vector3(0.0, 0.0, float(i) * 2.5)
+		mech.position = Vector3(0.0, 0.0, float(i) * MECH_SCRIPT.MECH_SPACING)
 		mech.is_lead = (i == 0)
 		if i > 0:
 			mech.leader = mechs[i - 1]

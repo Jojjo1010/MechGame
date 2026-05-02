@@ -1,7 +1,7 @@
 extends Node3D
 
 const SPEED         := 3.0
-const MECH_SPACING  := 2.5
+const MECH_SPACING  := 4.5
 
 const BURN_THRESHOLD      := 0.45   # fraction at which mech starts burning
 const BURN_DAMAGE_PER_SEC := 2.0
