@@ -64,8 +64,11 @@ func _build() -> void:
 
 	_build_body(_drone_root)
 	_build_ring(_drone_root)
-	var eye_l := _build_eye(_drone_root, Vector3(-0.13, 0.04, 0.40))
-	var eye_r := _build_eye(_drone_root, Vector3( 0.13, 0.04, 0.40))
+	# Eye Y must clear the equator ring (ring extends y=±0.04, eye radius 0.11)
+	# — at y=0.04 the bottom of each eye sat inside the ring and got clipped.
+	# 0.18 puts the eye bottom (~0.07) safely above the ring top (0.04).
+	var eye_l := _build_eye(_drone_root, Vector3(-0.13, 0.18, 0.40))
+	var eye_r := _build_eye(_drone_root, Vector3( 0.13, 0.18, 0.40))
 	_pupil_l = _build_pupil(eye_l)
 	_pupil_r = _build_pupil(eye_r)
 
