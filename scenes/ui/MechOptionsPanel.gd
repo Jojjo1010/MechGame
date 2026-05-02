@@ -183,10 +183,11 @@ func _build_ui() -> void:
 
 	add_child(_panel)
 
-	# Connector line from mech head to panel
+	# Connector line from mech head to panel — hot pink to match the selection
+	# outline. Full opacity, thicker than the previous near-invisible white.
 	_line = Line2D.new()
-	_line.width          = 1.5
-	_line.default_color  = Color(1.0, 1.0, 1.0, 0.40)
+	_line.width          = 2.5
+	_line.default_color  = UITheme.COLOR_ACCENT_HOT
 	_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	_line.end_cap_mode   = Line2D.LINE_CAP_ROUND
 	_line.visible        = false

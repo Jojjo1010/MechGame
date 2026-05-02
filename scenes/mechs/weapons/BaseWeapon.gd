@@ -129,6 +129,14 @@ func _reset_cooldown() -> void:
 	charge_changed.emit(0.0)
 	_on_ult_consumed()
 
+# Tutorial helper: clear any in-flight cooldown so the per-mech ult lesson
+# starts on a known-ready weapon. Without this, an accidental early fire
+# during a previous lesson leaves the next mech's ult unfireable when its
+# turn comes up.
+func force_ult_ready() -> void:
+	_cooldown_timer = 0.0
+	charge_changed.emit(1.0)
+
 # ── State queries ─────────────────────────────────────────────────────────────
 
 func get_charge() -> float:

@@ -507,7 +507,11 @@ func set_highlighted(on: bool) -> void:
 		var sm := ShaderMaterial.new()
 		sm.shader = OUTLINE_SHADER
 		sm.set_shader_parameter("outline_color", UITheme.COLOR_ACCENT_HOT)
-		sm.set_shader_parameter("outline_size", 0.14)
+		# Larger than the permanent black outline (0.08) by a wide margin so the
+		# pink ring sits clearly OUTSIDE the black. Depth + cull_front keep the
+		# black ring visible at the inner band (closer to camera at the mesh
+		# silhouette) while the pink shows in the outer band.
+		sm.set_shader_parameter("outline_size", 0.34)
 		ol.material_override = sm
 		src.add_child(ol)
 		ol.transform = Transform3D.IDENTITY
