@@ -74,6 +74,10 @@ func _ready() -> void:
 	# Persistent autoloads carry state across scene reloads — wipe per-run state.
 	get_tree().paused = false
 	RunManager.reset_run()
+	# Black-out the first frame while the camera, sun, and environment finish
+	# settling — without this you get a brief flash of the default editor
+	# clear-color / unlit sky between scene swap and the first configured render.
+	_spawn_boot_mask()
 	_setup_camera()
 	_setup_environment()
 	# Tutorial pins the line at exactly four — one mech per weapon archetype.
@@ -123,6 +127,26 @@ func _spawn_tutorial_prompts() -> void:
 	prompts.set_script(TUTORIAL_PROMPTS_SCRIPT)
 	add_child(prompts)
 	prompts.setup(drones[0], mechs)
+
+# Solid-black canvas overlay layered above gameplay UI for the first ~0.30s
+# of the run so the boot transition reads as a smooth fade-in instead of a
+# flash. Layer 200 so it sits above the UpgradePicker (50) and pause menu (55).
+func _spawn_boot_mask() -> void:
+	var mask := CanvasLayer.new()
+	mask.layer = 200
+	mask.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(mask)
+	var rect := ColorRect.new()
+	rect.color = Color.BLACK
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_STOP
+	mask.add_child(rect)
+	# One frame to let the configured world render under the mask, then ease out.
+	await get_tree().process_frame
+	var t := create_tween()
+	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	t.tween_property(rect, "modulate:a", 0.0, 0.30)
+	t.tween_callback(mask.queue_free)
 
 func _spawn_drone_hint() -> void:
 	_drone_hint = CanvasLayer.new()

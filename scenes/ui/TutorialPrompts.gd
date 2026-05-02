@@ -16,11 +16,10 @@ const PRACTICE_DUR       := 5.0    # seconds of free play after each prompt
 # How long the per-mech archetype intro lingers before swapping to the ult
 # prompt. Long enough to read the name + tagline, short enough not to drag.
 const INTRO_DUR          := 2.5
-# Generous timeout for the per-mech ult practice. ULT_FADING advances when
-# the dummies are all dead OR this timer elapses, whichever is first — so
-# fast players move on quickly and slow players still have room to figure
-# out the controls.
-const ULT_PRACTICE_TIMEOUT := 12.0
+# Post-fire wait so projectiles/splash can finish landing before we judge
+# success. After this elapses, ULT_FADING checks the dummy count: all dead →
+# celebrate + advance, any alive → repeat the same mech's lesson.
+const ULT_RESOLVE_DELAY  := 1.5
 # Input lockout after a prompt enters — covers FADE_DUR plus a moment to read.
 # Without this, a player who's already pressing W when WASD_SHOWING enters
 # satisfies the trigger on the same frame and skips past the prompt entirely.
@@ -114,6 +113,9 @@ var _dummies:        Array[Node3D] = []
 # prompt. Advance only when all four are present — pressing W alone shouldn't
 # end the lesson when the prompt is teaching the whole cluster.
 var _wasd_seen:      Dictionary = {}
+# Latches true while _resolve_ult_success is mid-celebration so its scheduled
+# advance can't be re-triggered by per-frame checks.
+var _ult_resolving:  bool       = false
 
 func setup(p_drone: Node3D, p_mechs: Array) -> void:
 	_drone = p_drone
@@ -242,8 +244,14 @@ func _enter_state(new_state: State) -> void:
 			_repair_mech = _force_damage_for_repair()
 			_attach_marker_to(_repair_mech)
 			_show_prompt(KeyChip.make_key_cap("F", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "repair", "REPAIR MARKED MECH")
-		State.WASD_FADING, State.SHIFT_FADING, State.ULT_FADING:
+		State.WASD_FADING, State.SHIFT_FADING:
 			_complete_and_fade()
+		State.ULT_FADING:
+			# No celebration on entry — we don't know yet if the ult killed all
+			# dummies. The resolve-delay branch in _process decides:
+			#   all dead → _resolve_ult_success (celebrate + advance)
+			#   any alive → _restart_current_mech (repeat instructions)
+			pass
 		State.DONE:
 			_free_marker()
 			_clear_dummies()
@@ -376,15 +384,14 @@ func _process(delta: float) -> void:
 	# between the first click (place) and the second (fire). Tutorial-only;
 	# the main game keeps moving during aim mode by design.
 	RunManager.line_speed_mult = 0.0 if _target_mech_in_aim_mode() else 1.0
-	# Cross-state kill-check: any of the ult phases advances the moment all
-	# practice dummies are dead. Catches the case where the in-world
-	# MechOptionsPanel fires the ult on its own range check (looser than the
-	# tutorial's APPROACH_RADIUS), so the player demonstrably did the lesson
-	# but the tutorial's E-near-target gate never tripped — previously this
-	# left the prompt stuck until the 12 s timeout rescued it.
-	if _state == State.ULT_SHOWING_E or _state == State.ULT_SHOWING_LMB or _state == State.ULT_FADING:
+	# Cross-state kill-check for the showing states only — if the panel fires
+	# the ult on its own range check (looser than APPROACH_RADIUS) and the
+	# kills happen before our state polling catches the fire, jump straight
+	# to the success path. ULT_FADING is judged on its own resolve timer
+	# below so the success/fail branch is deterministic.
+	if not _ult_resolving and (_state == State.ULT_SHOWING_E or _state == State.ULT_SHOWING_LMB):
 		if not _dummies.is_empty() and _alive_dummy_count() == 0:
-			_advance_to_next_ult()
+			_resolve_ult_success()
 			return
 	# Poll the target mech's weapon directly — the tutorial's own E listener
 	# requires drone-near-target, but the panel's E binding fires on whichever
@@ -432,12 +439,13 @@ func _process(delta: float) -> void:
 			if _state_timer >= INTRO_DUR:
 				_enter_state(State.ULT_SHOWING_E)
 		State.ULT_FADING:
-			# Adaptive pacing: leave the moment the dummies are cleared, but
-			# fall through after ULT_PRACTICE_TIMEOUT if the player's still
-			# figuring it out (or missed entirely). Either way, _advance does
-			# the dummy cleanup before the next mech's intro starts.
-			if _alive_dummy_count() == 0 or _state_timer >= ULT_PRACTICE_TIMEOUT:
-				_advance_to_next_ult()
+			# Wait ULT_RESOLVE_DELAY for projectiles/splash to land, then
+			# branch on success vs miss.
+			if not _ult_resolving and _state_timer >= ULT_RESOLVE_DELAY:
+				if _alive_dummy_count() == 0:
+					_resolve_ult_success()
+				else:
+					_restart_current_mech()
 		State.REPAIR_SHOWING:
 			# Wait for the actual repair to land, not just proximity. The
 			# minigame calls Mech.repair() on success, which flips _is_burning
@@ -476,6 +484,34 @@ func _input(event: InputEvent) -> void:
 # _target_mech and re-attaches the marker so the prompt has a live subject.
 # Always clears the previous phase's dummies first so each lesson starts on a
 # clean stage (covers SHIFT → ULT and ULT[i] → ULT[i+1] / REPAIR transitions).
+# Success branch out of ULT_FADING. Plays the celebration on the still-visible
+# modal, waits for it to fade out, then steps to the next mech (or REPAIR).
+# _ult_resolving latches so the per-frame checks don't re-fire while the tween
+# is in flight.
+func _resolve_ult_success() -> void:
+	_ult_resolving = true
+	_complete_and_fade()
+	var t := create_tween()
+	t.tween_interval(COMPLETE_FLASH_DUR + FADE_DUR + 0.4)
+	t.tween_callback(func() -> void:
+		_ult_resolving = false
+		_advance_to_next_ult())
+
+# Miss branch out of ULT_FADING. The player fired but didn't clear the
+# formation — wipe survivors, re-attach the marker, and re-enter ULT_INTRO so
+# the same archetype's intro + ult prompt play again. _ult_mech_idx stays put.
+func _restart_current_mech() -> void:
+	_clear_dummies()
+	if _target_mech == null or not is_instance_valid(_target_mech):
+		_advance_to_next_ult()
+		return
+	_attach_marker_to(_target_mech)
+	# Brief fade-out so the re-intro reads as a fresh attempt rather than an
+	# abrupt content swap on the still-visible panel.
+	var t := create_tween()
+	t.tween_property(_modal_root, "modulate:a", 0.0, 0.20)
+	t.tween_callback(func() -> void: _enter_state(State.ULT_INTRO))
+
 func _advance_to_next_ult() -> void:
 	_clear_dummies()
 	while _ult_mech_idx + 1 < _mechs.size():

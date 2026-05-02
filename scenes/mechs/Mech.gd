@@ -698,12 +698,15 @@ func _spawn_died_label() -> void:
 	lbl.scale            = Vector3.ONE * 0.1
 	add_child(lbl)
 	var tw := create_tween()
-	tw.tween_property(lbl, "scale", Vector3.ONE * 1.35, 0.18) \
+	tw.tween_property(lbl, "scale", Vector3.ONE * 1.35, 0.16) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(lbl, "scale", Vector3.ONE * 1.0, 0.10)
-	tw.tween_interval(0.9)
-	tw.tween_property(lbl, "position:y", 5.6, 1.2)
-	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.6)
+	tw.tween_property(lbl, "scale", Vector3.ONE * 1.0, 0.08)
+	# Snappier overall: hold cut from 0.9s → 0.30s and the drift+fade tail
+	# halved so the label reads, beats once, then clears the field instead of
+	# overstaying on a corpse the conga has already passed.
+	tw.tween_interval(0.30)
+	tw.tween_property(lbl, "position:y", 5.6, 0.55)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.45)
 
 # Returns extra Y offset for the model so the mech arcs over any nearby corpse
 # in its march path. Parabolic — peak when directly over the corpse, zero
