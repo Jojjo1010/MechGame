@@ -248,7 +248,9 @@ func _apply_ult_blast(center: Vector3) -> void:
 	for e in _source_weapon._enemies_in_radius(center, _ult_splash):
 		if not is_instance_valid(e):
 			continue
-		e.take_damage(dmg, true)
+		# Ult ring blast — explosion VFX + ring marker carries the visual; the
+		# per-enemy crit numbers stack into a wall in late-game clusters.
+		e.take_damage(dmg, true, false)
 		if e.has_method("apply_knockback"):
 			var dir: Vector3 = e.global_position - center
 			dir.y = 0.0

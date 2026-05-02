@@ -69,4 +69,4 @@ func _tick_damage() -> void:
 		if not is_instance_valid(e):
 			continue
 		if global_position.distance_to(e.global_position) <= _radius:
-			e.take_damage(dmg)
+			e.take_damage(dmg, false, false)

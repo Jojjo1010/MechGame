@@ -73,7 +73,9 @@ func _fire_ult() -> void:
 	var radius := ULT_RADIUS * range_mult
 	var enemies := _enemies_in_radius(_mech.global_position, radius)
 	for e in enemies:
-		e.take_damage(ULT_DAMAGE * damage_mult)
+		# Aoe ult — burst VFX + shockwave is the feedback; silencing the
+		# per-enemy number stops a 12-enemy ult from painting a wall.
+		e.take_damage(ULT_DAMAGE * damage_mult, false, false)
 		if dot_dps > 0.0 and e.has_method("apply_dot"):
 			e.apply_dot(dot_dps, DOT_DURATION)
 		if slow_duration > 0.0 and slow_mult < 1.0 and e.has_method("apply_slow"):

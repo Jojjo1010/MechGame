@@ -274,6 +274,6 @@ func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Ve
 		for other in _enemies_in_radius(hit_pos, splash_radius):
 			if other == enemy or not is_instance_valid(other):
 				continue
-			other.take_damage(splash_dmg)
+			other.take_damage(splash_dmg, false, false)
 			if dot_dps > 0.0 and other.has_method("apply_dot"):
 				other.apply_dot(dot_dps, DOT_DURATION)

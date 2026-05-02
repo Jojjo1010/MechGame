@@ -314,7 +314,7 @@ func _process(delta: float) -> void:
 		_dot_tick_timer -= delta
 		if _dot_tick_timer <= 0.0:
 			_dot_tick_timer = DOT_TICK_INTERVAL
-			take_damage(_dot_dps * DOT_TICK_INTERVAL)
+			take_damage(_dot_dps * DOT_TICK_INTERVAL, false, false)
 		if _dot_remaining <= 0.0:
 			_dot_dps = 0.0
 
@@ -413,19 +413,24 @@ func _flash_hit() -> void:
 			if is_instance_valid(mi):
 				mi.material_overlay = null)
 
-func take_damage(amount: float, is_crit: bool = false) -> void:
+# `show_number=false` suppresses the floating damage number for this hit. Used
+# by indirect damage (splash secondaries, DOT ticks, napalm, Garlic/Rocket ult
+# AOEs) so a single rocket impact doesn't paint 5+ numbers across the cluster.
+# Direct bullet/primary hits leave it true so per-shot feedback survives.
+func take_damage(amount: float, is_crit: bool = false, show_number: bool = true) -> void:
 	health = maxf(0.0, health - amount)
 	_flash_hit()
 	if is_instance_valid(_health_bar):
 		_health_bar.visible = true
 		_health_bar.set_fraction(health / max_health)
-	if _dmg_coalesce_cd <= 0.0:
-		_spawn_damage_number(amount, is_crit)
-		_dmg_coalesce_cd = DMG_COALESCE_WINDOW
-	else:
-		_dmg_pending += amount
-		if is_crit:
-			_dmg_pending_crit = true
+	if show_number:
+		if _dmg_coalesce_cd <= 0.0:
+			_spawn_damage_number(amount, is_crit)
+			_dmg_coalesce_cd = DMG_COALESCE_WINDOW
+		else:
+			_dmg_pending += amount
+			if is_crit:
+				_dmg_pending_crit = true
 	if health <= 0.0:
 		# Flush whatever was queued so the killing blow's full damage lands at
 		# the corpse rather than disappearing with the freed enemy.
