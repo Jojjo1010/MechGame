@@ -11,6 +11,7 @@ const GAME_SCENE_PATH := "res://scenes/game/Game.tscn"
 const MechPortraitScript := preload("res://scenes/ui/MechPortrait.gd")
 const StartScreenDroneScript := preload("res://scenes/ui/StartScreenDrone.gd")
 const StartScreenYouArrowScript := preload("res://scenes/ui/StartScreenYouArrow.gd")
+const StartScreenSettingsScript := preload("res://scenes/ui/StartScreenSettings.gd")
 
 # World/run flavor that used to live on its own crawl page. Reads above the
 # button column so the player gets the setup before they hit PLAY.
@@ -51,6 +52,11 @@ var _parade_mechs:  Array = []  # Array[Control] — MechPortrait instances
 var _parade_phases: Array = []  # Array[float]   — bob phase offset per mech
 var _parade_loop_w: float = 0.0 # width of the formation loop for wraparound
 
+# Wrapping all non-backdrop StartScreen visuals lets us hide them in one toggle
+# when the settings overlay is open.
+var _main_content:    Control = null
+var _settings_overlay: Control = null
+
 func _ready() -> void:
 	layer = 0
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -73,6 +79,13 @@ func _build() -> void:
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(backdrop)
 
+	# Holder for everything except the backdrop. Hidden as one unit when the
+	# settings overlay opens so the title/lore/parade don't bleed through.
+	_main_content = Control.new()
+	_main_content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_main_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_main_content)
+
 	# ── Title block (anchored above the centered buttons) ────────────────────
 	# Anchored relative to screen center so the title sits just above the
 	# button area, not pinned to the very top of the screen.
@@ -83,10 +96,10 @@ func _build() -> void:
 	title_block.anchor_right  = 1.0
 	title_block.anchor_top    = 0.5
 	title_block.anchor_bottom = 0.5
-	title_block.offset_top    = -310.0
-	title_block.offset_bottom = -180.0
+	title_block.offset_top    = -350.0
+	title_block.offset_bottom = -220.0
 	title_block.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	root.add_child(title_block)
+	_main_content.add_child(title_block)
 
 	var title := Label.new()
 	title.text = "CONGA MECHS"
@@ -107,7 +120,7 @@ func _build() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(center)
+	_main_content.add_child(center)
 
 	var btn_col := VBoxContainer.new()
 	btn_col.add_theme_constant_override("separation", BTN_GAP)
@@ -120,7 +133,7 @@ func _build() -> void:
 	# LORE_GAP px right of the BTN_W-wide buttons.
 	const LORE_W := 600.0
 	const LORE_GAP := 48.0
-	const BTN_COL_HALF_H := (BTN_H * 4.0 + BTN_GAP * 3.0) * 0.5
+	const BTN_COL_HALF_H := (BTN_H * 5.0 + BTN_GAP * 4.0) * 0.5
 	var lore := Label.new()
 	lore.text = LORE_TEXT
 	UITheme.style_body(lore, UITheme.COLOR_TEXT_SECONDARY)
@@ -137,7 +150,7 @@ func _build() -> void:
 	lore.offset_right  = lore.offset_left + LORE_W
 	lore.offset_top    = -BTN_COL_HALF_H
 	lore.offset_bottom = -BTN_COL_HALF_H + 480.0
-	root.add_child(lore)
+	_main_content.add_child(lore)
 
 	# Mascot drone, sitting under the lore — the visual answer to "You're the
 	# drone." Centered within the lore column so it reads as part of that block.
@@ -156,7 +169,7 @@ func _build() -> void:
 	drone.offset_right  = lore_center_x + DRONE_W * 0.5
 	drone.offset_top    = lore.offset_top + DRONE_TOP_OFFSET
 	drone.offset_bottom = drone.offset_top + DRONE_H
-	root.add_child(drone)
+	_main_content.add_child(drone)
 
 	# "YOU" arrow annotation pointing at the drone — sits to the right of the
 	# drone, overlapping its right edge so the arrowhead lands on the body.
@@ -171,25 +184,35 @@ func _build() -> void:
 	you_arrow.offset_right  = you_arrow.offset_left + ARROW_W
 	you_arrow.offset_top    = drone.offset_top - 20.0
 	you_arrow.offset_bottom = you_arrow.offset_top + ARROW_H
-	root.add_child(you_arrow)
+	_main_content.add_child(you_arrow)
 
-	var play_btn := _make_primary_button("PLAY")
-	var how_btn  := _make_secondary_button("HOW TO PLAY")
-	var grg_btn  := _make_disabled_button("GARAGE — COMING SOON")
-	var quit_btn := _make_secondary_button("QUIT")
+	var play_btn  := _make_primary_button("PLAY")
+	var how_btn   := _make_secondary_button("HOW TO PLAY")
+	var stg_btn   := _make_secondary_button("SETTINGS")
+	var grg_btn   := _make_disabled_button("GARAGE — COMING SOON")
+	var quit_btn  := _make_secondary_button("QUIT")
 
 	play_btn.pressed.connect(_on_play_pressed)
 	how_btn.pressed.connect(_on_how_to_play_pressed)
+	stg_btn.pressed.connect(_on_settings_pressed)
 	quit_btn.pressed.connect(_on_quit_pressed)
 
 	btn_col.add_child(play_btn)
 	btn_col.add_child(how_btn)
+	btn_col.add_child(stg_btn)
 	btn_col.add_child(grg_btn)
 	btn_col.add_child(quit_btn)
 
-	var parade_band := _build_mech_parade(root)
+	var parade_band := _build_mech_parade(_main_content)
 
-	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [play_btn, how_btn, grg_btn, quit_btn])
+	# Settings overlay sits on the root (above _main_content, including the
+	# parade) but starts hidden — _on_settings_pressed brings it up.
+	_settings_overlay = StartScreenSettingsScript.new()
+	_settings_overlay.visible = false
+	_settings_overlay.closed.connect(_on_settings_closed)
+	root.add_child(_settings_overlay)
+
+	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [play_btn, how_btn, stg_btn, grg_btn, quit_btn])
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
@@ -376,6 +399,19 @@ func _on_how_to_play_pressed() -> void:
 	AudioManager.play("ui_click")
 	RunManager.tutorial_only = true
 	get_tree().change_scene_to_file(GAME_SCENE_PATH)
+
+func _on_settings_pressed() -> void:
+	AudioManager.play("ui_click")
+	if _settings_overlay == null:
+		return
+	_main_content.visible = false
+	_settings_overlay.visible = true
+
+func _on_settings_closed() -> void:
+	if _settings_overlay == null:
+		return
+	_settings_overlay.visible = false
+	_main_content.visible = true
 
 func _on_quit_pressed() -> void:
 	AudioManager.play("ui_click")

@@ -111,6 +111,15 @@ func add_scrap(amount: int) -> void:
 	save_to_disk()
 	scrap_changed.emit(total_scrap)
 
+# Wipe meta-progression (scrap + mech-slot unlocks). Audio/window settings are
+# preferences, not progress, so they survive.
+func reset_progress() -> void:
+	total_scrap         = 0
+	unlocked_mech_slots = STARTING_MECH_SLOTS
+	save_to_disk()
+	scrap_changed.emit(total_scrap)
+	unlocks_changed.emit()
+
 func can_afford(cost: int) -> bool:
 	return total_scrap >= cost
 

@@ -9,7 +9,7 @@ extends CanvasLayer
 # below DeathScreen at 60). Pauses the tree on open; resumes on close. The
 # entire layer runs PROCESS_MODE_ALWAYS so it keeps ticking while paused.
 
-const GARAGE_SCENE_PATH := "res://scenes/garage/Garage.tscn"
+const START_SCENE_PATH := "res://scenes/ui/StartScreen.tscn"
 
 const PANEL_PAD_H    := UITheme.PAD_XL * 2
 const PANEL_PAD_V    := UITheme.PAD_XL * 2
@@ -33,6 +33,7 @@ var _main_view:      Control = null
 var _debug_view:     Control = null
 var _settings_view:  Control = null
 var _stat_labels:    Dictionary = {}   # label_key -> Label
+var _level_target:   SpinBox = null
 
 # Resolution presets shown in the settings dropdown. (0,0) is the
 # "Fullscreen" entry — handled specially.
@@ -116,11 +117,11 @@ func _build_main_view() -> Control:
 	var resume   := _make_primary_button("RESUME")
 	var settings := _make_secondary_button("SETTINGS")
 	var debug    := _make_secondary_button("DEBUG")
-	var quit     := _make_secondary_button("QUIT TO GARAGE")
+	var quit     := _make_secondary_button("QUIT TO MENU")
 	resume.pressed.connect(_resume)
 	settings.pressed.connect(_show_settings)
 	debug.pressed.connect(_show_debug)
-	quit.pressed.connect(_quit_to_garage)
+	quit.pressed.connect(_quit_to_menu)
 	btns.add_child(resume)
 	btns.add_child(settings)
 	btns.add_child(debug)
@@ -179,15 +180,13 @@ func _build_debug_view() -> Control:
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(actions)
 
-	var lvl_btn   := _make_secondary_button("FORCE LEVEL UP")
+	actions.add_child(_make_level_jump_row())
 	var gold_btn  := _make_secondary_button("+500 GOLD")
 	var heal_btn  := _make_secondary_button("HEAL ALL MECHS")
 	var kill_btn  := _make_secondary_button("KILL ALL ENEMIES")
-	lvl_btn.pressed.connect(_dbg_level_up)
 	gold_btn.pressed.connect(_dbg_gold)
 	heal_btn.pressed.connect(_dbg_heal)
 	kill_btn.pressed.connect(_dbg_kill_enemies)
-	actions.add_child(lvl_btn)
 	actions.add_child(gold_btn)
 	actions.add_child(heal_btn)
 	actions.add_child(kill_btn)
@@ -355,21 +354,51 @@ func _resume() -> void:
 	get_tree().paused = false
 	queue_free()
 
-func _quit_to_garage() -> void:
+func _quit_to_menu() -> void:
 	AudioManager.play("ui_click")
 	get_tree().paused = false
-	get_tree().change_scene_to_file(GARAGE_SCENE_PATH)
+	get_tree().change_scene_to_file(START_SCENE_PATH)
 
 # ── Debug actions ────────────────────────────────────────────────────────────
 
-func _dbg_level_up() -> void:
+func _make_level_jump_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(BTN_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_S)
+
+	_level_target = SpinBox.new()
+	_level_target.min_value = 2
+	_level_target.max_value = 99
+	_level_target.step      = 1
+	_level_target.value     = float(RunManager.level + 1)
+	_level_target.custom_minimum_size = Vector2(96.0, BTN_H)
+	_level_target.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+	_level_target.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(_level_target)
+
+	var btn := _make_secondary_button("JUMP TO LEVEL")
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0.0, BTN_H)
+	btn.pressed.connect(_dbg_jump_to_level)
+	hbox.add_child(btn)
+	return hbox
+
+func _dbg_jump_to_level() -> void:
 	AudioManager.play("ui_click")
-	# Top off XP to trigger exactly one level-up. The level-up signal fires the
-	# UpgradePicker which expects no other modal in the way — so close ourselves
-	# first. Tree stays paused (the picker re-pauses).
-	var needed: int = maxi(1, RunManager.xp_to_next - RunManager.xp)
+	var target: int = int(_level_target.value)
+	if target <= RunManager.level:
+		return
+	# Sum the XP gates between current level and target. Mirrors RunManager's
+	# multiplicative curve (xp_to_next = round(18 * 1.65^(level-1))) so the
+	# jump lands exactly on the requested level. The picker drains the queued
+	# level-ups one at a time via its _pending counter.
+	var xp_needed: int = RunManager.xp_to_next - RunManager.xp
+	var lvl: int = RunManager.level + 1
+	while lvl < target:
+		xp_needed += roundi(18.0 * pow(1.65, lvl - 1))
+		lvl += 1
 	queue_free()
-	RunManager.add_xp(needed)
+	RunManager.add_xp(xp_needed)
 
 func _dbg_gold() -> void:
 	AudioManager.play("ui_click")
