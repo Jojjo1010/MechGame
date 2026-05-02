@@ -13,13 +13,10 @@ const ENTRIES := [
 ]
 
 # All spacing/size values follow the 8 px design system. Type scale uses its
-# own modular ladder (16/20/24/28/32) and is defined separately.
+# own modular ladder (16/20/24/28/32) and is defined separately. Key-cap
+# sizing lives in KeyChip — referenced here, not duplicated.
 const ROW_GAP    := 32   # between rows — 4× ROW_SEP creates clear grouping
 const ROW_SEP    := 8    # chip ↔ icon ↔ label inside a row
-const KEY_SIZE   := 40.0 # 5×8
-const KEY_GAP    := 4    # half-step
-const SHIFT_W    := 80.0
-const SHIFT_H    := 40.0
 const MOUSE_W    := 32.0
 const MOUSE_H    := 48.0
 const ICON_SIZE  := 32.0
@@ -94,55 +91,10 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 # Picks the chip type that matches the actual input.
 func _make_chip(key_text: String) -> Control:
 	match key_text:
-		"WASD":   return _make_wasd_cluster()
-		"Shift":  return _make_key_cap("SHIFT", SHIFT_W, SHIFT_H, SHIFT_FONT)
+		"WASD":   return KeyChip.make_wasd_cluster(KEY_FONT)
+		"Shift":  return KeyChip.make_key_cap("SHIFT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
 		"Scroll": return _make_mouse_chip()
-		_:        return _make_key_cap(key_text, KEY_SIZE, KEY_SIZE, KEY_FONT)
-
-# Two-row keyboard cluster: W centered above the A/S/D row.
-func _make_wasd_cluster() -> Control:
-	var grid := GridContainer.new()
-	grid.columns      = 3
-	grid.add_theme_constant_override("h_separation", KEY_GAP)
-	grid.add_theme_constant_override("v_separation", KEY_GAP)
-	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	grid.add_child(_make_key_spacer())
-	grid.add_child(_make_key_cap("W", KEY_SIZE, KEY_SIZE, KEY_FONT))
-	grid.add_child(_make_key_spacer())
-	grid.add_child(_make_key_cap("A", KEY_SIZE, KEY_SIZE, KEY_FONT))
-	grid.add_child(_make_key_cap("S", KEY_SIZE, KEY_SIZE, KEY_FONT))
-	grid.add_child(_make_key_cap("D", KEY_SIZE, KEY_SIZE, KEY_FONT))
-	return grid
-
-func _make_key_spacer() -> Control:
-	var s := Control.new()
-	s.custom_minimum_size = Vector2(KEY_SIZE, KEY_SIZE)
-	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return s
-
-# Single keyboard key cap: dark fill, lime hairline border with a slightly
-# thicker bottom edge to imply the key's beveled lip.
-func _make_key_cap(text: String, w: float, h: float, font_size: int) -> PanelContainer:
-	var cap := PanelContainer.new()
-	cap.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	cap.custom_minimum_size  = Vector2(w, h)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color            = UITheme.COLOR_PANEL_ALPHA
-	sb.border_color        = UITheme.COLOR_TEXT_PRIMARY
-	sb.border_width_left   = 2
-	sb.border_width_right  = 2
-	sb.border_width_top    = 2
-	sb.border_width_bottom = 4
-	sb.set_corner_radius_all(4)
-	cap.add_theme_stylebox_override("panel", sb)
-	var lbl := Label.new()
-	lbl.text = text.to_upper()
-	UITheme.style_label_caps(lbl, font_size, UITheme.COLOR_TEXT_PRIMARY)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	cap.add_child(lbl)
-	return cap
+		_:        return KeyChip.make_key_cap(key_text, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
 
 func _make_mouse_chip() -> Control:
 	var m := MouseIcon.new()

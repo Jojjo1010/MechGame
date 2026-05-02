@@ -1,31 +1,36 @@
 extends CanvasLayer
 
-# First-run on-boarding director. Pauses the game and forces the player to
-# perform each core action before continuing — they can't skip past WASD,
-# SHIFT, or LEFT-CLICK without doing them. The repair beat is non-blocking
-# (movement is required to satisfy it) and triggers when a mech first drops
-# below the HP threshold during regular gameplay.
+# Tutorial director launched from the HOW TO PLAY button. The game keeps
+# running underneath the prompt — the player sees the world alive (mechs
+# walking, drone steerable) while learning each control. Each *_SHOWING state
+# waits for its input non-blockingly; each *_FADING state gives a long
+# practice window so the player can mess with the control they just learned.
+# REPAIR_WATCH polls mechs without modal until first damage; REPAIR_SHOWING
+# displays a prompt until the drone gets within range. DONE returns to the
+# start screen.
 #
-# State machine — each *_SHOWING state pauses the tree and waits for the
-# corresponding input; each *_FADING state unpauses for a brief practice
-# window so the player feels their action register before the next prompt
-# overlays. After LMB, control returns to the normal wave loop. REPAIR_WATCH
-# polls mechs without modal until first damage; REPAIR_SHOWING displays a
-# non-pausing prompt until the drone gets within range. DONE persists the
-# SaveData flag and frees the overlay.
+# Visual style mirrors ControlsLegend: chip (real key cap or WASD cluster) +
+# ActionIcon glyph + uppercase action label.
 
 const APPROACH_RADIUS    := 5.0
 const REPAIR_HP_TRIGGER  := 0.60
 const FADE_DUR           := 0.30
-const PRACTICE_DUR       := 1.0    # seconds of free play after each prompt
+const PRACTICE_DUR       := 5.0    # seconds of free play after each prompt
 const REPAIR_WATCH_TIMEOUT := 90.0 # auto-complete tutorial if mechs never get hurt
 
-const PROMPT_PANEL_W     := 600.0
+const PROMPT_PANEL_W     := 640.0
 const PROMPT_PANEL_PAD   := UITheme.PAD_XL
 const PROMPT_CORNER_R    := 16
 # How far down from the top of the screen the modal sits — clears the 64 px
 # XP bar with a comfortable margin so the gameplay below stays visible.
 const PROMPT_TOP_OFFSET  := 140.0
+
+# Chip sizing is shared with ControlsLegend via KeyChip — referenced from
+# there, not duplicated, so the tutorial prompt and the persistent legend on
+# the left side of the HUD never visually drift apart.
+const KEY_FONT   := UITheme.FONT_LABEL_CAPS  # 24 — single-letter caps in WASD
+const SHIFT_FONT := UITheme.FONT_BODY        # 16 — multi-letter wide caps
+const ICON_SIZE  := 40.0
 
 enum State {
 	WASD_SHOWING,  WASD_FADING,
@@ -39,9 +44,10 @@ var _state: State           = State.WASD_SHOWING
 var _state_timer: float     = 0.0
 var _drone:        Node3D   = null
 var _mechs:        Array    = []
-var _was_paused:   bool     = false
 var _modal_root:   PanelContainer = null
-var _chip_label:   Label    = null
+var _row:          HBoxContainer = null
+var _chip_holder:  Control  = null   # swapped each prompt — holds the key chip
+var _action_icon:  ActionIcon = null
 var _action_label: Label    = null
 
 func setup(p_drone: Node3D, p_mechs: Array) -> void:
@@ -51,8 +57,6 @@ func setup(p_drone: Node3D, p_mechs: Array) -> void:
 func _ready() -> void:
 	# Above HUD (10–12) and the upgrade picker (50), below DeathScreen / WinScreen (60).
 	layer = 55
-	# Tutorial drives the pause itself, so it must keep ticking while paused.
-	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build()
 	_enter_state(State.WASD_SHOWING)
 
@@ -91,23 +95,31 @@ func _build() -> void:
 	_modal_root.modulate.a = 0.0
 	top_row.add_child(_modal_root)
 
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", UITheme.PAD_M)
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_modal_root.add_child(col)
+	# Layout mirrors ControlsLegend rows: chip on the left, action glyph in
+	# the middle, uppercase label on the right.
+	_row = HBoxContainer.new()
+	_row.add_theme_constant_override("separation", UITheme.PAD_L)
+	_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_modal_root.add_child(_row)
 
-	_chip_label = Label.new()
-	UITheme.style_label_caps(_chip_label, UITheme.FONT_HEADING_L, UITheme.COLOR_ACCENT_LIME)
-	_chip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_chip_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	col.add_child(_chip_label)
+	_chip_holder = Control.new()
+	_chip_holder.custom_minimum_size = Vector2(0.0, KeyChip.KEY_SIZE * 2.0 + KeyChip.KEY_GAP)
+	_chip_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_row.add_child(_chip_holder)
+
+	_action_icon = ActionIcon.new()
+	_action_icon.accent              = UITheme.COLOR_ACCENT_LIME
+	_action_icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+	_action_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_action_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_row.add_child(_action_icon)
 
 	_action_label = Label.new()
-	UITheme.style_label_caps(_action_label, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_PRIMARY)
-	_action_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_action_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	col.add_child(_action_label)
+	UITheme.style_label_caps(_action_label, UITheme.FONT_HEADING_M, UITheme.COLOR_TEXT_PRIMARY)
+	_action_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_action_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_row.add_child(_action_label)
 
 # ── State machine ────────────────────────────────────────────────────────────
 
@@ -115,46 +127,42 @@ func _enter_state(new_state: State) -> void:
 	_state       = new_state
 	_state_timer = 0.0
 	match new_state:
-		State.WASD_SHOWING:   _show_modal("WASD",        "MOVE THE DRONE", true)
-		State.SHIFT_SHOWING:  _show_modal("SHIFT",       "DASH",           true)
-		State.LMB_SHOWING:    _show_modal("LEFT-CLICK",  "FIRE ULT",       true)
-		State.REPAIR_SHOWING: _show_modal("APPROACH",    "REPAIR DAMAGED MECH", false)
+		State.WASD_SHOWING:   _show_prompt(KeyChip.make_wasd_cluster(KEY_FONT),                                          "move",   "MOVE THE DRONE")
+		State.SHIFT_SHOWING:  _show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT),  "dash",   "DASH")
+		State.LMB_SHOWING:    _show_prompt(KeyChip.make_key_cap("LMB",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT),  "ult",    "FIRE ULT")
+		State.REPAIR_SHOWING: _show_prompt(KeyChip.make_key_cap("APPROACH", KeyChip.SHIFT_W * 1.6, KeyChip.SHIFT_H, SHIFT_FONT), "repair", "REPAIR DAMAGED MECH")
 		State.WASD_FADING, State.SHIFT_FADING, State.LMB_FADING:
 			_hide_modal()
-			_set_paused(false)
 		State.REPAIR_WATCH:
 			_hide_modal()
-			_set_paused(false)
 		State.DONE:
 			_hide_modal()
-			_set_paused(false)
 			# Tutorial only runs via HOW TO PLAY now, so DONE always returns to
 			# the start screen. Clear the flag first so re-entering Game.tscn
 			# from PLAY doesn't re-spawn the tutorial.
 			RunManager.tutorial_only = false
 			var t := create_tween()
-			t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 			t.tween_interval(FADE_DUR + 0.1)
 			t.tween_callback(func() -> void:
 				get_tree().change_scene_to_file("res://scenes/ui/StartScreen.tscn"))
 
-func _show_modal(chip_text: String, action_text: String, pause_tree: bool) -> void:
-	_chip_label.text   = chip_text.to_upper()
-	_action_label.text = action_text.to_upper()
-	_set_paused(pause_tree)
+func _show_prompt(chip: Control, icon_id: String, action_text: String) -> void:
+	# Swap the chip into the holder slot. Frees any previous chip so the row
+	# always has exactly one input visualization.
+	for child in _chip_holder.get_children():
+		child.queue_free()
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_chip_holder.add_child(chip)
+	_chip_holder.custom_minimum_size.x = chip.custom_minimum_size.x
+	_action_icon.set_action(icon_id)
+	_action_label.text = action_text
 	var t := create_tween()
-	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	t.tween_property(_modal_root, "modulate:a", 1.0, FADE_DUR)
 
 func _hide_modal() -> void:
 	var t := create_tween()
-	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	t.tween_property(_modal_root, "modulate:a", 0.0, FADE_DUR)
 
-# Pauses or unpauses the tree, but only flips state if it would change. Avoids
-# fighting an upstream pause from another system (e.g. PauseMenu).
-func _set_paused(should_pause: bool) -> void:
-	get_tree().paused = should_pause
 
 # ── Per-frame ────────────────────────────────────────────────────────────────
 
