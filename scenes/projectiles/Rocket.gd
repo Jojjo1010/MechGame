@@ -158,12 +158,10 @@ func _build_mesh() -> void:
 	exhaust_mi.position.y = -body_height * 0.55
 	_mesh_node.add_child(exhaust_mi)
 
-	var light := OmniLight3D.new()
-	light.light_color    = tint
-	light.light_energy   = 6.5 if _is_ult else 4.5
-	light.omni_range     = 6.5 if _is_ult else 5.0
-	light.shadow_enabled = false
-	add_child(light)
+	# No in-flight OmniLight: rockets pile up airborne at high fire rates, and
+	# each cluster light has Forward+ overhead. The unshaded emissive exhaust
+	# above already gives the rocket its visible glow. Detonation light below
+	# is short-lived so it stays.
 
 	# Ground blob shadow that tracks the rocket's XZ — gives a clear "where will
 	# this land" cue independent of the sun-cast shadow at altitude.

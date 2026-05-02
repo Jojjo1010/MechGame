@@ -70,18 +70,16 @@ func _build_mesh() -> void:
 		mat.emission = tint
 		mat.emission_energy_multiplier = 4.0
 	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	# Disable shadow casting on bullets entirely — at high waves there can be
+	# 50+ bullets in flight from 3 mechs simultaneously, and per-bullet shadow
+	# rendering compounds with cluster-build cost. Bullets move too fast for
+	# shadow detail to read anyway.
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
-	# Only crit/ult bullets get a light — passive bullets accumulate fast and
-	# every OmniLight pays cluster-build cost per frame in Forward+.
-	if _is_crit or _is_ult:
-		var light := OmniLight3D.new()
-		light.light_color = Color(1.0, 0.6, 0.1)
-		light.light_energy = 5.0 if _is_ult else 2.5
-		light.omni_range   = 4.5 if _is_ult else 3.0
-		light.shadow_enabled = false
-		add_child(light)
+	# No bullet OmniLights at all — the bullet's emissive material gives the
+	# visible glow. With 3 GUN mechs each capable of firing 9–30 ult bullets
+	# per cast simultaneously, light count was the dominant Forward+ cost.
 
 func _process(delta: float) -> void:
 	global_position += direction * SPEED * delta

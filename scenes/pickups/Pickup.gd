@@ -71,12 +71,9 @@ func _build_mesh() -> void:
 		mat.emission_energy_multiplier = 2.5
 		_build_sphere(mat)
 
-	var light := OmniLight3D.new()
-	light.light_color    = Color(0.7, 0.2, 1.0) if type == Type.XP else Color(1.0, 0.75, 0.0)
-	light.light_energy   = 1.2
-	light.omni_range     = 2.5
-	light.shadow_enabled = false
-	add_child(light)
+	# No OmniLight: pickups accumulate uncollected on the ground at higher
+	# waves, and Forward+ cluster cost scales with active light count. The
+	# unshaded emissive material above already gives them their visible glow.
 
 func _build_diamond(mat: StandardMaterial3D) -> void:
 	# Two cones joined at the waist — classic gem/diamond silhouette
