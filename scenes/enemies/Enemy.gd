@@ -458,11 +458,9 @@ func _spawn_pickups() -> void:
 	var xp_total: int = randi_range(5, 7) if is_elite else randi_range(2, 4)
 	Pickup.queue_xp(xp_total, global_position, scene)
 
+	# Gold drops route through queue_gold so an elite swarm collapses into a
+	# few BIG/HUGE coins at the cluster center instead of N×3 SMALL coins.
 	if is_elite:
-		# Guaranteed multi-coin gold drop on elites.
-		for i in 3:
-			var off := Vector3(randf_range(-0.8, 0.8), 0.5, randf_range(-0.8, 0.8))
-			Pickup.spawn(Pickup.Type.GOLD, 1, global_position + off, scene)
+		Pickup.queue_gold(3, global_position, scene)
 	elif randf() < 0.35:
-		var off := Vector3(randf_range(-0.6, 0.6), 0.5, randf_range(-0.6, 0.6))
-		Pickup.spawn(Pickup.Type.GOLD, 1, global_position + off, scene)
+		Pickup.queue_gold(1, global_position, scene)
