@@ -43,6 +43,11 @@ static func make_wasd_cluster(font_size: int = UITheme.FONT_LABEL_CAPS) -> Contr
 	grid.add_theme_constant_override("h_separation", KEY_GAP)
 	grid.add_theme_constant_override("v_separation", KEY_GAP)
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Without an explicit minimum here, callers that read `custom_minimum_size`
+	# at insert time (TutorialPrompts' chip holder) get 0 — the grid only
+	# auto-sizes once it's been laid out, which is too late, and the chip
+	# spills into the action icon / label downstream.
+	grid.custom_minimum_size = Vector2(3.0 * KEY_SIZE + 2.0 * KEY_GAP, 2.0 * KEY_SIZE + KEY_GAP)
 	grid.add_child(_make_spacer())
 	grid.add_child(make_key_cap("W", KEY_SIZE, KEY_SIZE, font_size))
 	grid.add_child(_make_spacer())

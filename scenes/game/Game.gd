@@ -73,20 +73,30 @@ func _ready() -> void:
 	RunManager.reset_run()
 	_setup_camera()
 	_setup_environment()
-	_spawn_mech_line(SaveData.unlocked_mech_slots)
+	# Tutorial always uses the 3 starter slots — the player hasn't been taught
+	# what extra mech slots cost or how the 4th archetype (ROCKET) plays, so
+	# don't surface them yet even if SaveData has unlocked more.
+	var mech_count: int = 3 if RunManager.tutorial_only else SaveData.unlocked_mech_slots
+	_spawn_mech_line(mech_count)
 	_spawn_drone()
-	wave_spawner.setup(enemies_root)
 	mech_options.setup(camera)
 	mech_options.repair_pressed.connect(_on_mech_repair_pressed)
-	_spawn_controls_legend()
-	_spawn_xp_bar()
-	_spawn_gold_counter()
-	_spawn_ult_bar()
-	_spawn_upgrade_picker()
-	_spawn_drone_hint()
-	_spawn_left_click_hint()
 	if RunManager.tutorial_only:
+		# Tutorial sandbox: introduce things only as the prompts call for them.
+		# Wave spawner / XP / ult bar / upgrade picker / legend would all show
+		# up before they're explained, so skip them here. The MechOptionsPanel
+		# stays — it's the in-world prompt the tutorial points the player at.
+		wave_spawner.process_mode = Node.PROCESS_MODE_DISABLED
 		_spawn_tutorial_prompts()
+	else:
+		wave_spawner.setup(enemies_root)
+		_spawn_controls_legend()
+		_spawn_xp_bar()
+		_spawn_gold_counter()
+		_spawn_ult_bar()
+		_spawn_upgrade_picker()
+		_spawn_drone_hint()
+		_spawn_left_click_hint()
 	RunManager.run_won.connect(_on_run_won)
 	AudioManager.play_music("bgm_main", -12.0)
 

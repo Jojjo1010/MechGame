@@ -53,6 +53,11 @@ func add_gold(amount: int) -> void:
 	gold_changed.emit(gold)
 
 func add_xp(amount: int) -> void:
+	# HOW TO PLAY runs the tutorial in a calm sandbox; suppress XP so the
+	# UpgradePicker can't fire mid-tutorial — the player hasn't been taught
+	# what an upgrade is yet.
+	if tutorial_only:
+		return
 	xp += amount
 	while xp >= xp_to_next:
 		xp        -= xp_to_next
