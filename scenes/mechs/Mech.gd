@@ -674,9 +674,36 @@ func _on_died() -> void:
 		fall.tween_property(model, "rotation:x", -PI * 0.5, FALL_DURATION) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
+	_spawn_died_label()
+
 	# Self-cleanup after the linger window so the line has time to walk over.
 	var t := get_tree().create_timer(CORPSE_LINGER)
 	t.timeout.connect(queue_free)
+
+# Big billboarded "DIED" text that punches in over the falling mech, holds,
+# then drifts up and fades. Parented to the mech root (not the model) so the
+# fall tilt doesn't rotate the label, and so it gets queue_free'd with the
+# corpse after CORPSE_LINGER.
+func _spawn_died_label() -> void:
+	var lbl := Label3D.new()
+	lbl.text             = "DIED"
+	lbl.font_size        = 160
+	lbl.modulate         = UITheme.COLOR_ACCENT_WARN
+	lbl.outline_size     = 18
+	lbl.outline_modulate = Color(0.0, 0.0, 0.0, 1.0)
+	lbl.billboard        = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test    = true
+	lbl.render_priority  = 12
+	lbl.position         = Vector3(0.0, 4.6, 0.0)
+	lbl.scale            = Vector3.ONE * 0.1
+	add_child(lbl)
+	var tw := create_tween()
+	tw.tween_property(lbl, "scale", Vector3.ONE * 1.35, 0.18) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "scale", Vector3.ONE * 1.0, 0.10)
+	tw.tween_interval(0.9)
+	tw.tween_property(lbl, "position:y", 5.6, 1.2)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.6)
 
 # Returns extra Y offset for the model so the mech arcs over any nearby corpse
 # in its march path. Parabolic — peak when directly over the corpse, zero

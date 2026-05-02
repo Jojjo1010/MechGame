@@ -36,6 +36,12 @@ const CAM_ZOOM_STEP := 1.5
 
 var _cam_zoom: float = CAM_ZOOM_MAX
 
+# Screen-shake state. Triggered by mech death (and any other future "thump"
+# events). Strength is in world units of camera-position offset; decays to 0.
+const SHAKE_DECAY := 8.0
+var _shake_strength: float = 0.0
+var _shake_offset:   Vector3 = Vector3.ZERO
+
 @onready var camera_rig:       Node3D = $CameraRig
 @onready var camera:           Camera3D = $CameraRig/Camera3D
 @onready var mechs_root:       Node3D = $Mechs
@@ -249,8 +255,20 @@ func _follow_camera(delta: float) -> void:
 	# Smooth zoom
 	camera.size = lerpf(camera.size, _cam_zoom, CAM_SMOOTH * delta)
 
-	camera.position = CAM_OFFSET
+	# Pick a fresh random offset each frame for that "impact" feel; decays
+	# exponentially so the shake settles within a fraction of a second.
+	if _shake_strength > 0.0:
+		_shake_strength = maxf(0.0, _shake_strength - SHAKE_DECAY * delta)
+		var k := _shake_strength
+		_shake_offset = Vector3(randf_range(-k, k), randf_range(-k, k), randf_range(-k, k))
+	else:
+		_shake_offset = Vector3.ZERO
+
+	camera.position = CAM_OFFSET + _shake_offset
 	camera.look_at(camera_rig.global_position, Vector3.UP)
+
+func shake_camera(strength: float) -> void:
+	_shake_strength = maxf(_shake_strength, strength)
 
 # --- Environment ---
 
@@ -390,6 +408,9 @@ func _spawn_mech_line(count: int) -> void:
 		_weapons.append(w)
 
 func _on_mech_died(mech: Node3D) -> void:
+	# Heavy thump on each mech loss — pairs with the floating "DIED" label
+	# spawned by Mech._on_died and the mech_death audio cue.
+	shake_camera(0.55)
 	# Pull the dead mech off the field and re-link the conga line so survivors
 	# don't try to follow a freed node. Then rebuild the UltBar so its slot
 	# count matches the surviving line.
