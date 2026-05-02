@@ -4,7 +4,6 @@ const BurstVFX     = preload("res://scenes/vfx/BurstVFX.gd")
 const HealthBar3D  = preload("res://scenes/ui/HealthBar3D.gd")
 const DamageNumber = preload("res://scenes/ui/DamageNumber.gd")
 const Pickup       = preload("res://scenes/pickups/Pickup.gd")
-const OUTLINE_SHADER = preload("res://scenes/vfx/mech_outline.gdshader")
 const EnemyGridCS    = preload("res://scenes/enemies/EnemyGrid.gd")
 
 const SPEED := 4.5
@@ -42,6 +41,9 @@ var is_elite:    bool = false
 var health: float = max_health
 var attack_timer: float = 0.0
 var target_mech: Node3D = null
+# Per-enemy phase offset for the staggered retarget cadence — without it every
+# enemy would re-evaluate target on the same frame and spike the cost.
+var _retarget_phase: int = 0
 var _health_bar: Node3D = null
 var _mesh_instances: Array[MeshInstance3D] = []
 var _flash_mat: StandardMaterial3D = null
@@ -75,8 +77,11 @@ var _dmg_coalesce_frames: int  = 0
 
 signal enemy_died()
 
+const RETARGET_INTERVAL_FRAMES := 10
+
 func _ready() -> void:
 	add_to_group("enemies")
+	_retarget_phase = randi() % RETARGET_INTERVAL_FRAMES
 	if not is_dummy:
 		_apply_wave_scaling()
 	health = max_health
@@ -94,7 +99,6 @@ func _ready() -> void:
 		if mi:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_mesh_instances.append(mi)
-	_add_permanent_outline()
 	_add_blob_shadow(0.5, 2.5)
 	# HP bar — hidden until first hit
 	_health_bar = Node3D.new()
@@ -169,21 +173,6 @@ func _make_head_mat(albedo: Color, emission: Color, energy: float) -> StandardMa
 	m.emission                      = emission
 	m.emission_energy_multiplier    = energy
 	return m
-
-func _add_permanent_outline() -> void:
-	for src in _mesh_instances:
-		if not is_instance_valid(src) or src.mesh == null:
-			continue
-		var ol := MeshInstance3D.new()
-		ol.mesh = src.mesh
-		ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var sm := ShaderMaterial.new()
-		sm.shader = OUTLINE_SHADER
-		sm.set_shader_parameter("outline_color", Color(0.0, 0.0, 0.0, 1.0))
-		sm.set_shader_parameter("outline_size", 0.08)
-		ol.material_override = sm
-		src.add_child(ol)
-		ol.transform = Transform3D.IDENTITY
 
 func _add_shadow_decal(width: float, depth: float, char_height: float) -> void:
 	const SUN_Y_DEG := 42.0
@@ -334,7 +323,13 @@ func _process(delta: float) -> void:
 	if is_dummy:
 		return
 
-	_find_target()
+	# Re-pick target every ~10 frames (staggered per enemy) instead of every
+	# frame. Forces an immediate refresh if the current target is gone or dead
+	# so kills don't leave enemies frozen for up to 10 frames.
+	var alive: Variant = target_mech.get("is_alive") if (target_mech != null and is_instance_valid(target_mech)) else null
+	var stale: bool = target_mech == null or not is_instance_valid(target_mech) or alive == false
+	if stale or (Engine.get_process_frames() + _retarget_phase) % RETARGET_INTERVAL_FRAMES == 0:
+		_find_target()
 
 	var sep := _get_separation()
 
