@@ -105,6 +105,17 @@ func notify_kill() -> void:
 func emit_run_won() -> void:
 	run_won.emit()
 
+# Debug: jump straight to `target_level` without firing the level_up signal
+# (so JUMP TO LEVEL doesn't queue N upgrade-pickers in a row). xp resets to 0
+# and xp_to_next is recomputed from the same curve add_xp uses.
+func set_level(target_level: int) -> void:
+	if target_level < 1:
+		return
+	level      = target_level
+	xp         = 0
+	xp_to_next = roundi(18.0 * pow(1.65, float(level - 1)))
+	xp_changed.emit(xp, xp_to_next)
+
 func reset_run() -> void:
 	wave       = 0
 	gold       = 0

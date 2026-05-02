@@ -221,6 +221,22 @@ func _show_picker() -> void:
 	_rolled_target_idx = available_targets[randi() % available_targets.size()]
 	_offered = Upgrades.pick_weighted(_available_pools[_rolled_target_idx], N_OFFERS)
 
+	# Single eligible target (last mech standing, or the others have all
+	# capped) — the spin reveals nothing. Snap the carousel and skip straight
+	# to the cards.
+	if available_targets.size() == 1:
+		_root.visible = true
+		get_tree().paused = true
+		if _carousel != null and is_instance_valid(_carousel):
+			# duration=0, revs=0 → tween fires the same frame, no perceived spin.
+			_carousel.call("spin_to", _rolled_target_idx, 0.0, 0.0)
+		_refresh_subtitle()
+		_refresh_equipped_slots()
+		_equipped_row.visible = true
+		_refresh_cards()
+		_cards_row.visible = true
+		return
+
 	# Roll setup: subtitle says "Rolling…", equipped section hidden, cards
 	# row visible with placeholder ??? cards. Cards flip to real after the
 	# carousel disk lands on the rolled mech.

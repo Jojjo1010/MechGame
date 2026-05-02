@@ -10,6 +10,7 @@ extends CanvasLayer
 # entire layer runs PROCESS_MODE_ALWAYS so it keeps ticking while paused.
 
 const START_SCENE_PATH := "res://scenes/ui/StartScreen.tscn"
+const Upgrades         := preload("res://src/Upgrades.gd")
 
 const PANEL_PAD_H    := UITheme.PAD_XL * 2
 const PANEL_PAD_V    := UITheme.PAD_XL * 2
@@ -35,6 +36,8 @@ var _settings_view:  Control = null
 var _stat_labels:    Dictionary = {}   # label_key -> Label
 var _level_target:   SpinBox = null
 var _wave_target:    SpinBox = null
+var _upgrade_target: OptionButton = null
+var _upgrade_choice: OptionButton = null
 
 # Resolution presets shown in the settings dropdown. (0,0) is the
 # "Fullscreen" entry — handled specially.
@@ -183,6 +186,7 @@ func _build_debug_view() -> Control:
 
 	actions.add_child(_make_wave_jump_row())
 	actions.add_child(_make_level_jump_row())
+	actions.add_child(_make_add_upgrade_row())
 	var gold_btn  := _make_secondary_button("+500 GOLD")
 	var heal_btn  := _make_secondary_button("HEAL ALL MECHS")
 	var kill_btn  := _make_secondary_button("KILL ALL ENEMIES")
@@ -427,17 +431,91 @@ func _dbg_jump_to_level() -> void:
 	var target: int = int(_level_target.value)
 	if target <= RunManager.level:
 		return
-	# Sum the XP gates between current level and target. Mirrors RunManager's
-	# multiplicative curve (xp_to_next = round(18 * 1.65^(level-1))) so the
-	# jump lands exactly on the requested level. The picker drains the queued
-	# level-ups one at a time via its _pending counter.
-	var xp_needed: int = RunManager.xp_to_next - RunManager.xp
-	var lvl: int = RunManager.level + 1
-	while lvl < target:
-		xp_needed += roundi(18.0 * pow(1.65, lvl - 1))
-		lvl += 1
+	# Silent jump — RunManager.set_level skips the level_up signal so we don't
+	# queue a stack of upgrade pickers (one per level skipped). Use the new
+	# ADD UPGRADE row to grant specific upgrades after jumping.
+	RunManager.set_level(target)
 	queue_free()
-	RunManager.add_xp(xp_needed)
+
+# ── ADD UPGRADE row ──────────────────────────────────────────────────────────
+# Mech dropdown + upgrade dropdown + ADD button. Lets you grant a specific
+# upgrade to a specific mech without going through the level-up picker. The
+# upgrade list filters to entries whose target matches the selected mech, so
+# the second dropdown stays scoped.
+func _make_add_upgrade_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(BTN_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_S)
+
+	_upgrade_target = OptionButton.new()
+	_upgrade_target.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+	_upgrade_target.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for w in _get_run_weapons():
+		if w == null:
+			continue
+		_upgrade_target.add_item(String(w.weapon_name))
+	_upgrade_target.item_selected.connect(_on_upgrade_target_changed)
+	hbox.add_child(_upgrade_target)
+
+	_upgrade_choice = OptionButton.new()
+	_upgrade_choice.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+	_upgrade_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_upgrade_choice.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(_upgrade_choice)
+	_populate_upgrade_choices()
+
+	var btn := _make_secondary_button("ADD")
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.custom_minimum_size = Vector2(96.0, BTN_H)
+	btn.pressed.connect(_dbg_apply_upgrade)
+	hbox.add_child(btn)
+	return hbox
+
+func _on_upgrade_target_changed(_idx: int) -> void:
+	_populate_upgrade_choices()
+
+func _populate_upgrade_choices() -> void:
+	if _upgrade_choice == null or _upgrade_target == null:
+		return
+	_upgrade_choice.clear()
+	if _upgrade_target.item_count == 0:
+		return
+	var target_name := _upgrade_target.get_item_text(_upgrade_target.selected)
+	for d in Upgrades.ALL:
+		if String(d.target) == target_name:
+			_upgrade_choice.add_item(String(d.title))
+
+func _dbg_apply_upgrade() -> void:
+	AudioManager.play("ui_click")
+	if _upgrade_target == null or _upgrade_choice == null:
+		return
+	if _upgrade_target.item_count == 0 or _upgrade_choice.item_count == 0:
+		return
+	var target_name := _upgrade_target.get_item_text(_upgrade_target.selected)
+	var title       := _upgrade_choice.get_item_text(_upgrade_choice.selected)
+	var upgrade: Dictionary = {}
+	for d in Upgrades.ALL:
+		if String(d.target) == target_name and String(d.title) == title:
+			upgrade = d
+			break
+	if upgrade.is_empty():
+		return
+	var weapons := _get_run_weapons()
+	if weapons.is_empty():
+		return
+	Upgrades.apply(upgrade, weapons)
+	RunManager.record_upgrade(upgrade)
+
+# Pulls the live weapons array off Game.gd. Game owns the canonical list and
+# replays it whenever a mech dies, so this stays in sync without us tracking it.
+func _get_run_weapons() -> Array:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return []
+	var raw: Variant = scene.get("_weapons")
+	if raw is Array:
+		return raw
+	return []
 
 func _dbg_gold() -> void:
 	AudioManager.play("ui_click")
