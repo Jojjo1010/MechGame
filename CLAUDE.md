@@ -6,15 +6,16 @@ Read this first. It's the cold-start brief for any Claude session on this repo.
 
 **Conga Mechs** — Godot 4.6 roguelite. Solo dev. Repo: `Jojjo1010/MechGame`.
 
-You play a drone hovering over a marching line of three mechs. The mechs auto-fire at enemies; the drone supports them by triggering ults (E), repairing damage (F), and dashing (Space). Survive waves; level up; pick upgrades.
+You play a drone hovering over a marching line of four mechs. The mechs auto-fire at enemies; the drone supports them by triggering ults (E), repairing damage (F), and dashing (Space). Survive waves; level up; pick upgrades.
 
-Three weapon archetypes — one per mech in the line:
+Four weapon archetypes — one per mech in the starting line:
 
 | Weapon | Archetype | Tint | Role |
 |---|---|---|---|
 | `GUN` | **VOLLEY** | Orange-red `#e07338` | Sustained precision fire |
 | `GARLIC` | **AEGIS** | Teal-green `#3acb74` | Aura support, damage shield |
 | `BEAM` | **ARC** | Electric blue `#3aa6e6` | Chained beam strikes |
+| `ROCKET` | **SALVO** | Saffron `#e6a93a` | Heavy splash ordnance |
 
 Identity lives in `scenes/mechs/MechArchetypes.gd` — `name_for(weapon_name)`, `color_for(weapon_name)`, `tagline_for(weapon_name)`. Game.gd colors mechs by weapon, not line position.
 
