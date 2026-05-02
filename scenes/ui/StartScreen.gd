@@ -12,13 +12,12 @@ const GAME_SCENE_PATH := "res://scenes/game/Game.tscn"
 # World/run flavor that used to live on its own crawl page. Reads above the
 # button column so the player gets the setup before they hit PLAY.
 const LORE_TEXT := \
-	"The mechs only walk forward.\n" + \
+	"The mechs haul cargo.\n" + \
+	"Turning was a paid upgrade. Nobody bought it.\n" + \
 	"The delivery was supposed to take a week —\n" + \
 	"it has been a hundred years.\n\n" + \
-	"VOLLEY shoots. AEGIS reeks of garlic.\n" + \
-	"ARC zaps. Mostly enemies.\n\n" + \
 	"You're the drone. Patch the dents,\n" + \
-	"set off the ults, and please don't tell them."
+	"set off the ults, keep them walking."
 
 # Layout tokens — same 8 px grid the rest of the UI uses.
 const PANEL_CORNER_R := 16
