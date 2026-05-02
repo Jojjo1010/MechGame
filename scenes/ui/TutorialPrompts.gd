@@ -1,166 +1,189 @@
 extends CanvasLayer
 
-# First-run on-boarding overlay. A short stack of hint rows on the right edge
-# of the screen — each row fades out the moment its action is satisfied. Once
-# all four are dismissed, the player is marked "tutorialized" via SaveData
-# and the overlay frees itself; Game.gd no longer spawns it on subsequent runs.
+# First-run on-boarding director. Pauses the game and forces the player to
+# perform each core action before continuing — they can't skip past WASD,
+# SHIFT, or LEFT-CLICK without doing them. The repair beat is non-blocking
+# (movement is required to satisfy it) and triggers when a mech first drops
+# below the HP threshold during regular gameplay.
 #
-# Designed to be unobtrusive: rows are small, sit out of the way of mechs
-# and the action, and don't block input. No modal pause, no enforced order —
-# whatever the player does first, the matching hint vanishes.
+# State machine — each *_SHOWING state pauses the tree and waits for the
+# corresponding input; each *_FADING state unpauses for a brief practice
+# window so the player feels their action register before the next prompt
+# overlays. After LMB, control returns to the normal wave loop. REPAIR_WATCH
+# polls mechs without modal until first damage; REPAIR_SHOWING displays a
+# non-pausing prompt until the drone gets within range. DONE persists the
+# SaveData flag and frees the overlay.
 
-const ROW_W           := 320.0
-const ROW_H           := 56.0
-const ROW_GAP         := 12
-const PANEL_CORNER_R  := 10
-const SIDE_MARGIN     := 32.0
-const FADE_DUR        := 0.45
+const APPROACH_RADIUS    := 5.0
+const REPAIR_HP_TRIGGER  := 0.60
+const FADE_DUR           := 0.30
+const PRACTICE_DUR       := 1.0    # seconds of free play after each prompt
+const REPAIR_WATCH_TIMEOUT := 90.0 # auto-complete tutorial if mechs never get hurt
 
-# Drone-mech proximity that counts as "approached" — must match Game.gd's
-# DRONE_INTERACT_RADIUS so the dismissal lines up with when MechOptionsPanel
-# would actually let the player repair.
-const APPROACH_RADIUS := 5.0
-const REPAIR_HP_TRIGGER := 0.60   # mech HP fraction below which the repair hint surfaces
+const PROMPT_PANEL_W     := 600.0
+const PROMPT_PANEL_PAD   := UITheme.PAD_XL
+const PROMPT_CORNER_R    := 16
 
-enum HintId { WASD, SHIFT, LMB, REPAIR }
+enum State {
+	WASD_SHOWING,  WASD_FADING,
+	SHIFT_SHOWING, SHIFT_FADING,
+	LMB_SHOWING,   LMB_FADING,
+	REPAIR_WATCH,  REPAIR_SHOWING,
+	DONE,
+}
 
-var _drone:  Node3D = null
-var _mechs:  Array  = []
-var _rows: Dictionary = {}        # HintId → PanelContainer
-var _dismissed: Dictionary = {}   # HintId → bool
-
-# Visibility-gating state.
-var _repair_visible: bool = false
-var _all_done:       bool = false
+var _state: State           = State.WASD_SHOWING
+var _state_timer: float     = 0.0
+var _drone:        Node3D   = null
+var _mechs:        Array    = []
+var _was_paused:   bool     = false
+var _modal_root:   PanelContainer = null
+var _chip_label:   Label    = null
+var _action_label: Label    = null
 
 func setup(p_drone: Node3D, p_mechs: Array) -> void:
 	_drone = p_drone
 	_mechs = p_mechs
 
 func _ready() -> void:
-	layer = 12   # above the HUD strip, below pause / death / win modals
-	process_mode = Node.PROCESS_MODE_PAUSABLE
+	# Above HUD (10–12) and the upgrade picker (50), below DeathScreen / WinScreen (60).
+	layer = 55
+	# Tutorial drives the pause itself, so it must keep ticking while paused.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build()
+	_enter_state(State.WASD_SHOWING)
+
+# ── Layout ───────────────────────────────────────────────────────────────────
 
 func _build() -> void:
-	var anchor := Control.new()
-	anchor.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(anchor)
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Don't intercept clicks — let LMB during LMB_SHOWING reach the polling.
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(center)
+
+	_modal_root = PanelContainer.new()
+	_modal_root.custom_minimum_size = Vector2(PROMPT_PANEL_W, 0.0)
+	_modal_root.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	var sb := UITheme.panel_stylebox(UITheme.COLOR_BORDER_BRIGHT)
+	sb.bg_color              = UITheme.COLOR_PANEL
+	sb.set_corner_radius_all(PROMPT_CORNER_R)
+	sb.content_margin_left   = PROMPT_PANEL_PAD
+	sb.content_margin_right  = PROMPT_PANEL_PAD
+	sb.content_margin_top    = PROMPT_PANEL_PAD
+	sb.content_margin_bottom = PROMPT_PANEL_PAD
+	_modal_root.add_theme_stylebox_override("panel", sb)
+	_modal_root.modulate.a = 0.0
+	center.add_child(_modal_root)
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", ROW_GAP)
+	col.add_theme_constant_override("separation", UITheme.PAD_M)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Anchor: right edge, vertically centered in viewport.
-	col.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	col.position = Vector2(-ROW_W - SIDE_MARGIN, -((ROW_H + ROW_GAP) * 2))
-	anchor.add_child(col)
+	_modal_root.add_child(col)
 
-	_rows[HintId.WASD]   = _make_row("WASD",        "MOVE")
-	_rows[HintId.SHIFT]  = _make_row("SHIFT",       "DASH")
-	_rows[HintId.LMB]    = _make_row("LEFT-CLICK",  "FIRE ULT")
-	_rows[HintId.REPAIR] = _make_row("APPROACH",    "REPAIR DAMAGED MECH")
+	_chip_label = Label.new()
+	UITheme.style_label_caps(_chip_label, UITheme.FONT_HEADING_L, UITheme.COLOR_ACCENT_LIME)
+	_chip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_chip_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	col.add_child(_chip_label)
 
-	for id in [HintId.WASD, HintId.SHIFT, HintId.LMB, HintId.REPAIR]:
-		var row: PanelContainer = _rows[id]
-		col.add_child(row)
-		# REPAIR starts hidden; surfaces when a mech first drops below the HP
-		# threshold so it doesn't compete for attention before it's relevant.
-		if id == HintId.REPAIR:
-			row.modulate.a = 0.0
+	_action_label = Label.new()
+	UITheme.style_label_caps(_action_label, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_PRIMARY)
+	_action_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_action_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	col.add_child(_action_label)
 
-func _make_row(chip_text: String, action_text: String) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(ROW_W, ROW_H)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color     = UITheme.COLOR_PANEL_ALPHA
-	sb.border_color = UITheme.COLOR_BORDER_BRIGHT
-	sb.set_border_width_all(int(UITheme.PANEL_BORDER_W))
-	sb.set_corner_radius_all(PANEL_CORNER_R)
-	sb.content_margin_left   = UITheme.PAD_M
-	sb.content_margin_right  = UITheme.PAD_M
-	sb.content_margin_top    = UITheme.PAD_S
-	sb.content_margin_bottom = UITheme.PAD_S
-	panel.add_theme_stylebox_override("panel", sb)
+# ── State machine ────────────────────────────────────────────────────────────
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", UITheme.PAD_M)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(row)
+func _enter_state(new_state: State) -> void:
+	_state       = new_state
+	_state_timer = 0.0
+	match new_state:
+		State.WASD_SHOWING:   _show_modal("WASD",        "MOVE THE DRONE", true)
+		State.SHIFT_SHOWING:  _show_modal("SHIFT",       "DASH",           true)
+		State.LMB_SHOWING:    _show_modal("LEFT-CLICK",  "FIRE ULT",       true)
+		State.REPAIR_SHOWING: _show_modal("APPROACH",    "REPAIR DAMAGED MECH", false)
+		State.WASD_FADING, State.SHIFT_FADING, State.LMB_FADING:
+			_hide_modal()
+			_set_paused(false)
+		State.REPAIR_WATCH:
+			_hide_modal()
+			_set_paused(false)
+		State.DONE:
+			_hide_modal()
+			_set_paused(false)
+			SaveData.mark_tutorial_seen()
+			# Wait for the fade to finish before freeing.
+			var t := create_tween()
+			t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+			t.tween_interval(FADE_DUR + 0.1)
+			t.tween_callback(queue_free)
 
-	var chip := Label.new()
-	chip.text = chip_text
-	UITheme.style_label_caps(chip, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_ACCENT_LIME)
-	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(chip)
+func _show_modal(chip_text: String, action_text: String, pause_tree: bool) -> void:
+	_chip_label.text   = chip_text.to_upper()
+	_action_label.text = action_text.to_upper()
+	_set_paused(pause_tree)
+	var t := create_tween()
+	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	t.tween_property(_modal_root, "modulate:a", 1.0, FADE_DUR)
 
-	var action := Label.new()
-	action.text = action_text
-	UITheme.style_label_caps(action, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_PRIMARY)
-	action.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	action.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	action.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(action)
-	return panel
+func _hide_modal() -> void:
+	var t := create_tween()
+	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	t.tween_property(_modal_root, "modulate:a", 0.0, FADE_DUR)
 
-# ── Polling ──────────────────────────────────────────────────────────────────
+# Pauses or unpauses the tree, but only flips state if it would change. Avoids
+# fighting an upstream pause from another system (e.g. PauseMenu).
+func _set_paused(should_pause: bool) -> void:
+	get_tree().paused = should_pause
 
-func _process(_delta: float) -> void:
-	if _all_done:
-		return
-	_check_wasd()
-	_check_shift()
-	_check_lmb()
-	_check_repair()
-	_check_done()
+# ── Per-frame ────────────────────────────────────────────────────────────────
 
-func _check_wasd() -> void:
-	if _dismissed.get(HintId.WASD, false):
-		return
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) \
-			or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D):
-		_dismiss(HintId.WASD)
+func _process(delta: float) -> void:
+	_state_timer += delta
+	match _state:
+		State.WASD_SHOWING:
+			if _wasd_pressed():
+				_enter_state(State.WASD_FADING)
+		State.WASD_FADING:
+			if _state_timer >= PRACTICE_DUR:
+				_enter_state(State.SHIFT_SHOWING)
+		State.SHIFT_SHOWING:
+			if Input.is_key_pressed(KEY_SHIFT):
+				_enter_state(State.SHIFT_FADING)
+		State.SHIFT_FADING:
+			if _state_timer >= PRACTICE_DUR:
+				_enter_state(State.LMB_SHOWING)
+		State.LMB_SHOWING:
+			if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+				_enter_state(State.LMB_FADING)
+		State.LMB_FADING:
+			if _state_timer >= PRACTICE_DUR:
+				_enter_state(State.REPAIR_WATCH)
+		State.REPAIR_WATCH:
+			if _state_timer >= REPAIR_WATCH_TIMEOUT:
+				# Player is doing fine without help — call the tutorial done.
+				_enter_state(State.DONE)
+				return
+			if _any_mech_damaged():
+				_enter_state(State.REPAIR_SHOWING)
+		State.REPAIR_SHOWING:
+			if _drone_near_damaged_mech():
+				_enter_state(State.DONE)
+		State.DONE:
+			pass
 
-func _check_shift() -> void:
-	if _dismissed.get(HintId.SHIFT, false):
-		return
-	if Input.is_key_pressed(KEY_SHIFT):
-		_dismiss(HintId.SHIFT)
+# ── Conditions ───────────────────────────────────────────────────────────────
 
-# Ults start fully charged on wave 1 (BaseWeapon.setup), so the LMB hint is
-# always actionable from frame one — no gating needed.
-func _check_lmb() -> void:
-	if _dismissed.get(HintId.LMB, false):
-		return
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		_dismiss(HintId.LMB)
-
-func _check_repair() -> void:
-	if _dismissed.get(HintId.REPAIR, false):
-		return
-	if not _repair_visible:
-		if _any_mech_damaged():
-			_repair_visible = true
-			_fade_in(_rows[HintId.REPAIR])
-		return
-	# Dismiss when the drone closes within interact range of any damaged mech —
-	# at that point MechOptionsPanel surfaces the actual REPAIR button and
-	# takes over the affordance.
-	if _drone == null or not is_instance_valid(_drone):
-		return
-	for m in _mechs:
-		if not is_instance_valid(m):
-			continue
-		if not _mech_is_damaged(m):
-			continue
-		var d := _drone.global_position.distance_to(m.global_position)
-		if d <= APPROACH_RADIUS:
-			_dismiss(HintId.REPAIR)
-			return
+func _wasd_pressed() -> bool:
+	return Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) \
+		or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D)
 
 func _any_mech_damaged() -> bool:
 	for m in _mechs:
@@ -168,38 +191,23 @@ func _any_mech_damaged() -> bool:
 			return true
 	return false
 
+func _drone_near_damaged_mech() -> bool:
+	if _drone == null or not is_instance_valid(_drone):
+		return false
+	for m in _mechs:
+		if not is_instance_valid(m):
+			continue
+		if not _mech_is_damaged(m):
+			continue
+		if _drone.global_position.distance_to(m.global_position) <= APPROACH_RADIUS:
+			return true
+	return false
+
 func _mech_is_damaged(m: Object) -> bool:
 	if not is_instance_valid(m):
 		return false
-	var hp:    Variant = m.get("health")
+	var hp:     Variant = m.get("health")
 	var hp_max: Variant = m.get("max_health")
 	if hp == null or hp_max == null or float(hp_max) <= 0.0:
 		return false
 	return float(hp) / float(hp_max) < REPAIR_HP_TRIGGER
-
-# ── Dismissal ────────────────────────────────────────────────────────────────
-
-func _dismiss(id: int) -> void:
-	if _dismissed.get(id, false):
-		return
-	_dismissed[id] = true
-	var row: Control = _rows[id]
-	var t := create_tween()
-	t.tween_property(row, "modulate:a", 0.0, FADE_DUR)
-	t.tween_callback(row.queue_free)
-
-func _fade_in(row: Control) -> void:
-	var t := create_tween()
-	t.tween_property(row, "modulate:a", 1.0, FADE_DUR)
-
-func _check_done() -> void:
-	# All four prompts have been satisfied — persist the flag and self-destruct.
-	for id in [HintId.WASD, HintId.SHIFT, HintId.LMB, HintId.REPAIR]:
-		if not _dismissed.get(id, false):
-			return
-	_all_done = true
-	SaveData.mark_tutorial_seen()
-	# Small grace so the last fade finishes before the layer is freed.
-	var t := create_tween()
-	t.tween_interval(FADE_DUR + 0.1)
-	t.tween_callback(queue_free)
