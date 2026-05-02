@@ -11,6 +11,7 @@ const ULT_BAR_SCRIPT        := preload("res://scenes/ui/UltBar.gd")
 const REPAIR_MINIGAME_SCRIPT := preload("res://scenes/ui/RepairMinigame.gd")
 const UPGRADE_PICKER_SCRIPT := preload("res://scenes/ui/UpgradePicker.gd")
 const DEATH_SCREEN_SCRIPT   := preload("res://scenes/ui/DeathScreen.gd")
+const WIN_SCREEN_SCRIPT     := preload("res://scenes/ui/WinScreen.gd")
 const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
 const LEFT_CLICK_HINT_SCRIPT := preload("res://scenes/ui/LeftClickHint.gd")
 const PAUSE_MENU_SCRIPT     := preload("res://scenes/ui/PauseMenu.gd")
@@ -83,6 +84,7 @@ func _ready() -> void:
 	_spawn_upgrade_picker()
 	_spawn_drone_hint()
 	_spawn_left_click_hint()
+	RunManager.run_won.connect(_on_run_won)
 	AudioManager.play_music("bgm_main", -12.0)
 
 func _spawn_drone_hint() -> void:
@@ -384,6 +386,21 @@ func _trigger_run_end() -> void:
 	# Show death screen overlay (it pauses the game itself)
 	var screen := CanvasLayer.new()
 	screen.set_script(DEATH_SCREEN_SCRIPT)
+	add_child(screen)
+	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_scrap)
+
+func _on_run_won() -> void:
+	# WaveSpawner has stopped spawning and confirmed the field is empty.
+	# Award scrap on the same formula as a death — wave will be WIN_WAVE — and
+	# show the WinScreen instead of the DeathScreen. Guard with _run_ended so
+	# a final-mech death the same frame can't double up.
+	if _run_ended:
+		return
+	_run_ended = true
+	var earned := RunManager.wave + int(RunManager.gold / 3.0)
+	SaveData.add_scrap(earned)
+	var screen := CanvasLayer.new()
+	screen.set_script(WIN_SCREEN_SCRIPT)
 	add_child(screen)
 	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_scrap)
 

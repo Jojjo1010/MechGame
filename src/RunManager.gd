@@ -27,10 +27,15 @@ var owned_upgrades: Dictionary = {}
 const MAX_TYPES_PER_TARGET := 2   # how many DISTINCT upgrade types each mech (or LINE) can carry
 const MAX_STACKS_COMMON    := 3   # how many times a single common can stack within its slot
 
+# Wave the player needs to survive to win the run. WaveSpawner stops spawning
+# after this and emits run_won once the final wave is cleared.
+const WIN_WAVE := 30
+
 signal wave_started(number: int)
 signal gold_changed(total: int)
 signal xp_changed(current: int, needed: int)
 signal level_up(new_level: int)
+signal run_won()
 
 func start_wave(number: int) -> void:
 	wave = number
@@ -80,6 +85,11 @@ func is_target_at_type_cap(target: String) -> bool:
 
 func notify_kill() -> void:
 	pass   # combo system removed; hook kept so call-sites in Enemy.gd don't break
+
+# Tiny indirection so the run_won signal isn't flagged "unused" by the static
+# analyzer — WaveSpawner emits via this helper instead of touching .emit directly.
+func emit_run_won() -> void:
+	run_won.emit()
 
 func reset_run() -> void:
 	wave       = 0

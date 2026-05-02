@@ -7,14 +7,31 @@ const BASE_ENEMIES   := 5
 const WAVE_INTERVAL  := 12.0
 const SPAWN_SPREAD   := 4.0    # seconds over which a wave staggers its spawns
 
+const FINAL_CHECK_INTERVAL := 0.5
+
 var enemies_container: Node3D
 var wave_number: int = 0
 var timer: float = 3.0
+
+# Set true once the final (WIN_WAVE) wave has spawned. Spawning halts; the
+# spawner polls the enemies group on FINAL_CHECK_INTERVAL until empty, then
+# emits RunManager.run_won and stops checking.
+var _final_wave_spawned: bool = false
+var _final_check_timer:  float = 0.0
+var _win_emitted:        bool = false
 
 func setup(p_enemies_container: Node3D) -> void:
 	enemies_container = p_enemies_container
 
 func _process(delta: float) -> void:
+	if _final_wave_spawned:
+		_final_check_timer -= delta
+		if _final_check_timer <= 0.0:
+			_final_check_timer = FINAL_CHECK_INTERVAL
+			if not _win_emitted and get_tree().get_nodes_in_group("enemies").is_empty():
+				_win_emitted = true
+				RunManager.emit_run_won()
+		return
 	timer -= delta
 	if timer <= 0.0:
 		timer = WAVE_INTERVAL
@@ -30,6 +47,13 @@ func _spawn_wave() -> void:
 
 	for i in count:
 		get_tree().create_timer(i * interval).timeout.connect(_spawn_one)
+
+	if wave_number >= RunManager.WIN_WAVE:
+		# Final wave: stop spawning. Wait until after the staggered spawns finish
+		# (+1s grace) before we start polling for an empty field, so we don't
+		# trigger the win mid-spawn.
+		_final_wave_spawned = true
+		_final_check_timer  = SPAWN_SPREAD + 1.0
 
 func _spawn_one() -> void:
 	var center := _get_spawn_reference()
