@@ -23,6 +23,9 @@ const REPAIR_WATCH_TIMEOUT := 90.0 # auto-complete tutorial if mechs never get h
 const PROMPT_PANEL_W     := 600.0
 const PROMPT_PANEL_PAD   := UITheme.PAD_XL
 const PROMPT_CORNER_R    := 16
+# How far down from the top of the screen the modal sits — clears the 64 px
+# XP bar with a comfortable margin so the gameplay below stays visible.
+const PROMPT_TOP_OFFSET  := 140.0
 
 enum State {
 	WASD_SHOWING,  WASD_FADING,
@@ -62,10 +65,17 @@ func _build() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(center)
+	# Top-anchored hbox: full width, height auto-sizes to the panel content.
+	# Pushing offset_top down past the XP bar leaves the gameplay area below
+	# fully visible — the original CenterContainer placed the prompt over the
+	# mech line and made the action unreadable.
+	var top_row := HBoxContainer.new()
+	top_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	top_row.offset_top    = PROMPT_TOP_OFFSET
+	top_row.offset_bottom = PROMPT_TOP_OFFSET
+	top_row.alignment     = BoxContainer.ALIGNMENT_CENTER
+	top_row.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	root.add_child(top_row)
 
 	_modal_root = PanelContainer.new()
 	_modal_root.custom_minimum_size = Vector2(PROMPT_PANEL_W, 0.0)
@@ -79,7 +89,7 @@ func _build() -> void:
 	sb.content_margin_bottom = PROMPT_PANEL_PAD
 	_modal_root.add_theme_stylebox_override("panel", sb)
 	_modal_root.modulate.a = 0.0
-	center.add_child(_modal_root)
+	top_row.add_child(_modal_root)
 
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", UITheme.PAD_M)
