@@ -314,27 +314,27 @@ func _build_preview() -> void:
 	_aim_zone = _build_zone_ring(ULT_PLACEMENT_RADIUS)
 	_aim_root.add_child(_aim_zone)
 
-	_aim_cursor_marker = _build_marker(Color(0.4, 0.85, 1.0, 0.85), 0.45)
+	_aim_cursor_marker = _build_marker(Color(1.00, 0.25, 0.18, 0.85), 0.45)
 	_aim_root.add_child(_aim_cursor_marker)
 
-	_aim_start_marker = _build_marker(Color(0.7, 0.95, 1.0, 0.9), 0.40)
+	_aim_start_marker = _build_marker(Color(1.00, 0.45, 0.35, 0.9), 0.40)
 	_aim_start_marker.visible = false
 	_aim_root.add_child(_aim_start_marker)
 
 	# Layered preview matching the fired laser visual: soft halo + bright core.
 	_aim_line_halo = MeshInstance3D.new()
 	var halo_cap := CapsuleMesh.new()
-	halo_cap.radius = 0.22
+	halo_cap.radius = 0.45
 	halo_cap.height = 1.0
-	halo_cap.radial_segments = 6
+	halo_cap.radial_segments = 8
 	halo_cap.rings = 1
 	_aim_line_halo.mesh = halo_cap
 	_aim_line_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var halo_mat := StandardMaterial3D.new()
-	halo_mat.albedo_color              = Color(0.15, 0.55, 1.0, 0.30)
+	halo_mat.albedo_color              = Color(0.80, 0.05, 0.02, 0.35)
 	halo_mat.emission_enabled          = true
-	halo_mat.emission                  = Color(0.1, 0.40, 1.0)
-	halo_mat.emission_energy_multiplier = 3.0
+	halo_mat.emission                  = Color(1.00, 0.05, 0.02)
+	halo_mat.emission_energy_multiplier = 2.5
 	halo_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	halo_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
 	halo_mat.no_depth_test             = true
@@ -345,17 +345,17 @@ func _build_preview() -> void:
 
 	_aim_line = MeshInstance3D.new()
 	var core_cap := CapsuleMesh.new()
-	core_cap.radius = 0.07
+	core_cap.radius = 0.14
 	core_cap.height = 1.0
-	core_cap.radial_segments = 6
+	core_cap.radial_segments = 8
 	core_cap.rings = 1
 	_aim_line.mesh = core_cap
 	_aim_line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var core_mat := StandardMaterial3D.new()
-	core_mat.albedo_color              = Color(0.85, 0.97, 1.0, 1.0)
+	core_mat.albedo_color              = Color(0.90, 0.10, 0.05, 1.0)
 	core_mat.emission_enabled          = true
-	core_mat.emission                  = Color(0.25, 0.70, 1.0)
-	core_mat.emission_energy_multiplier = 12.0
+	core_mat.emission                  = Color(1.00, 0.05, 0.02)
+	core_mat.emission_energy_multiplier = 4.0
 	core_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	core_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
 	core_mat.no_depth_test             = true
@@ -376,9 +376,9 @@ func _build_zone_ring(radius: float) -> MeshInstance3D:
 	mi.mesh = torus
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color              = Color(0.4, 0.85, 1.0, 0.55)
+	mat.albedo_color              = Color(1.00, 0.25, 0.18, 0.55)
 	mat.emission_enabled          = true
-	mat.emission                  = Color(0.2, 0.7, 1.0)
+	mat.emission                  = Color(1.00, 0.10, 0.05)
 	mat.emission_energy_multiplier = 4.0
 	mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -492,20 +492,21 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	var a := Vector3(start_pos.x, beam_y, start_pos.z)
 	var b := Vector3(end_pos.x,   beam_y, end_pos.z)
 
-	# Soft halo — same radius/feel as passive beam segments.
+	# Match aim-line dimensions; bump emission energy so the fired beam reads
+	# as the aim line "lit up" — punchier glow during its short visible window.
 	var halo := MeshInstance3D.new()
 	var halo_cap := CapsuleMesh.new()
-	halo_cap.radius = 0.22
-	halo_cap.height = 0.01
-	halo_cap.radial_segments = 6
+	halo_cap.radius = 0.45
+	halo_cap.height = 1.0
+	halo_cap.radial_segments = 8
 	halo_cap.rings = 1
 	halo.mesh = halo_cap
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var halo_mat := StandardMaterial3D.new()
-	halo_mat.albedo_color              = Color(0.15, 0.55, 1.0, 0.30)
+	halo_mat.albedo_color              = Color(0.80, 0.05, 0.02, 0.45)
 	halo_mat.emission_enabled          = true
-	halo_mat.emission                  = Color(0.1, 0.40, 1.0)
-	halo_mat.emission_energy_multiplier = 3.0
+	halo_mat.emission                  = Color(1.00, 0.05, 0.02)
+	halo_mat.emission_energy_multiplier = 5.0
 	halo_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	halo_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
 	halo_mat.no_depth_test             = true
@@ -513,20 +514,19 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	halo.material_override = halo_mat
 	get_tree().current_scene.add_child(halo)
 
-	# Thin core — same radius as passive beam segments.
 	var core := MeshInstance3D.new()
 	var core_cap := CapsuleMesh.new()
-	core_cap.radius = 0.07
-	core_cap.height = 0.01
-	core_cap.radial_segments = 6
+	core_cap.radius = 0.14
+	core_cap.height = 1.0
+	core_cap.radial_segments = 8
 	core_cap.rings = 1
 	core.mesh = core_cap
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var core_mat := StandardMaterial3D.new()
-	core_mat.albedo_color              = Color(0.85, 0.97, 1.0, 1.0)
+	core_mat.albedo_color              = Color(0.90, 0.10, 0.05, 1.0)
 	core_mat.emission_enabled          = true
-	core_mat.emission                  = Color(0.25, 0.70, 1.0)
-	core_mat.emission_energy_multiplier = 12.0
+	core_mat.emission                  = Color(1.00, 0.05, 0.02)
+	core_mat.emission_energy_multiplier = 8.0
 	core_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	core_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
 	core_mat.no_depth_test             = true
@@ -542,10 +542,10 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	head.mesh = sph
 	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var hmat := StandardMaterial3D.new()
-	hmat.albedo_color              = Color(1.0, 1.0, 1.0, 1.0)
+	hmat.albedo_color              = Color(1.00, 0.20, 0.10, 1.0)
 	hmat.emission_enabled          = true
-	hmat.emission                  = Color(0.4, 0.82, 1.0)
-	hmat.emission_energy_multiplier = 20.0
+	hmat.emission                  = Color(1.00, 0.10, 0.05)
+	hmat.emission_energy_multiplier = 6.0
 	hmat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
 	hmat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
 	hmat.no_depth_test             = true
@@ -560,6 +560,7 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 
 	var hit_set: Dictionary = {}
 
+	# FTL-style draw: beam grows from start point along to head as it sweeps.
 	var on_advance := func(u: float) -> void:
 		var head_pos := a.lerp(b, u)
 		head.global_position = head_pos
@@ -570,12 +571,12 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	var tw := head.create_tween()
 	tw.tween_method(on_advance, 0.0, 1.0, duration).set_trans(Tween.TRANS_LINEAR)
 	# Hold the fully-drawn laser briefly so the player can read it.
-	tw.tween_interval(0.15)
-	tw.tween_property(core_mat, "albedo_color:a", 0.0, 0.32)
-	tw.parallel().tween_property(core_mat, "emission_energy_multiplier", 0.0, 0.32)
-	tw.parallel().tween_property(halo_mat, "albedo_color:a", 0.0, 0.32)
-	tw.parallel().tween_property(halo_mat, "emission_energy_multiplier", 0.0, 0.32)
-	tw.parallel().tween_property(hmat, "albedo_color:a", 0.0, 0.20)
+	tw.tween_interval(0.70)
+	tw.tween_property(core_mat, "albedo_color:a", 0.0, 0.55)
+	tw.parallel().tween_property(core_mat, "emission_energy_multiplier", 0.0, 0.55)
+	tw.parallel().tween_property(halo_mat, "albedo_color:a", 0.0, 0.55)
+	tw.parallel().tween_property(halo_mat, "emission_energy_multiplier", 0.0, 0.55)
+	tw.parallel().tween_property(hmat, "albedo_color:a", 0.0, 0.35)
 	tw.tween_callback(core.queue_free)
 	tw.tween_callback(halo.queue_free)
 	tw.tween_callback(head.queue_free)
