@@ -4,13 +4,34 @@ const LIFETIME      := 0.65
 const LIFETIME_CRIT := 1.10
 const RISE_SPEED    := 4.5
 
+# Hard cap on simultaneous floating numbers across the whole scene. Once we'd
+# exceed this, the oldest number is freed early so the new one can spawn —
+# Diablo 3-style. Without the cap, dense late-game frames pile dozens of
+# numbers in the same screen patch and they blur into illegible static.
+const MAX_ACTIVE := 12
+static var _active: Array = []   # Array[DamageNumber] — newest at end
+
 static func spawn(amount: float, world_pos: Vector3, parent: Node,
 		color: Color = Color(1.0, 0.92, 0.15), is_crit: bool = false) -> void:
+	# Filter dead refs (scene reloads, race with queue_free) so the cap doesn't
+	# count phantoms.
+	var alive: Array = []
+	for n in _active:
+		if is_instance_valid(n):
+			alive.append(n)
+	_active = alive
+	# Evict oldest if we're at the cap. The newest hit always wins because the
+	# player just fired it — old numbers fading out are less interesting.
+	while _active.size() >= MAX_ACTIVE:
+		var oldest = _active.pop_front()
+		if is_instance_valid(oldest):
+			oldest.queue_free()
 	var inst := Node3D.new()
 	inst.set_script(load("res://scenes/ui/DamageNumber.gd"))
 	parent.add_child(inst)
 	inst.global_position = world_pos + Vector3(randf_range(-0.35, 0.35), 0.0, 0.0)
 	inst._start(amount, color, is_crit)
+	_active.append(inst)
 
 var _label: Label3D
 var _age:   float = 0.0
@@ -56,4 +77,5 @@ func _process(delta: float) -> void:
 		_label.modulate.a = 1.0 - fade
 
 	if _age >= _lifetime:
+		_active.erase(self)
 		queue_free()

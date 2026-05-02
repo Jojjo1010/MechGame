@@ -64,14 +64,14 @@ var _wither_remaining: float = 0.0
 var _wither_pips:      Label3D = null
 
 # Damage-number coalescing. The first hit shows immediately; subsequent hits
-# within DMG_COALESCE_WINDOW accumulate into a single combined number. This
-# stops late-game burn / napalm / splash / aura ticks from drawing dozens of
-# overlapping numbers per enemy. is_crit OR-fold means a crit anywhere in the
-# window upgrades the combined visual to the crit treatment.
-const DMG_COALESCE_WINDOW := 0.12
-var _dmg_pending:      float = 0.0
-var _dmg_pending_crit: bool  = false
-var _dmg_coalesce_cd:  float = 0.0
+# within DMG_COALESCE_FRAMES accumulate into a single combined number that
+# spawns once the counter drains. Frame-counted (not time) so visual density
+# stays consistent regardless of dt jitter. is_crit OR-fold means a crit
+# anywhere in the window upgrades the combined visual to the crit treatment.
+const DMG_COALESCE_FRAMES := 5
+var _dmg_pending:        float = 0.0
+var _dmg_pending_crit:   bool  = false
+var _dmg_coalesce_frames: int  = 0
 
 signal enemy_died()
 
@@ -292,18 +292,16 @@ func _spawn_damage_number(amount: float, is_crit: bool) -> void:
 		get_tree().current_scene, _damage_number_color(is_crit), is_crit)
 
 func _process(delta: float) -> void:
-	if _dmg_coalesce_cd > 0.0:
-		_dmg_coalesce_cd -= delta
-		if _dmg_coalesce_cd <= 0.0:
-			_dmg_coalesce_cd = 0.0
-			# Flush whatever piled up during the cooldown. If something is
-			# pending, restart the window so a sustained DOT/aura keeps
-			# coalescing instead of going back to spawn-per-hit.
-			if _dmg_pending > 0.0:
-				_spawn_damage_number(_dmg_pending, _dmg_pending_crit)
-				_dmg_pending = 0.0
-				_dmg_pending_crit = false
-				_dmg_coalesce_cd = DMG_COALESCE_WINDOW
+	if _dmg_coalesce_frames > 0:
+		_dmg_coalesce_frames -= 1
+		if _dmg_coalesce_frames <= 0 and _dmg_pending > 0.0:
+			# Flush what piled up during the cooldown. If something was queued
+			# we restart the counter so a sustained burst keeps coalescing
+			# instead of falling back to spawn-per-hit.
+			_spawn_damage_number(_dmg_pending, _dmg_pending_crit)
+			_dmg_pending = 0.0
+			_dmg_pending_crit = false
+			_dmg_coalesce_frames = DMG_COALESCE_FRAMES
 
 	if _knockback_vel.length_squared() > 0.01:
 		_knockback_vel = _knockback_vel.lerp(Vector3.ZERO, 10.0 * delta)
@@ -424,9 +422,9 @@ func take_damage(amount: float, is_crit: bool = false, show_number: bool = true)
 		_health_bar.visible = true
 		_health_bar.set_fraction(health / max_health)
 	if show_number:
-		if _dmg_coalesce_cd <= 0.0:
+		if _dmg_coalesce_frames <= 0:
 			_spawn_damage_number(amount, is_crit)
-			_dmg_coalesce_cd = DMG_COALESCE_WINDOW
+			_dmg_coalesce_frames = DMG_COALESCE_FRAMES
 		else:
 			_dmg_pending += amount
 			if is_crit:
