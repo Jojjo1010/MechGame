@@ -9,7 +9,11 @@ const MECH_MODEL := preload("res://assets/CongaGoober.fbx")
 # Slot count is derived from the colors array passed to setup(). Dead mechs
 # are dropped from the carousel between rounds, so the turntable shrinks to
 # match the surviving line.
-const DISK_RADIUS := 2.0
+# Disk radius drives how far apart adjacent mechs sit. For N mechs the chord
+# distance between adjacent slots is 2 · R · sin(π / N) — 4.0 gives ~5.7 u
+# between two mechs (N=3) and ~5.3 u (N=4), comfortably past the mech body
+# silhouette so they don't intersect.
+const DISK_RADIUS := 4.0
 const DISK_HEIGHT := 0.18
 const MECH_HEIGHT := 5.5          # carousel-only scale (hero-shot, not field-sized)
 
