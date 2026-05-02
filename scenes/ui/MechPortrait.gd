@@ -110,7 +110,10 @@ func _bake(bake_w: int, bake_h: int, cache_key: String) -> void:
 
 	var aabb := _aabb_of(mech_visual)
 	if aabb.size.y > 0.0:
-		var s_factor := 4.0 / aabb.size.y
+		# Scale to 3.6u so a 4u-tall view region has 0.4u of headroom — the
+		# Triangle/ARC mech sits taller in its silhouette (pointed crown) and
+		# was clipping when scaled to fill the full 4u.
+		var s_factor := 3.6 / aabb.size.y
 		mech_visual.scale = Vector3.ONE * s_factor
 		aabb = _aabb_of(mech_visual)
 		mech_visual.position.y = -aabb.position.y
@@ -139,11 +142,13 @@ func _bake(bake_w: int, bake_h: int, cache_key: String) -> void:
 	light.light_energy = 1.0
 	vp.add_child(light)
 
-	# Frame the whole mech vertically (head at top, body filling middle, base
-	# near bottom). Mech is 4u tall, base at y=0. With FOV 32° and z=7.0, the
-	# vertical extent of view is 2*7*tan(16°) ≈ 4.0u — perfect fit.
+	# Frame the upper portion of the mech (head + body, feet cropped). Mech is
+	# 3.6u tall (base at y=0). With FOV 32° and z=7.0 the vertical extent of
+	# view is ~4.0u; centering it at y=2.5 means the visible region runs y=0.5
+	# to y=4.5 — feet (y=0..0.4) drop off the bottom, head (y=3.6) sits with
+	# 0.9u of headroom so the Triangle's crown doesn't clip.
 	var cam := Camera3D.new()
-	cam.position = Vector3(0.0, 2.0, 7.0)
+	cam.position = Vector3(0.0, 2.5, 7.0)
 	cam.rotation_degrees.x = 0.0
 	cam.fov = 32.0
 	cam.current = true
