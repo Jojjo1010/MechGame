@@ -59,7 +59,7 @@ func _ready() -> void:
 	env.background_color = Color(0.05, 0.05, 0.07)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.55, 0.6, 0.7)
-	env.ambient_light_energy = 0.5
+	env.ambient_light_energy = 0.18
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = 0.045
 	env.volumetric_fog_albedo = Color(1.0, 0.96, 0.88)
@@ -68,22 +68,27 @@ func _ready() -> void:
 	world_env.environment = env
 	_viewport.add_child(world_env)
 
-	# Soft directional fill so the mechs read as 3D form, not flat lit.
+	# Very low directional fill so unspotlit mechs read as silhouettes — just
+	# enough rim light to keep their outline distinguishable from the BG.
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-25.0, 25.0, 0.0)
-	fill.light_energy = 0.45
+	fill.light_energy = 0.2
 	_viewport.add_child(fill)
 
-	# Theatrical spotlight: rigged from above-front, aimed at the chosen mech's
-	# torso. High energy + reduced attenuation so the beam clearly lights the
-	# mech; volumetric fog above renders the visible column of light.
+	# Theatrical spotlight: rigged from well above the mech and aimed down at the
+	# front slot. Mech is ~5.5u tall, so the rig sits above its head and the
+	# range is long enough that the visible volumetric column extends from above
+	# the head down to the disk — the whole mech sits inside the beam, not just
+	# the floor under it.
 	_spot = SpotLight3D.new()
-	_spot.position = Vector3(0.0, 9.0, DISK_RADIUS + 1.0)
+	_spot.position = Vector3(0.0, 18.0, DISK_RADIUS + 1.0)
 	_spot.rotation_degrees = Vector3(-81.0, 0.0, 0.0)
-	_spot.spot_range = 14.0
-	_spot.spot_angle = 22.0
+	_spot.spot_range = 24.0
+	# 11° cone: front mech (~6° off-axis) is fully inside, side mechs (~14°)
+	# fall outside, so the spot lights only the chosen one.
+	_spot.spot_angle = 11.0
 	_spot.spot_attenuation = 0.5
-	_spot.light_energy = 14.0
+	_spot.light_energy = 22.0
 	_spot.light_color = Color(1.0, 0.92, 0.78)
 	_viewport.add_child(_spot)
 
