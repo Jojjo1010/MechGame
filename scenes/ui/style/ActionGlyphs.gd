@@ -17,6 +17,7 @@ static func draw(canvas: CanvasItem, rect: Rect2, action_id: String, color: Colo
 		"zoom":   _zoom(canvas, c, r, color)
 		"gold":   _gold(canvas, c, r, color)
 		"drone":  _drone(canvas, c, r, color)
+		"check":  _check(canvas, c, r, color)
 		_:        return false
 	return true
 
@@ -162,3 +163,14 @@ static func _drone(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 		p + Vector2(-body, 0.0),
 	])
 	c.draw_colored_polygon(body_pts, col)
+
+# Bold checkmark — three-vertex polyline (down stroke + up stroke). Used by
+# TutorialPrompts as the "step completed" overlay.
+static func _check(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	var th := r * 0.32
+	var pts := PackedVector2Array([
+		p + Vector2(-r * 0.85,  r * 0.0),
+		p + Vector2(-r * 0.18,  r * 0.55),
+		p + Vector2( r * 0.85, -r * 0.55),
+	])
+	c.draw_polyline(pts, col, th, true)

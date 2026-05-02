@@ -16,6 +16,10 @@ const PRACTICE_DUR       := 5.0    # seconds of free play after each prompt
 # How long the per-mech archetype intro lingers before swapping to the ult
 # prompt. Long enough to read the name + tagline, short enough not to drag.
 const INTRO_DUR          := 2.5
+# Input lockout after a prompt enters — covers FADE_DUR plus a moment to read.
+# Without this, a player who's already pressing W when WASD_SHOWING enters
+# satisfies the trigger on the same frame and skips past the prompt entirely.
+const MIN_PROMPT_TIME    := 0.45
 
 # Completion feedback — a brief lime tint on the modal panel + a positive
 # audio ping. Tuned short so the next prompt comes promptly, not lingering.
@@ -76,6 +80,10 @@ var _row:          HBoxContainer = null
 var _chip_holder:  CenterContainer = null   # swapped each prompt — holds the key chip
 var _action_icon:  ActionIcon = null
 var _action_label: Label    = null
+# Big lime check that pops in over the modal on every step completion. Lives
+# outside the modal panel so its scale punch isn't constrained by the panel
+# layout.
+var _check_overlay: ActionIcon = null
 
 # Mech currently flagged. _target_mech wears the marker during the ult-
 # teaching steps; _repair_mech takes over once we damage it for REPAIR.
@@ -160,11 +168,36 @@ func _build() -> void:
 	_action_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_row.add_child(_action_label)
 
+	# Check overlay — sibling to top_row so it can grow past the modal's edges
+	# when its scale punches above 1.0. Anchored to the panel area.
+	const CHECK_SIZE := 120.0
+	_check_overlay = ActionIcon.new()
+	_check_overlay.action_id            = "check"
+	_check_overlay.accent               = UITheme.COLOR_ACCENT_LIME
+	_check_overlay.custom_minimum_size  = Vector2(CHECK_SIZE, CHECK_SIZE)
+	_check_overlay.size                 = Vector2(CHECK_SIZE, CHECK_SIZE)
+	_check_overlay.pivot_offset         = Vector2(CHECK_SIZE * 0.5, CHECK_SIZE * 0.5)
+	_check_overlay.modulate             = Color(1.0, 1.0, 1.0, 0.0)
+	_check_overlay.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_check_overlay.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_check_overlay.offset_left          = -CHECK_SIZE * 0.5
+	_check_overlay.offset_right         =  CHECK_SIZE * 0.5
+	_check_overlay.offset_top           = PROMPT_TOP_OFFSET + 20.0
+	_check_overlay.offset_bottom        = PROMPT_TOP_OFFSET + 20.0 + CHECK_SIZE
+	root.add_child(_check_overlay)
+
 # ── State machine ────────────────────────────────────────────────────────────
 
 func _enter_state(new_state: State) -> void:
 	_state       = new_state
 	_state_timer = 0.0
+	# Surface ContextUI (MechOptionsPanel + ControlsLegend + UltBar) once we're
+	# actually teaching ult/repair. Hiding it during WASD/CAMERA/SHIFT keeps the
+	# screen focused on the prompt being taught; revealing it on ULT_INTRO gives
+	# the player the supporting reference UI right when the ult tour begins.
+	var late_ui_visible := _state_uses_mech_panel(new_state) or new_state == State.ULT_INTRO
+	_set_mech_options_enabled(late_ui_visible)
+	_set_late_ui_visible(late_ui_visible)
 	match new_state:
 		State.WASD_SHOWING:
 			_show_prompt(KeyChip.make_wasd_cluster(KEY_FONT), "move", "MOVE THE DRONE")
@@ -220,19 +253,47 @@ func _swap_prompt(chip: Control, icon_id: String, action_text: String) -> void:
 	_action_icon.set_action(icon_id)
 	_action_label.text = action_text
 
-# Lime flash on the panel + positive ping, then fade out. Used at every step
-# completion so the player feels the input register before the next prompt.
+# Lime flash on the panel + positive ping + a check-mark pop. Modal stays at
+# full alpha through the practice window so the player keeps seeing the prompt
+# they just satisfied — handy for re-reading mid-practice. The next state's
+# _show_prompt fades the modal out before swapping in fresh content.
 func _complete_and_fade() -> void:
 	AudioManager.play(COMPLETE_SOUND, Vector3.INF, -2.0, 1.0)
+	_play_check_animation()
 	var t := create_tween()
 	t.tween_property(_modal_root, "modulate", COMPLETE_TINT, COMPLETE_FLASH_DUR)
-	t.tween_property(_modal_root, "modulate", Color(1.0, 1.0, 1.0, 0.0), FADE_DUR)
+	t.tween_property(_modal_root, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+
+# Big lime check, scale-punches in then fades. The pop reads as a clear
+# "you did it" beat even when the panel itself fades out behind it.
+func _play_check_animation() -> void:
+	if _check_overlay == null:
+		return
+	_check_overlay.scale    = Vector2(0.4, 0.4)
+	_check_overlay.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_check_overlay.set_action("check")
+	var t := create_tween()
+	# Pop in: bigger overshoot than before so the celebration reads.
+	t.set_parallel(true)
+	t.tween_property(_check_overlay, "scale", Vector2(1.35, 1.35), 0.20) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(_check_overlay, "modulate:a", 1.0, 0.12)
+	t.set_parallel(false)
+	# Settle to 1.0 and hold longer so the player sees their accomplishment
+	# while continuing to practice — pairs with the modal staying visible too.
+	t.tween_property(_check_overlay, "scale", Vector2(1.0, 1.0), 0.14)
+	t.tween_interval(1.10)
+	# Slow shrink + fade out — drawn out so the moment lingers.
+	t.set_parallel(true)
+	t.tween_property(_check_overlay, "scale", Vector2(0.85, 0.85), 0.45)
+	t.tween_property(_check_overlay, "modulate:a", 0.0, 0.45)
 
 # Final "you're done" panel — replaces the prompt content with a heading and a
 # button. Stays up until the player clicks; the tutorial does NOT auto-route
 # back to the start screen so the player can keep practicing afterward.
 func _show_done_panel() -> void:
 	AudioManager.play(COMPLETE_SOUND, Vector3.INF, -2.0, 1.0)
+	_play_check_animation()
 	for child in _row.get_children():
 		child.queue_free()
 	var v := VBoxContainer.new()
@@ -289,19 +350,19 @@ func _process(delta: float) -> void:
 	_animate_marker(delta)
 	match _state:
 		State.WASD_SHOWING:
-			if _wasd_pressed():
+			# MIN_PROMPT_TIME gate: a player who's already pressing W when this
+			# state enters would otherwise satisfy the trigger on the same
+			# frame and skip the prompt entirely.
+			if _state_timer >= MIN_PROMPT_TIME and _wasd_pressed():
 				_enter_state(State.WASD_FADING)
 		State.WASD_FADING:
 			if _state_timer >= PRACTICE_DUR:
 				_enter_state(State.CAMERA_SHOWING)
-		State.CAMERA_SHOWING:
-			if Input.is_key_pressed(KEY_Q):
-				_enter_state(State.CAMERA_FADING)
 		State.CAMERA_FADING:
 			if _state_timer >= PRACTICE_DUR:
 				_enter_state(State.SHIFT_SHOWING)
 		State.SHIFT_SHOWING:
-			if Input.is_key_pressed(KEY_SHIFT):
+			if _state_timer >= MIN_PROMPT_TIME and Input.is_key_pressed(KEY_SHIFT):
 				_enter_state(State.SHIFT_FADING)
 		State.SHIFT_FADING:
 			if _state_timer >= PRACTICE_DUR:
@@ -309,18 +370,6 @@ func _process(delta: float) -> void:
 		State.ULT_INTRO:
 			if _state_timer >= INTRO_DUR:
 				_enter_state(State.ULT_SHOWING_E)
-		State.ULT_SHOWING_E:
-			# Both gates required: pressing E away from the marked mech does
-			# nothing in the actual game.
-			if Input.is_key_pressed(KEY_E) and _drone_near_target_mech():
-				if _target_uses_aim_mode():
-					_enter_state(State.ULT_SHOWING_LMB)
-				else:
-					# Instant-cast ult (e.g. GARLIC) — no LMB phase needed.
-					_enter_state(State.ULT_FADING)
-		State.ULT_SHOWING_LMB:
-			if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-				_enter_state(State.ULT_FADING)
 		State.ULT_FADING:
 			if _state_timer >= PRACTICE_DUR:
 				_advance_to_next_ult()
@@ -335,6 +384,28 @@ func _process(delta: float) -> void:
 				_enter_state(State.DONE)
 		State.DONE:
 			pass
+
+# Tap-style inputs (Q, E, LMB) go through events rather than per-frame polling.
+# Polling can drop a quick press if it lands between frames; events fire on the
+# pressed edge regardless of frame timing. The MIN_PROMPT_TIME gate still
+# applies so the prompt has time to render before the input counts.
+func _input(event: InputEvent) -> void:
+	if _state_timer < MIN_PROMPT_TIME:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		match _state:
+			State.CAMERA_SHOWING:
+				if event.keycode == KEY_Q:
+					_enter_state(State.CAMERA_FADING)
+			State.ULT_SHOWING_E:
+				if event.keycode == KEY_E and _drone_near_target_mech():
+					if _target_uses_aim_mode():
+						_enter_state(State.ULT_SHOWING_LMB)
+					else:
+						_enter_state(State.ULT_FADING)
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT and _state == State.ULT_SHOWING_LMB:
+			_enter_state(State.ULT_FADING)
 
 # ── Target / marker ──────────────────────────────────────────────────────────
 
@@ -465,6 +536,29 @@ func _force_damage_for_repair() -> Node3D:
 func _wasd_pressed() -> bool:
 	return Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) \
 		or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D)
+
+# Whether the in-world MechOptionsPanel (E ult / F repair prompts) should be
+# allowed to surface during this state. Off during pure-input phases so it
+# doesn't compete with the tutorial prompts; on once we're teaching the
+# panel-driven actions.
+func _state_uses_mech_panel(s: State) -> bool:
+	return s == State.ULT_SHOWING_E \
+		or s == State.ULT_SHOWING_LMB \
+		or s == State.ULT_FADING \
+		or s == State.REPAIR_SHOWING \
+		or s == State.DONE
+
+func _set_mech_options_enabled(p_enabled: bool) -> void:
+	var mo := get_parent().get_node_or_null("MechOptionsPanel")
+	if mo != null and mo.has_method("set_enabled"):
+		mo.set_enabled(p_enabled)
+
+# Toggle visibility on the supporting UI Game.gd tagged for the tutorial late
+# phases (ControlsLegend, UltBar). They're spawned hidden at the start of the
+# tutorial and revealed once we reach ULT_INTRO.
+func _set_late_ui_visible(p_visible: bool) -> void:
+	for n in get_tree().get_nodes_in_group("tutorial_late_ui"):
+		(n as CanvasLayer).visible = p_visible
 
 func _drone_near_target_mech() -> bool:
 	return _drone_near_mech_xz(_target_mech)

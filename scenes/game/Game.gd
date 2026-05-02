@@ -82,11 +82,16 @@ func _ready() -> void:
 	mech_options.setup(camera)
 	mech_options.repair_pressed.connect(_on_mech_repair_pressed)
 	if RunManager.tutorial_only:
-		# Tutorial sandbox: introduce things only as the prompts call for them.
-		# Wave spawner / XP / ult bar / upgrade picker / legend would all show
-		# up before they're explained, so skip them here. The MechOptionsPanel
-		# stays — it's the in-world prompt the tutorial points the player at.
+		# Tutorial sandbox. Wave spawner is off (no enemies), and ContextUI that
+		# would surface things before they're taught is gated. ControlsLegend
+		# and UltBar are spawned but tagged as "tutorial_late_ui" so the tutorial
+		# can hide them during the WASD/CAMERA/SHIFT phases and reveal them once
+		# the ult phase begins — by then the player has the context to read them.
 		wave_spawner.process_mode = Node.PROCESS_MODE_DISABLED
+		_spawn_controls_legend()
+		_spawn_ult_bar()
+		for n in get_tree().get_nodes_in_group("tutorial_late_ui"):
+			n.visible = false
 		_spawn_tutorial_prompts()
 	else:
 		wave_spawner.setup(enemies_root)
@@ -131,6 +136,7 @@ func _open_pause_menu() -> void:
 func _spawn_controls_legend() -> void:
 	var legend := CanvasLayer.new()
 	legend.set_script(preload("res://scenes/ui/ControlsLegend.gd"))
+	legend.add_to_group("tutorial_late_ui")
 	add_child(legend)
 
 func _spawn_xp_bar() -> void:
@@ -146,6 +152,7 @@ func _spawn_gold_counter() -> void:
 func _spawn_ult_bar() -> void:
 	_ult_bar = CanvasLayer.new()
 	_ult_bar.set_script(ULT_BAR_SCRIPT)
+	_ult_bar.add_to_group("tutorial_late_ui")
 	add_child(_ult_bar)
 	_ult_bar.setup(_weapons, _archetype_colors())
 

@@ -9,6 +9,11 @@ var _ult_btn: Button = null
 var _repair_btn: Button = null
 var _charge_fill: ColorRect = null
 var _line: Line2D = null
+# Tutorial gate: when false, proximity notifications and key input are ignored
+# and the panel stays hidden. Lets the tutorial keep this UI off-screen during
+# the WASD/CAMERA/SHIFT phases and only surface it once the player is being
+# taught ult / repair.
+var _enabled: bool = true
 
 # Label refs needed for runtime colour/text updates
 var _ult_action_lbl:   Label = null
@@ -218,7 +223,22 @@ func _make_key_badge(key_text: String, bg_color: Color, btn_height: float) -> Pa
 	return badge
 
 # ─────────────────────────────────────────────────────────────────────────────
+func set_enabled(p_enabled: bool) -> void:
+	_enabled = p_enabled
+	if not _enabled:
+		# Drop the current target and hide the UI immediately — don't wait for
+		# the next proximity tick.
+		if _target_mech and _target_mech.has_method("set_highlighted"):
+			_target_mech.set_highlighted(false)
+		_target_mech = null
+		if _panel != null:
+			_panel.hide()
+		if _line != null:
+			_line.visible = false
+
 func notify_proximity(mech: Node3D) -> void:
+	if not _enabled:
+		return
 	if mech == _target_mech:
 		return
 	if _target_mech and _target_mech.has_method("set_highlighted"):
@@ -255,7 +275,7 @@ func _on_repair_pressed() -> void:
 	_fire_repair()
 
 func _input(event: InputEvent) -> void:
-	if not _panel.visible:
+	if not _enabled or not _panel.visible:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_E:
