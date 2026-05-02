@@ -1,12 +1,22 @@
 extends Node3D
 
-enum Type { XP, GOLD, XP_BIG }
+enum Type { XP, GOLD, XP_BIG, XP_HUGE }
 
 const ATTRACT_RADIUS := 5.5   # drone starts pulling the pickup in
 const COLLECT_RADIUS := 0.9   # actually collected
 const FLY_SPEED      := 10.0
 const BOB_SPEED      := 2.2
 const BOB_AMP        := 0.18
+
+# XP gem tier values, in ascending order. queue_xp() pays out a pile as the
+# fewest sprites possible by greedy-decomposing into HUGE → BIG → SMALL.
+const XP_HUGE_VAL := 50
+const XP_BIG_VAL  := 10
+
+# Spatial bucket for queue_xp consolidation. Kills within this radius collapse
+# into one pile; cross-screen kills stay separate.
+const _XP_BUCKET_SIZE := 3.0
+const _XP_FLUSH_DELAY := 0.10
 
 var type:  Type = Type.XP
 var value: int  = 1
@@ -19,9 +29,16 @@ var _attracted: bool   = false
 # Procedural pixel-art textures for the pickup sprites. Built once on first
 # request and reused — pickups pile up by the dozens at high waves and
 # re-baking the image per pickup is wasted work.
-static var _xp_texture:     ImageTexture = null
-static var _xp_big_texture: ImageTexture = null
-static var _gold_texture:   ImageTexture = null
+static var _xp_texture:      ImageTexture = null
+static var _xp_big_texture:  ImageTexture = null
+static var _xp_huge_texture: ImageTexture = null
+static var _gold_texture:    ImageTexture = null
+
+# queue_xp accumulator. Entries shape: { value: int, weighted_pos: Vector3,
+# weight: float, parent: Node }. Keyed by integer grid cell so simultaneous
+# kills in different parts of the field don't collapse into one pile.
+static var _xp_pending:        Dictionary = {}
+static var _xp_flush_scheduled: bool       = false
 
 static func spawn(p_type: Type, p_value: int, world_pos: Vector3, parent: Node) -> void:
 	var inst := Node3D.new()
@@ -30,6 +47,74 @@ static func spawn(p_type: Type, p_value: int, world_pos: Vector3, parent: Node) 
 	inst.set_meta("_pvalue", p_value)
 	inst.set_meta("_pos",    world_pos)  # position set inside _ready before _base_y is captured
 	parent.add_child(inst)
+
+# Drop-in replacement for `spawn(Type.XP, ...)` that batches kills happening
+# within _XP_FLUSH_DELAY into the fewest gem sprites possible. Late-game AOE
+# clears used to spawn N small gems (one per kill) — this collapses each
+# spatial cluster into a HUGE/BIG/SMALL pile. The flush runs on a single
+# SceneTreeTimer per window, regardless of how many enemies queued during it.
+static func queue_xp(amount: int, world_pos: Vector3, parent: Node) -> void:
+	if amount <= 0 or parent == null:
+		return
+	var key := Vector3i(
+		roundi(world_pos.x / _XP_BUCKET_SIZE),
+		roundi(world_pos.y / _XP_BUCKET_SIZE),
+		roundi(world_pos.z / _XP_BUCKET_SIZE)
+	)
+	var bucket: Dictionary
+	if _xp_pending.has(key):
+		bucket = _xp_pending[key]
+	else:
+		bucket = {"value": 0, "weighted_pos": Vector3.ZERO, "weight": 0.0, "parent": parent}
+		_xp_pending[key] = bucket
+	bucket["value"]        = int(bucket["value"]) + amount
+	bucket["weighted_pos"] = (bucket["weighted_pos"] as Vector3) + world_pos * float(amount)
+	bucket["weight"]       = float(bucket["weight"]) + float(amount)
+	bucket["parent"]       = parent
+	if not _xp_flush_scheduled:
+		_xp_flush_scheduled = true
+		var tree := parent.get_tree()
+		if tree == null:
+			# No tree (parent was already detached); flush synchronously rather
+			# than leaking the queued XP forever.
+			_flush_xp()
+			return
+		tree.create_timer(_XP_FLUSH_DELAY).timeout.connect(_flush_xp)
+
+static func _flush_xp() -> void:
+	var snapshot: Dictionary = _xp_pending
+	_xp_pending = {}
+	_xp_flush_scheduled = false
+	for key in snapshot:
+		var bucket: Dictionary = snapshot[key]
+		var parent: Node = bucket.get("parent")
+		if parent == null or not is_instance_valid(parent):
+			continue
+		var weight: float = float(bucket["weight"])
+		if weight <= 0.0:
+			continue
+		var center: Vector3 = (bucket["weighted_pos"] as Vector3) / weight
+		_spawn_xp_pile(int(bucket["value"]), center, parent)
+
+# Greedy decompose into HUGE → BIG → SMALL. SMALL absorbs the remainder as a
+# single variable-value gem (it already supports any 1+ value), so a 47-XP
+# pile is 4 BIG (40) + 1 SMALL (7), not 7 individual SMALLs.
+static func _spawn_xp_pile(value: int, center: Vector3, parent: Node) -> void:
+	if value <= 0:
+		return
+	var huge_count: int = value / XP_HUGE_VAL
+	var rem: int        = value - huge_count * XP_HUGE_VAL
+	var big_count: int  = rem / XP_BIG_VAL
+	rem                -= big_count * XP_BIG_VAL
+	for i in huge_count:
+		var off := Vector3(randf_range(-1.4, 1.4), 0.5, randf_range(-1.4, 1.4))
+		spawn(Type.XP_HUGE, XP_HUGE_VAL, center + off, parent)
+	for i in big_count:
+		var off := Vector3(randf_range(-1.2, 1.2), 0.5, randf_range(-1.2, 1.2))
+		spawn(Type.XP_BIG, XP_BIG_VAL, center + off, parent)
+	if rem > 0:
+		var off := Vector3(randf_range(-0.8, 0.8), 0.5, randf_range(-0.8, 0.8))
+		spawn(Type.XP, rem, center + off, parent)
 
 func _ready() -> void:
 	add_to_group("pickups")
@@ -67,6 +152,8 @@ func _build_mesh() -> void:
 		_build_xp_sprite()
 	elif type == Type.XP_BIG:
 		_build_xp_big_sprite()
+	elif type == Type.XP_HUGE:
+		_build_xp_huge_sprite()
 	else:
 		_build_gold_sprite()
 
@@ -179,6 +266,62 @@ static func _make_xp_big_texture() -> ImageTexture:
 	img.set_pixel(int(cx) - 1, int(cy) - 2, Color(1.0, 1.0, 1.0, 1.0))
 	return ImageTexture.create_from_image(img)
 
+func _build_xp_huge_sprite() -> void:
+	if _xp_huge_texture == null:
+		_xp_huge_texture = _make_xp_huge_texture()
+	var sprite := Sprite3D.new()
+	sprite.texture        = _xp_huge_texture
+	# Bigger again than XP_BIG so a HUGE gem reads as the premium drop at a
+	# glance even when sitting next to BIG / SMALL piles.
+	sprite.pixel_size     = 0.058
+	sprite.billboard      = BaseMaterial3D.BILLBOARD_ENABLED
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.shaded         = false
+	sprite.alpha_cut      = SpriteBase3D.ALPHA_CUT_DISCARD
+	# Cyan modulate, pushed into HDR so bloom catches it. Distinct from the
+	# purple SMALL/BIG tier so the player can spot HUGEs in a pickup pile.
+	sprite.modulate       = Color(1.4, 2.4, 3.0, 1.0)
+	add_child(sprite)
+
+# 20×24 cyan diamond, three sparkles. Same Manhattan-distance profile as the
+# smaller gems so the silhouette family reads consistently — only the size and
+# hue change between tiers.
+static func _make_xp_huge_texture() -> ImageTexture:
+	const W: int = 20
+	const H: int = 24
+	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	var cx: float = float(W - 1) * 0.5
+	var cy: float = float(H - 1) * 0.5
+	var rx: float = cx
+	var ry: float = cy
+
+	var c_outline := Color(0.0,  0.20, 0.32, 1.0)
+	var c_body    := Color(0.30, 0.85, 1.00, 1.0)
+	var c_light   := Color(0.85, 1.00, 1.00, 1.0)
+
+	for y in H:
+		for x in W:
+			var nx: float = abs(float(x) - cx) / rx
+			var ny: float = abs(float(y) - cy) / ry
+			var d: float  = nx + ny
+			if d > 1.0:
+				continue
+			if d > 0.85:
+				img.set_pixel(x, y, c_outline)
+			elif x <= int(cx) and y <= int(cy):
+				img.set_pixel(x, y, c_light)
+			else:
+				img.set_pixel(x, y, c_body)
+
+	# Three sparkles — the hierarchy across tiers is 1 / 2 / 3, so HUGE reads as
+	# the biggest payday on the floor.
+	img.set_pixel(int(cx) - 4, int(cy) - 5, Color(1.0, 1.0, 1.0, 1.0))
+	img.set_pixel(int(cx) - 2, int(cy) - 3, Color(1.0, 1.0, 1.0, 1.0))
+	img.set_pixel(int(cx) + 1, int(cy) - 1, Color(1.0, 1.0, 1.0, 1.0))
+	return ImageTexture.create_from_image(img)
+
 func _build_gold_sprite() -> void:
 	if _gold_texture == null:
 		_gold_texture = _make_gold_texture()
@@ -264,7 +407,7 @@ func _bob(_delta: float) -> void:
 	global_position.y = _base_y + sin(_age * BOB_SPEED) * BOB_AMP
 
 func _collect() -> void:
-	if type == Type.XP or type == Type.XP_BIG:
+	if type == Type.XP or type == Type.XP_BIG or type == Type.XP_HUGE:
 		RunManager.add_xp(value)
 		AudioManager.play("xp_collect", global_position, -8.0, randf_range(0.95, 1.1))
 	else:

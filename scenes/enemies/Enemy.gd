@@ -63,6 +63,16 @@ var _wither_stacks:    int   = 0
 var _wither_remaining: float = 0.0
 var _wither_pips:      Label3D = null
 
+# Damage-number coalescing. The first hit shows immediately; subsequent hits
+# within DMG_COALESCE_WINDOW accumulate into a single combined number. This
+# stops late-game burn / napalm / splash / aura ticks from drawing dozens of
+# overlapping numbers per enemy. is_crit OR-fold means a crit anywhere in the
+# window upgrades the combined visual to the crit treatment.
+const DMG_COALESCE_WINDOW := 0.12
+var _dmg_pending:      float = 0.0
+var _dmg_pending_crit: bool  = false
+var _dmg_coalesce_cd:  float = 0.0
+
 signal enemy_died()
 
 func _ready() -> void:
@@ -277,7 +287,24 @@ func apply_slow(mult: float, duration: float) -> void:
 	_slow_mult      = minf(_slow_mult, mult)
 	_slow_remaining = maxf(_slow_remaining, duration)
 
+func _spawn_damage_number(amount: float, is_crit: bool) -> void:
+	DamageNumber.spawn(amount, global_position + Vector3(0.0, 2.2, 0.0),
+		get_tree().current_scene, _damage_number_color(is_crit), is_crit)
+
 func _process(delta: float) -> void:
+	if _dmg_coalesce_cd > 0.0:
+		_dmg_coalesce_cd -= delta
+		if _dmg_coalesce_cd <= 0.0:
+			_dmg_coalesce_cd = 0.0
+			# Flush whatever piled up during the cooldown. If something is
+			# pending, restart the window so a sustained DOT/aura keeps
+			# coalescing instead of going back to spawn-per-hit.
+			if _dmg_pending > 0.0:
+				_spawn_damage_number(_dmg_pending, _dmg_pending_crit)
+				_dmg_pending = 0.0
+				_dmg_pending_crit = false
+				_dmg_coalesce_cd = DMG_COALESCE_WINDOW
+
 	if _knockback_vel.length_squared() > 0.01:
 		_knockback_vel = _knockback_vel.lerp(Vector3.ZERO, 10.0 * delta)
 		global_position += _knockback_vel * delta
@@ -392,9 +419,20 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	if is_instance_valid(_health_bar):
 		_health_bar.visible = true
 		_health_bar.set_fraction(health / max_health)
-	DamageNumber.spawn(amount, global_position + Vector3(0.0, 2.2, 0.0),
-		get_tree().current_scene, _damage_number_color(is_crit), is_crit)
+	if _dmg_coalesce_cd <= 0.0:
+		_spawn_damage_number(amount, is_crit)
+		_dmg_coalesce_cd = DMG_COALESCE_WINDOW
+	else:
+		_dmg_pending += amount
+		if is_crit:
+			_dmg_pending_crit = true
 	if health <= 0.0:
+		# Flush whatever was queued so the killing blow's full damage lands at
+		# the corpse rather than disappearing with the freed enemy.
+		if _dmg_pending > 0.0:
+			_spawn_damage_number(_dmg_pending, _dmg_pending_crit)
+			_dmg_pending = 0.0
+			_dmg_pending_crit = false
 		enemy_died.emit()
 		RunManager.notify_kill()
 		BurstVFX.spawn(
@@ -406,23 +444,16 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 		_spawn_pickups()
 		queue_free()
 
-const _BIG_XP_VALUE := 10
-
 func _spawn_pickups() -> void:
 	var scene := get_tree().current_scene
 	# Total XP for the kill — same averages as before (3 normal, 6 elite). The
-	# value is paid out as the *fewest* sprites possible: floor(total/10) big
-	# gems (value 10 each) plus one small gem carrying the remainder. AOE
-	# clears that used to spawn N×3 sprites in a single frame now spawn N.
+	# XP is queued, not spawned directly: queue_xp batches kills inside one
+	# 3 m bucket over a ~100 ms window and pays the consolidated total out as
+	# the fewest gems possible (HUGE 50 / BIG 10 / SMALL remainder). An AOE
+	# clear of 30 enemies × 3 XP = 90 XP collapses to ~1 HUGE + 4 BIG (5
+	# sprites) instead of 30 small gems.
 	var xp_total: int = randi_range(5, 7) if is_elite else randi_range(2, 4)
-	var big_count: int = xp_total / _BIG_XP_VALUE
-	var remainder: int = xp_total - big_count * _BIG_XP_VALUE
-	for i in big_count:
-		var off := Vector3(randf_range(-1.2, 1.2), 0.5, randf_range(-1.2, 1.2))
-		Pickup.spawn(Pickup.Type.XP_BIG, _BIG_XP_VALUE, global_position + off, scene)
-	if remainder > 0:
-		var off := Vector3(randf_range(-0.8, 0.8), 0.5, randf_range(-0.8, 0.8))
-		Pickup.spawn(Pickup.Type.XP, remainder, global_position + off, scene)
+	Pickup.queue_xp(xp_total, global_position, scene)
 
 	if is_elite:
 		# Guaranteed multi-coin gold drop on elites.
