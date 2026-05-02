@@ -72,6 +72,7 @@ var _root: Control
 var _backdrop: ColorRect
 var _carousel: Control = null   # MechCarousel instance
 var _subtitle_label:  Label = null
+var _subtitle_chip_sb: StyleBoxFlat = null   # chip border tinted per-target
 var _equipped_label:  Label = null
 var _equipped_row:    HBoxContainer = null
 var _cards_row:       HBoxContainer = null
@@ -130,13 +131,6 @@ func _build() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 
-	_subtitle_label = Label.new()
-	_subtitle_label.add_theme_font_size_override("font_size", 38)
-	_subtitle_label.add_theme_color_override("font_color",      TEXT_DIM)
-	_subtitle_label.add_theme_constant_override("outline_size", 0)
-	_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_subtitle_label)
-
 	# Main dark panel
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(MAIN_PANEL_W, 0.0)
@@ -155,6 +149,29 @@ func _build() -> void:
 	var pv := VBoxContainer.new()
 	pv.add_theme_constant_override("separation", 18)
 	panel.add_child(pv)
+
+	# Subtitle chip — sits at the top of the panel, centered. Border + text
+	# get tinted to the rolled target's archetype color in _refresh_subtitle().
+	var subtitle_chip := PanelContainer.new()
+	subtitle_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_subtitle_chip_sb = StyleBoxFlat.new()
+	_subtitle_chip_sb.bg_color = Color(0, 0, 0, 0)
+	_subtitle_chip_sb.border_color = SELECTED_GOLD
+	_subtitle_chip_sb.set_border_width_all(2)
+	_subtitle_chip_sb.set_corner_radius_all(8)
+	_subtitle_chip_sb.content_margin_left   = 18
+	_subtitle_chip_sb.content_margin_right  = 18
+	_subtitle_chip_sb.content_margin_top    = 6
+	_subtitle_chip_sb.content_margin_bottom = 6
+	subtitle_chip.add_theme_stylebox_override("panel", _subtitle_chip_sb)
+	pv.add_child(subtitle_chip)
+
+	_subtitle_label = Label.new()
+	_subtitle_label.add_theme_font_size_override("font_size", 28)
+	_subtitle_label.add_theme_color_override("font_color",      TEXT_DIM)
+	_subtitle_label.add_theme_constant_override("outline_size", 0)
+	_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle_chip.add_child(_subtitle_label)
 
 	# Top section: 3D carousel on the left, vertical card column on the right.
 	var content_hbox := HBoxContainer.new()
@@ -226,6 +243,8 @@ func _show_picker() -> void:
 	# carousel disk lands on the rolled mech.
 	_subtitle_label.text = "Rolling…"
 	_subtitle_label.add_theme_color_override("font_color", TEXT_DIM)
+	if _subtitle_chip_sb != null:
+		_subtitle_chip_sb.border_color = BORDER_DIM
 	_equipped_row.visible    = false
 	_equipped_label.visible  = false
 	_refresh_cards_placeholder()
@@ -250,6 +269,8 @@ func _refresh_subtitle() -> void:
 	var color: Color = MechArchetypes.color_for(target_str)
 	_subtitle_label.text = "Upgrade %s" % target_str
 	_subtitle_label.add_theme_color_override("font_color", color)
+	if _subtitle_chip_sb != null:
+		_subtitle_chip_sb.border_color = color
 
 func _refresh_equipped_slots() -> void:
 	for child in _equipped_row.get_children():
