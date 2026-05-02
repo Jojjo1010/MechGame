@@ -73,10 +73,10 @@ func _ready() -> void:
 	RunManager.reset_run()
 	_setup_camera()
 	_setup_environment()
-	# Tutorial always uses the 3 starter slots — the player hasn't been taught
-	# what extra mech slots cost or how the 4th archetype (ROCKET) plays, so
-	# don't surface them yet even if SaveData has unlocked more.
-	var mech_count: int = 3 if RunManager.tutorial_only else SaveData.unlocked_mech_slots
+	# Tutorial pins the line at exactly four — one mech per weapon archetype.
+	# Outside the tutorial we use whatever the player has unlocked, but the
+	# starter is also four so a fresh save matches the tutorial exactly.
+	var mech_count: int = 4 if RunManager.tutorial_only else SaveData.unlocked_mech_slots
 	_spawn_mech_line(mech_count)
 	_spawn_drone()
 	mech_options.setup(camera)

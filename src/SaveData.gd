@@ -6,7 +6,7 @@ extends Node
 const SAVE_PATH := "user://save.json"
 const SAVE_VERSION := 1
 
-const STARTING_MECH_SLOTS := 3
+const STARTING_MECH_SLOTS := 4   # one mech per weapon archetype (GUN / GARLIC / BEAM / ROCKET)
 const MAX_MECH_SLOTS       := 5
 
 var total_scrap:         int = 0
