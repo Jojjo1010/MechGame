@@ -239,22 +239,33 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 # Hover scale-up + click scale-punch + audio cues. State-color shifts come
 # from the theme stylebox overrides — this only handles the motion layer.
 func _wire_button_motion(btn: Button) -> void:
+	# Mouse signals can fire while the scene is tearing down (button click →
+	# change_scene → btn queued for free); guard each tween creation so the
+	# captured `btn` isn't dereferenced after free.
 	btn.mouse_entered.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		AudioManager.play("ui_hover")
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DUR)
 	)
 	btn.mouse_exited.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2.ONE, HOVER_DUR)
 	)
 	btn.button_down.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		# Quick punch: scale dips slightly, then snaps back when the press
 		# completes (or we get a button_up).
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(0.96, 0.96), PRESS_FLASH_DUR)
 	)
 	btn.button_up.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_FLASH_DUR)
 	)

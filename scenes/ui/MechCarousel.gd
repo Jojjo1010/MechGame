@@ -211,6 +211,10 @@ func spin_to(target_idx: int, duration: float = 2.4, revs: float = SPIN_REVS_DEF
 	_spin_tween.tween_property(_turntable, "rotation:y", target_rot, duration) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_spin_tween.tween_callback(func() -> void:
+		# Carousel can be freed mid-spin (UpgradePicker dismissed); skip the
+		# emit so the lambda doesn't dereference a freed `self`.
+		if not is_instance_valid(self):
+			return
 		AudioManager.play("repair_correct_3", Vector3.INF, -2.0, 1.0)
 		landed.emit(target_idx)
 	)

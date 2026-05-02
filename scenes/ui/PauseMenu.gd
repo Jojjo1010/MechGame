@@ -486,23 +486,34 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 	return btn
 
 func _wire_button_motion(btn: Button) -> void:
+	# Mouse signals can fire while the menu is tearing down (PauseMenu close →
+	# btn queued for free); guard each tween creation so the captured `btn`
+	# isn't dereferenced after free.
 	btn.mouse_entered.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		AudioManager.play("ui_hover")
 		var t := btn.create_tween()
 		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DUR)
 	)
 	btn.mouse_exited.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		t.tween_property(btn, "scale", Vector2.ONE, HOVER_DUR)
 	)
 	btn.button_down.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		t.tween_property(btn, "scale", Vector2(0.96, 0.96), PRESS_FLASH_DUR)
 	)
 	btn.button_up.connect(func() -> void:
+		if not is_instance_valid(btn):
+			return
 		var t := btn.create_tween()
 		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_FLASH_DUR)
