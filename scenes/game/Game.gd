@@ -25,16 +25,7 @@ const CAM_ZOOM_MIN  := 6.0
 const CAM_ZOOM_MAX  := 32.0
 const CAM_ZOOM_STEP := 1.5
 
-# Available isometric views (toggle with Q)
-const CAM_VIEWS: Array[Vector3] = [
-	Vector3( 16.0, 16.0,  16.0),   # default  (front-right)
-	Vector3(-16.0, 16.0,  16.0),   # left side (front-left)
-]
-
-var _cam_zoom:           float   = CAM_ZOOM_MAX
-var _cam_view_idx:       int     = 0
-var _cam_offset_current: Vector3 = CAM_VIEWS[0]
-var _cam_offset_target:  Vector3 = CAM_VIEWS[0]
+var _cam_zoom: float = CAM_ZOOM_MAX
 
 @onready var camera_rig:       Node3D = $CameraRig
 @onready var camera:           Camera3D = $CameraRig/Camera3D
@@ -174,12 +165,8 @@ func _input(event: InputEvent) -> void:
 			_cam_zoom = clampf(_cam_zoom - CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_cam_zoom = clampf(_cam_zoom + CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
-	# Toggle camera angle with Q
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_Q:
-			_cam_view_idx = (_cam_view_idx + 1) % CAM_VIEWS.size()
-			_cam_offset_target = CAM_VIEWS[_cam_view_idx]
-		elif event.keycode == KEY_ESCAPE:
+		if event.keycode == KEY_ESCAPE:
 			# Game._input only fires while unpaused (PROCESS_MODE_INHERIT) — so
 			# this path can't open a pause menu over the upgrade picker / death
 			# screen / repair minigame, all of which already pause the tree.
@@ -253,9 +240,7 @@ func _follow_camera(delta: float) -> void:
 	# Smooth zoom
 	camera.size = lerpf(camera.size, _cam_zoom, CAM_SMOOTH * delta)
 
-	# Smooth angle transition — interpolate offset then re-orient
-	_cam_offset_current = _cam_offset_current.lerp(_cam_offset_target, CAM_SMOOTH * delta)
-	camera.position = _cam_offset_current
+	camera.position = CAM_OFFSET
 	camera.look_at(camera_rig.global_position, Vector3.UP)
 
 # --- Environment ---

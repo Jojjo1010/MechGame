@@ -8,7 +8,6 @@ extends CanvasLayer
 const ENTRIES := [
 	{key = "WASD",   icon = "move",   action = "Move drone"},
 	{key = "Shift",  icon = "dash",   action = "Dash"},
-	{key = "Q",      icon = "camera", action = "Camera angle"},
 	{key = "Scroll", icon = "zoom",   action = "Zoom"},
 ]
 

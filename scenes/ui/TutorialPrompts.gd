@@ -77,7 +77,6 @@ const ICON_SIZE  := 40.0
 # fresh prompt. ULT_FADING is the post-completion practice window.
 enum State {
 	WASD_SHOWING,    WASD_FADING,
-	CAMERA_SHOWING,  CAMERA_FADING,
 	SHIFT_SHOWING,   SHIFT_FADING,
 	ULT_INTRO,       # archetype name + tagline, auto-advances after INTRO_DUR
 	ULT_SHOWING_E,   ULT_SHOWING_LMB,   ULT_FADING,
@@ -223,8 +222,6 @@ func _enter_state(new_state: State) -> void:
 		State.WASD_SHOWING:
 			_wasd_seen.clear()
 			_show_prompt(KeyChip.make_wasd_cluster(KEY_FONT), "move", "MOVE THE DRONE")
-		State.CAMERA_SHOWING:
-			_show_prompt(KeyChip.make_key_cap("Q", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "camera", "TOGGLE CAMERA")
 		State.SHIFT_SHOWING:
 			_spawn_shift_dummies()
 			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH THROUGH ENEMIES")
@@ -245,7 +242,7 @@ func _enter_state(new_state: State) -> void:
 			_repair_mech = _force_damage_for_repair()
 			_attach_marker_to(_repair_mech)
 			_show_prompt(KeyChip.make_key_cap("F", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "repair", "REPAIR MARKED MECH")
-		State.WASD_FADING, State.CAMERA_FADING, State.SHIFT_FADING, State.ULT_FADING:
+		State.WASD_FADING, State.SHIFT_FADING, State.ULT_FADING:
 			_complete_and_fade()
 		State.DONE:
 			_free_marker()
@@ -424,9 +421,6 @@ func _process(delta: float) -> void:
 				_enter_state(State.WASD_FADING)
 		State.WASD_FADING:
 			if _state_timer >= PRACTICE_DUR:
-				_enter_state(State.CAMERA_SHOWING)
-		State.CAMERA_FADING:
-			if _state_timer >= PRACTICE_DUR:
 				_enter_state(State.SHIFT_SHOWING)
 		State.SHIFT_SHOWING:
 			if _state_timer >= MIN_PROMPT_TIME and Input.is_key_pressed(KEY_SHIFT):
@@ -456,7 +450,7 @@ func _process(delta: float) -> void:
 		State.DONE:
 			pass
 
-# Tap-style inputs (Q, E, LMB) go through events rather than per-frame polling.
+# Tap-style inputs (E, LMB) go through events rather than per-frame polling.
 # Polling can drop a quick press if it lands between frames; events fire on the
 # pressed edge regardless of frame timing. The MIN_PROMPT_TIME gate still
 # applies so the prompt has time to render before the input counts.
@@ -465,9 +459,6 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match _state:
-			State.CAMERA_SHOWING:
-				if event.keycode == KEY_Q:
-					_enter_state(State.CAMERA_FADING)
 			State.ULT_SHOWING_E:
 				if event.keycode == KEY_E and _drone_near_target_mech():
 					if _target_uses_aim_mode():
