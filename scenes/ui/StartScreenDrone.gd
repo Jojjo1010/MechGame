@@ -9,18 +9,17 @@ extends SubViewportContainer
 
 const BODY_COLOR := Color(0.10, 0.80, 1.00)
 const RING_COLOR := Color(0.05, 0.40, 0.60)
-const EYE_WHITE  := Color(0.96, 0.98, 1.00)
 const PUPIL_DARK := Color(0.04, 0.10, 0.16)
 
 const TILT_MAX_DEG    := 12.0
 const TILT_RANGE_PX   := 600.0   # cursor distance at which tilt reaches max
-const PUPIL_TRACK_3D  := 0.045   # pupil offset in eye-local units
+const PUPIL_TRACK_3D  := 0.035   # eye-dot offset in eye-local units
 const PUPIL_RANGE_PX  := 240.0
 const DRIFT_AMP_X     := 0.030
 const DRIFT_AMP_Y     := 0.022
 const DRIFT_FREQ_X    := 0.70
 const DRIFT_FREQ_Y    := 1.05
-const PUPIL_REST_Z    := 0.085   # pupil resting offset in eye-pivot +Z
+const PUPIL_REST_Z    := 0.020   # forward offset of the eye-dot in pivot space
 
 const VIEWPORT_SIZE := Vector2i(280, 220)
 
@@ -106,35 +105,29 @@ func _build_ring(parent: Node3D) -> void:
 	parent.add_child(mi)
 
 func _build_eye(parent: Node3D, pos: Vector3) -> Node3D:
+	# Eye is just a pivot — no white sclera. The dark dot returned by
+	# _build_pupil reads as the whole eye, which is much cuter than a glossy
+	# sphere catching specular like a glass globe.
 	var pivot := Node3D.new()
 	pivot.position = pos
 	parent.add_child(pivot)
-	var mi := MeshInstance3D.new()
-	var sph := SphereMesh.new()
-	sph.radius = 0.11
-	sph.height = 0.22
-	mi.mesh = sph
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = EYE_WHITE
-	mat.emission_enabled = true
-	mat.emission = Color(1, 1, 1)
-	mat.emission_energy_multiplier = 0.35
-	mat.metallic = 0.0
-	mat.roughness = 0.5
-	mi.material_override = mat
-	pivot.add_child(mi)
 	return pivot
 
 func _build_pupil(eye_pivot: Node3D) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var sph := SphereMesh.new()
-	sph.radius = 0.05
-	sph.height = 0.10
+	# Smaller dot. Was 0.05 with a 0.11 sclera around it; without the sclera
+	# it's still readable at half that.
+	sph.radius = 0.045
+	sph.height = 0.090
 	mi.mesh = sph
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = PUPIL_DARK
-	mat.metallic = 0.0
-	mat.roughness = 0.2
+	# Unshaded + matte so the directional sun doesn't spec-highlight the dot
+	# into a mini-globe — keeps the read flat, cartoon-style.
+	mat.metallic     = 0.0
+	mat.roughness    = 1.0
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mi.material_override = mat
 	mi.position = Vector3(0.0, 0.0, PUPIL_REST_Z)
 	eye_pivot.add_child(mi)
