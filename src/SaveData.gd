@@ -12,6 +12,10 @@ const MAX_MECH_SLOTS       := 5
 var total_scrap:         int = 0
 var unlocked_mech_slots: int = STARTING_MECH_SLOTS
 
+# Set true once the player has cleared the on-boarding hints. Persisted so
+# replay runs aren't pestered.
+var tutorial_seen: bool = false
+
 # Settings — persisted across runs.
 var music_volume:   float = 1.0   # 0..1 linear
 var sfx_volume:     float = 1.0   # 0..1 linear
@@ -75,6 +79,7 @@ func save_to_disk() -> void:
 		"window_w":            window_size.x,
 		"window_h":            window_size.y,
 		"fullscreen":          fullscreen,
+		"tutorial_seen":       tutorial_seen,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -99,8 +104,15 @@ func load_from_disk() -> void:
 		STARTING_MECH_SLOTS, MAX_MECH_SLOTS)
 	music_volume = clampf(float(data.get("music_volume", 1.0)), 0.0, 1.0)
 	sfx_volume   = clampf(float(data.get("sfx_volume",   1.0)), 0.0, 1.0)
-	window_size  = Vector2i(int(data.get("window_w", 0)), int(data.get("window_h", 0)))
-	fullscreen   = bool(data.get("fullscreen", true))
+	window_size   = Vector2i(int(data.get("window_w", 0)), int(data.get("window_h", 0)))
+	fullscreen    = bool(data.get("fullscreen", true))
+	tutorial_seen = bool(data.get("tutorial_seen", false))
+
+func mark_tutorial_seen() -> void:
+	if tutorial_seen:
+		return
+	tutorial_seen = true
+	save_to_disk()
 
 # ── Scrap ─────────────────────────────────────────────────────────────────────
 

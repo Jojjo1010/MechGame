@@ -21,7 +21,7 @@ extends CanvasLayer
 # referenced by the button signal connections. Do not rename.
 
 const GAME_SCENE_PATH   := "res://scenes/game/Game.tscn"
-const GARAGE_SCENE_PATH := "res://scenes/garage/Garage.tscn"
+const START_SCENE_PATH  := "res://scenes/ui/StartScreen.tscn"
 
 # ── Layout tokens (8 px grid) ────────────────────────────────────────────────
 
@@ -288,6 +288,9 @@ func _on_retry_pressed() -> void:
 	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 func _on_garage_pressed() -> void:
+	# Handler name kept as-is — caller in _build wires it to the secondary
+	# button. With the flow shift to a real Start screen, "QUIT" now returns
+	# to that screen rather than the (still-unreached) Garage.
 	AudioManager.play("ui_click")
 	get_tree().paused = false
-	get_tree().change_scene_to_file(GARAGE_SCENE_PATH)
+	get_tree().change_scene_to_file(START_SCENE_PATH)

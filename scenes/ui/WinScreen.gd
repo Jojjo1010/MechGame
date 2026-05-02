@@ -9,8 +9,8 @@ extends CanvasLayer
 # `_on_play_again_pressed` / `_on_garage_pressed` are referenced by the button
 # signal connections. Do not rename.
 
-const GAME_SCENE_PATH   := "res://scenes/game/Game.tscn"
-const GARAGE_SCENE_PATH := "res://scenes/garage/Garage.tscn"
+const GAME_SCENE_PATH  := "res://scenes/game/Game.tscn"
+const START_SCENE_PATH := "res://scenes/ui/StartScreen.tscn"
 
 # ── Layout tokens (8 px grid) — match DeathScreen so the two screens read as
 # siblings ──────────────────────────────────────────────────────────────────
@@ -251,6 +251,8 @@ func _on_play_again_pressed() -> void:
 	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 func _on_garage_pressed() -> void:
+	# Handler name kept verbatim for parity with DeathScreen. QUIT routes back
+	# to the Start screen until the meta-progression flow lands.
 	AudioManager.play("ui_click")
 	get_tree().paused = false
-	get_tree().change_scene_to_file(GARAGE_SCENE_PATH)
+	get_tree().change_scene_to_file(START_SCENE_PATH)
