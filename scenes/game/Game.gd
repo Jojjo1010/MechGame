@@ -324,17 +324,22 @@ func _setup_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.7
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.fog_enabled = true
 	env.fog_density = 0.005
-	env.glow_enabled = true
-	env.glow_intensity = 0.35
+	if OS.has_feature("web"):
+		env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+		env.glow_enabled = false
+		env.ambient_light_energy = 0.9
+	else:
+		env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		env.glow_enabled = true
+		env.glow_intensity = 0.35
+		env.ambient_light_energy = 0.7
 	world_env.environment = env
 
 	sun.light_color = Color(1.0, 0.94, 0.78)
 	sun.light_energy = 1.3
-	sun.shadow_enabled = true
+	sun.shadow_enabled = not OS.has_feature("web")
 	sun.rotation_degrees = Vector3(-52.0, 42.0, 0.0)
 
 # --- Drone proximity ---

@@ -18,7 +18,7 @@
 set -euo pipefail
 
 GODOT="${GODOT:-/c/Users/Johanna/Downloads/Godot_v4.6.2-stable_win64.exe/Godot_v4.6.2-stable_win64.exe}"
-ITCH_TARGET="${ITCH_TARGET:-jojjo1010/conga-mechs:web}"
+ITCH_TARGET="${ITCH_TARGET:-granstrom/mech-game:web}"
 OUT_DIR="build/web"
 OUT_FILE="$OUT_DIR/index.html"
 

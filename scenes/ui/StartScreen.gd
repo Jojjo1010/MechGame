@@ -393,11 +393,13 @@ func _process(delta: float) -> void:
 
 func _on_play_pressed() -> void:
 	AudioManager.play("ui_click")
+	AudioManager.play_music("bgm_main", -12.0)
 	RunManager.tutorial_only = false
 	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 func _on_how_to_play_pressed() -> void:
 	AudioManager.play("ui_click")
+	AudioManager.play_music("bgm_main", -12.0)
 	RunManager.tutorial_only = true
 	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
