@@ -120,10 +120,16 @@ func _input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	super._process(delta)
 	if _marking:
-		# Ring is parented to the drone, so it follows automatically. If the
-		# drone died mid-mark, bail out cleanly.
-		if _get_drone() == null:
+		var drone := _get_drone()
+		if drone == null:
 			_cancel_marking()
+			return
+		# Ring is top_level (ignores parent transform) so the drone's tilt-
+		# from-velocity doesn't rotate the targeting circle. Track XZ in world
+		# space and pin to ground each frame.
+		if is_instance_valid(_ring_root):
+			_ring_root.global_position = Vector3(drone.global_position.x, 0.05, drone.global_position.z)
+			_ring_root.global_rotation = Vector3.ZERO
 
 # ── Drone lookup ─────────────────────────────────────────────────────────────
 
@@ -141,8 +147,12 @@ func _get_drone() -> Node3D:
 func _build_ring(drone: Node3D) -> void:
 	_ring_root = Node3D.new()
 	drone.add_child(_ring_root)
-	# Drone hovers — anchor to ground regardless of drone height.
-	_ring_root.position = Vector3(0.0, -drone.global_position.y + 0.05, 0.0)
+	# top_level = the ring's transform is in world space, so the drone's
+	# velocity-driven tilt and bob don't rotate / translate the targeting
+	# circle. _process pins it to the drone's XZ at ground level each frame.
+	_ring_root.top_level = true
+	_ring_root.global_position = Vector3(drone.global_position.x, 0.05, drone.global_position.z)
+	_ring_root.global_rotation = Vector3.ZERO
 
 	var disc := MeshInstance3D.new()
 	var torus := TorusMesh.new()

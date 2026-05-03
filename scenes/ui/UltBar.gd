@@ -163,6 +163,10 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	# ── Connect charge signal ─────────────────────────────────────────────────
 	var slot_idx := idx
 	weapon.charge_changed.connect(func(v: float) -> void: _on_charge(slot_idx, v))
+	# weapon.setup() already emitted charge_changed before this connect ran, so
+	# pull the current charge once to seed the bar — otherwise it sits empty on
+	# wave 1 even though the ult is fully charged.
+	_on_charge(slot_idx, weapon.get_charge())
 
 # ── Portrait construction ─────────────────────────────────────────────────────
 func _build_portrait(weapon_name: String) -> Control:

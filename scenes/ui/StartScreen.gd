@@ -358,10 +358,12 @@ func _build_mech_parade(root: Control) -> Control:
 	for i in slots:
 		var weapon: String = PARADE_WEAPONS[i % PARADE_WEAPONS.size()]
 		var portrait: Control = MechPortraitScript.new()
-		# facing_deg=0 → front faces +X (screen right), matching the walk direction.
+		# facing_deg=180 → front faces +X (screen right), matching the walk
+		# direction. Latest FBX exports authored their front toward -X, so the
+		# 180° flip puts the noses pointing along the parade march again.
 		# weapon_name pulls model + tint from MechArchetypes — the parade reflects
 		# whatever per-archetype model is registered there.
-		portrait.call("setup", weapon, PARADE_MECH_SIZE, 0.0, true, 0.0)
+		portrait.call("setup", weapon, PARADE_MECH_SIZE, 0.0, true, 180.0)
 		# Whole formation starts off-screen to the left, so the title opens
 		# empty and the line walks in. i=0 is the front of the conga (closest
 		# to the screen edge); higher i sits further off-screen back.

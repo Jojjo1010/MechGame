@@ -22,6 +22,9 @@ const DASH_DESIGN_ASPECT := 1.6 # 2880×1800 — the design machine's aspect
 const DASH_IFRAMES_GRACE := 0.18 # daze-immune grace tacked on after dash ends
 const DASH_COOLDOWN  := 0.7     # snappy — re-dash twice per second-ish, not rationed
 const DASH_GHOST_PERIOD  := 0.035   # seconds between afterimage spawns during dash
+const DASH_HIT_RADIUS    := 1.6     # enemies inside this get punched through
+const DASH_DAMAGE        := 18.0    # damage per enemy passed through (one hit per dash)
+const DASH_KNOCKBACK     := 24.0    # impulse magnitude on enemies passed through
 
 var player_controlled: bool = false
 var repair_locked: bool = false
@@ -37,6 +40,7 @@ var _dash_cooldown:  float = 0.0
 var _dash_iframe:    float = 0.0              # daze-immune window — covers dash + brief landing grace
 var _dash_ghost_t:   float = 0.0
 var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
+var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
 var _shift_was_down: bool = false              # edge-detect for polled Shift key
 
 func _ready() -> void:
@@ -142,7 +146,7 @@ func _process(delta: float) -> void:
 
 	# Dashing: i-frames (skip enemy contact) + steerable. Re-read WASD each
 	# frame so the player can curve mid-dash; if no input, we keep the last dash
-	# direction. Pure movement — no damage; that may return as a drone upgrade.
+	# direction. Each enemy along the path is punched through once.
 	if _dash_active > 0.0:
 		_dash_active = maxf(0.0, _dash_active - delta)
 		var cam_fwd2   := _cam_forward()
@@ -165,6 +169,7 @@ func _process(delta: float) -> void:
 		if _dash_ghost_t <= 0.0:
 			_dash_ghost_t = DASH_GHOST_PERIOD
 			_spawn_dash_ghost()
+		_dash_punch_through()
 		return
 
 	# Check for enemy contacts → daze
@@ -245,6 +250,7 @@ func _try_dash() -> void:
 	_dash_iframe   = duration + DASH_IFRAMES_GRACE
 	_dash_dir      = input.normalized()
 	_dash_ghost_t  = 0.0
+	_dash_hit_set.clear()
 	# Dash breaks daze
 	if _daze_timer > 0.0:
 		_daze_timer = 0.0
@@ -254,6 +260,33 @@ func _try_dash() -> void:
 	AudioManager.play("garlic_pulse", global_position, -8.0, 0.85)
 	# Cyan flash burst at takeoff so the player sees the dash trigger
 	BurstVFX.spawn(global_position, Color(0.4, 0.85, 1.0), 22, 7.0, 0.45, get_tree().current_scene)
+
+# Find any enemies within DASH_HIT_RADIUS of the drone, deal damage + knockback
+# once per enemy per dash, and spawn a hit-through VFX.
+func _dash_punch_through() -> void:
+	EnemyGridCS.ensure_fresh(get_tree())
+	for e in EnemyGridCS.query(global_position, DASH_HIT_RADIUS):
+		if e == null or not is_instance_valid(e):
+			continue
+		var enemy_id: int = e.get_instance_id()
+		if _dash_hit_set.has(enemy_id):
+			continue
+		var diff: Vector3 = e.global_position - global_position
+		diff.y = 0.0
+		if diff.length() > DASH_HIT_RADIUS:
+			continue
+		_dash_hit_set[enemy_id] = true
+		if e.has_method("take_damage"):
+			e.take_damage(DASH_DAMAGE, true)   # render as crit so the number shouts
+		if e.has_method("apply_knockback"):
+			# Shove enemies along dash direction (so they spray forward, readable)
+			var dir := _dash_dir
+			if dir.length_squared() < 0.01:
+				dir = diff.normalized()
+			e.apply_knockback(dir.normalized() * DASH_KNOCKBACK)
+		AudioManager.play("bullet_impact", e.global_position, -4.0, 1.4)
+		BurstVFX.spawn(e.global_position + Vector3(0.0, 1.0, 0.0),
+			Color(0.5, 0.9, 1.0), 18, 6.5, 0.4, get_tree().current_scene)
 
 # Spawn a faded copy of the drone's body meshes at the current pose. Each ghost
 # fades out over 0.28s, creating a continuous afterimage trail behind the dash.
