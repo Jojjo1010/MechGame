@@ -44,13 +44,15 @@ static func spawn(pos: Vector3, color: Color, count: int, speed: float, lifetime
 	# Callable bind throws "Cannot convert argument 1 from Object to Object"
 	# trying to pass a freed Object as a typed param. Capturing through a
 	# weakref sidesteps that — we can null-check inside the lambda safely.
-	var ref := weakref(p)
+	var ref: WeakRef = weakref(p)
 	scene_root.get_tree().create_timer(lifetime + 0.5).timeout.connect(
 		func() -> void:
 			_active_count = maxi(0, _active_count - 1)
-			var alive: Variant = ref.get_ref()
+			# `as Node` returns null if the weakref already collected, so the
+			# is_instance_valid check covers the freed-but-not-yet-cleared case.
+			var alive: Node = ref.get_ref() as Node
 			if alive != null and is_instance_valid(alive):
-				(alive as Node).queue_free()
+				alive.queue_free()
 	)
 
 static func _build_shared_mesh() -> void:
