@@ -22,6 +22,7 @@ const DRONE_HINT_SCRIPT     := preload("res://scenes/ui/DroneHiddenHint.gd")
 const LEFT_CLICK_HINT_SCRIPT := preload("res://scenes/ui/LeftClickHint.gd")
 const PAUSE_MENU_SCRIPT     := preload("res://scenes/ui/PauseMenu.gd")
 const TUTORIAL_PROMPTS_SCRIPT := preload("res://scenes/ui/TutorialPrompts.gd")
+const WAVE_BANNER_SCRIPT      := preload("res://scenes/ui/WaveBanner.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
@@ -127,6 +128,7 @@ func _ready() -> void:
 		_spawn_upgrade_picker()
 		_spawn_drone_hint()
 		_spawn_left_click_hint()
+		_spawn_wave_banner()
 	RunManager.run_won.connect(_on_run_won)
 	AudioManager.play_music("bgm_main", -12.0)
 
@@ -206,6 +208,12 @@ func _spawn_upgrade_picker() -> void:
 	_upgrade_picker.set_script(UPGRADE_PICKER_SCRIPT)
 	add_child(_upgrade_picker)
 	_upgrade_picker.setup(_weapons, _archetype_colors())
+
+func _spawn_wave_banner() -> void:
+	var banner := CanvasLayer.new()
+	banner.set_script(WAVE_BANNER_SCRIPT)
+	add_child(banner)
+	wave_spawner.wave_announced.connect(banner.show_wave)
 
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
