@@ -417,7 +417,7 @@
   <!-- HIGH CONCEPT -->
   <section id="concept" class="panel" style="--accent: var(--c-blue);">
     <h2>High Concept</h2>
-    <p>A 3D roguelite where the player pilots a flying drone shepherding a forward-marching conga line of 3–5 auto-firing mechs through endless enemy waves. The drone collects pickups, triggers ultimates, and runs a 4-key WASD minigame to repair burning mechs. Each level-up offers 3 weighted boons (Hades-style) for one rolled mech. Between runs, scrap earned from waves and gold unlocks additional mech slots in the Garage.</p>
+    <p>A 3D roguelite where the player pilots a flying drone shepherding a forward-marching conga line of 3–5 auto-firing mechs through endless enemy waves. The drone collects pickups, triggers ultimates, and runs a 4-key directional minigame (WASD or arrow keys, interchangeable) to repair burning mechs. Each level-up offers 3 weighted boons (Hades-style) for one rolled mech. Between runs, scrap earned from waves and gold unlocks additional mech slots in the Garage.</p>
   </section>
 
   <!-- CORE LOOP -->
@@ -438,7 +438,7 @@
       <div>
         <h3>Branches</h3>
         <ul style="margin:0; padding-left:18px;">
-          <li><strong>Burn</strong> — Mech HP <code>≤ 45%</code> ignites, ticks <code>2 dps</code>. Drone within <code>5 u</code> + Repair button → 4-key WASD minigame → success fully heals + clears burn; fail flashes red and resets sequence.</li>
+          <li><strong>Burn</strong> — Mech HP <code>≤ 45%</code> ignites, ticks <code>2 dps</code>. Drone within <code>5 u</code> + Repair button → 4-key directional minigame (WASD or arrows) → success fully heals + clears burn; fail flashes red and resets sequence.</li>
           <li><strong>Death</strong> — A mech at 0 HP is lost for the rest of the run. Enemies retarget the nearest alive mech.</li>
           <li><strong>Run end</strong> — All mechs dead → DeathScreen → return to Garage with <code>wave + floor(gold / 3)</code> scrap. Slot 4 = 50 scrap, slot 5 = 120 scrap (must own 4 first). Save lives in <code>user://save.json</code>.</li>
         </ul>
@@ -453,7 +453,7 @@
       <div>
         <h3>Keyboard</h3>
         <dl class="stats">
-          <div><dt>WASD</dt><dd>Move drone (camera-relative)</dd></div>
+          <div><dt>WASD or ↑ ← ↓ →</dt><dd>Move drone (camera-relative; either set works, freely interchangeable)</dd></div>
           <div><dt>Space</dt><dd>Dash (1.5 s cd, force 32, 0.18 s, breaks daze)</dd></div>
           <div><dt>E</dt><dd>Trigger ult on nearest mech in range</dd></div>
           <div><dt>F</dt><dd>Start repair minigame on damaged mech</dd></div>
@@ -469,7 +469,7 @@
           <div><dt>UI: Repair</dt><dd>MechOptionsPanel — appears within 5 u of mech</dd></div>
           <div><dt>UI: Ult</dt><dd>UltBar — shows charge per weapon, fires on E</dd></div>
         </dl>
-        <p style="color:var(--muted); font-size:12px; margin-top:12px;"><strong>Repair minigame</strong> — 4 random WASD keys (no repeat). Wrong key flashes red and resets to step 0; correct sequence fully heals the mech and clears burn.</p>
+        <p style="color:var(--muted); font-size:12px; margin-top:12px;"><strong>Repair minigame</strong> — 4 random direction keys, no repeat (WASD or arrow keys both count for each direction; matched index-wise: W = ↑, A = ←, S = ↓, D = →). Wrong key flashes red and resets to step 0; correct sequence fully heals the mech and clears burn.</p>
       </div>
     </div>
   </section>
@@ -1250,7 +1250,7 @@ if splash_radius &gt; 0
         <h3>Full-screen overlays</h3>
         <dl class="stats">
           <div><dt>UpgradePicker</dt><dd>Level-up boon selector. Slot-machine portrait carousel + 3 offer cards. Pauses time. No skip.</dd></div>
-          <div><dt>RepairMinigame</dt><dd>4-key WASD sequence overlay. Locks drone in place beside mech; retries on wrong key.</dd></div>
+          <div><dt>RepairMinigame</dt><dd>4-key directional sequence overlay (WASD or arrows). Locks drone in place beside mech; retries on wrong key.</dd></div>
           <div><dt>DeathScreen</dt><dd>Run-end summary: wave reached, gold collected, scrap earned. Routes to Garage.</dd></div>
         </dl>
         <h3>Contextual panels</h3>

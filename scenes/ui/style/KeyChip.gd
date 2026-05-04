@@ -38,6 +38,42 @@ static func make_key_cap(text: String, w: float, h: float, font_size: int) -> Pa
 
 # Two-row keyboard cluster: W centered above the A/S/D row.
 static func make_wasd_cluster(font_size: int = UITheme.FONT_LABEL_CAPS) -> Control:
+	return _make_dpad_cluster(["W", "A", "S", "D"], font_size)
+
+# Same shape as the WASD cluster but with arrow glyphs — for surfaces that
+# need to show the arrow-key alternative explicitly.
+static func make_arrow_cluster(font_size: int = UITheme.FONT_LABEL_CAPS) -> Control:
+	return _make_dpad_cluster(["↑", "←", "↓", "→"], font_size)
+
+# Combined chip used wherever movement is taught (controls legend, tutorial
+# prompt). Two clusters with a small "OR" between so the player sees both
+# input options at once instead of having to hunt for it.
+static func make_movement_cluster(font_size: int = UITheme.FONT_LABEL_CAPS) -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", KEY_GAP * 2)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(make_wasd_cluster(font_size))
+
+	var sep := Label.new()
+	sep.text = "OR"
+	UITheme.style_label_caps(sep, UITheme.FONT_BODY, UITheme.COLOR_TEXT_SECONDARY)
+	sep.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sep.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(sep)
+
+	hbox.add_child(make_arrow_cluster(font_size))
+
+	# Same min-size pattern as the single cluster — give the chip-holder caller
+	# (TutorialPrompts) a real width at insert time so it doesn't read 0.
+	var cluster_w: float = 3.0 * KEY_SIZE + 2.0 * KEY_GAP
+	hbox.custom_minimum_size = Vector2(2.0 * cluster_w + 64.0, 2.0 * KEY_SIZE + KEY_GAP)
+	return hbox
+
+# Internal helper — the WASD and arrow clusters share an identical 3-column
+# d-pad layout (top centered, bottom row of three), so the only difference
+# is the four glyph strings. Pass them top → left → down → right.
+static func _make_dpad_cluster(glyphs: Array, font_size: int) -> Control:
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", KEY_GAP)
@@ -49,11 +85,11 @@ static func make_wasd_cluster(font_size: int = UITheme.FONT_LABEL_CAPS) -> Contr
 	# spills into the action icon / label downstream.
 	grid.custom_minimum_size = Vector2(3.0 * KEY_SIZE + 2.0 * KEY_GAP, 2.0 * KEY_SIZE + KEY_GAP)
 	grid.add_child(_make_spacer())
-	grid.add_child(make_key_cap("W", KEY_SIZE, KEY_SIZE, font_size))
+	grid.add_child(make_key_cap(String(glyphs[0]), KEY_SIZE, KEY_SIZE, font_size))
 	grid.add_child(_make_spacer())
-	grid.add_child(make_key_cap("A", KEY_SIZE, KEY_SIZE, font_size))
-	grid.add_child(make_key_cap("S", KEY_SIZE, KEY_SIZE, font_size))
-	grid.add_child(make_key_cap("D", KEY_SIZE, KEY_SIZE, font_size))
+	grid.add_child(make_key_cap(String(glyphs[1]), KEY_SIZE, KEY_SIZE, font_size))
+	grid.add_child(make_key_cap(String(glyphs[2]), KEY_SIZE, KEY_SIZE, font_size))
+	grid.add_child(make_key_cap(String(glyphs[3]), KEY_SIZE, KEY_SIZE, font_size))
 	return grid
 
 static func _make_spacer() -> Control:

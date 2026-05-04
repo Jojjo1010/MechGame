@@ -144,18 +144,14 @@ func _process(delta: float) -> void:
 	if _dash_iframe > 0.0:
 		_dash_iframe = maxf(0.0, _dash_iframe - delta)
 
-	# Dashing: i-frames (skip enemy contact) + steerable. Re-read WASD each
-	# frame so the player can curve mid-dash; if no input, we keep the last dash
-	# direction. Each enemy along the path is punched through once.
+	# Dashing: i-frames (skip enemy contact) + steerable. Re-read movement
+	# input each frame so the player can curve mid-dash; if no input, we keep
+	# the last dash direction. Each enemy along the path is punched through once.
 	if _dash_active > 0.0:
 		_dash_active = maxf(0.0, _dash_active - delta)
 		var cam_fwd2   := _cam_forward()
 		var cam_right2 := _cam_right()
-		var dash_input := Vector3.ZERO
-		if Input.is_key_pressed(KEY_W): dash_input += cam_fwd2
-		if Input.is_key_pressed(KEY_S): dash_input -= cam_fwd2
-		if Input.is_key_pressed(KEY_A): dash_input -= cam_right2
-		if Input.is_key_pressed(KEY_D): dash_input += cam_right2
+		var dash_input := _read_movement_input(cam_fwd2, cam_right2)
 		if dash_input.length_squared() > 0.01:
 			dash_input.y = 0.0
 			_dash_dir = dash_input.normalized()
@@ -190,12 +186,7 @@ func _process(delta: float) -> void:
 	var cam_fwd   := _cam_forward()
 	var cam_right := _cam_right()
 
-	var input := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W): input += cam_fwd
-	if Input.is_key_pressed(KEY_S): input -= cam_fwd
-	if Input.is_key_pressed(KEY_A): input -= cam_right
-	if Input.is_key_pressed(KEY_D): input += cam_right
-
+	var input := _read_movement_input(cam_fwd, cam_right)
 	if input.length() > 0.0:
 		input = input.normalized()
 
@@ -227,15 +218,11 @@ func _dash_duration_for_aspect() -> float:
 func _try_dash() -> void:
 	if _dash_cooldown > 0.0 or _dash_active > 0.0:
 		return
-	# Dash direction: current WASD input (camera-relative). Falls back to current
-	# movement direction; if standing still, dash forward along the line of march.
+	# Dash direction: current movement input (camera-relative). Falls back to
+	# current movement direction; if standing still, dash forward along the line.
 	var cam_fwd   := _cam_forward()
 	var cam_right := _cam_right()
-	var input := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W): input += cam_fwd
-	if Input.is_key_pressed(KEY_S): input -= cam_fwd
-	if Input.is_key_pressed(KEY_A): input -= cam_right
-	if Input.is_key_pressed(KEY_D): input += cam_right
+	var input := _read_movement_input(cam_fwd, cam_right)
 	if input.length_squared() < 0.01:
 		input = velocity if velocity.length_squared() > 0.5 else cam_fwd
 	input.y = 0.0
@@ -342,6 +329,18 @@ func _set_daze_visual(on: bool) -> void:
 	for mi in _mesh_instances:
 		if is_instance_valid(mi):
 			mi.material_overlay = _daze_mat if on else null
+
+# Camera-relative movement input. WASD and arrow keys are interchangeable —
+# either set produces the same vector, so left-handed players or those who
+# prefer arrows aren't penalized. Used by passive movement, dash steering,
+# and the dash-launch direction read.
+func _read_movement_input(cam_fwd: Vector3, cam_right: Vector3) -> Vector3:
+	var v := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    v += cam_fwd
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  v -= cam_fwd
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):  v -= cam_right
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): v += cam_right
+	return v
 
 # Camera's -Z axis projected onto XZ = screen-forward in world space
 func _cam_forward() -> Vector3:

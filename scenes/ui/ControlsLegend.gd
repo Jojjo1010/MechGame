@@ -6,9 +6,9 @@ extends CanvasLayer
 # input, not an abstract label.
 
 const ENTRIES := [
-	{key = "WASD",   icon = "move",   action = "Move drone"},
-	{key = "Shift",  icon = "dash",   action = "Dash"},
-	{key = "Scroll", icon = "zoom",   action = "Zoom"},
+	{key = "MOVEMENT", icon = "move",   action = "Move drone"},
+	{key = "Shift",    icon = "dash",   action = "Dash"},
+	{key = "Scroll",   icon = "zoom",   action = "Zoom"},
 ]
 
 # All spacing/size values follow the 8 px design system. Type scale uses its
@@ -90,10 +90,10 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 # Picks the chip type that matches the actual input.
 func _make_chip(key_text: String) -> Control:
 	match key_text:
-		"WASD":   return KeyChip.make_wasd_cluster(KEY_FONT)
-		"Shift":  return KeyChip.make_key_cap("SHIFT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
-		"Scroll": return _make_mouse_chip()
-		_:        return KeyChip.make_key_cap(key_text, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
+		"MOVEMENT": return KeyChip.make_movement_cluster(KEY_FONT)
+		"Shift":    return KeyChip.make_key_cap("SHIFT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
+		"Scroll":   return _make_mouse_chip()
+		_:          return KeyChip.make_key_cap(key_text, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
 
 func _make_mouse_chip() -> Control:
 	var m := MouseIcon.new()
