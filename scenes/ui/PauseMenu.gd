@@ -11,6 +11,7 @@ extends CanvasLayer
 
 const START_SCENE_PATH := "res://scenes/ui/StartScreen.tscn"
 const Upgrades         := preload("res://src/Upgrades.gd")
+const MechArchetypesCS := preload("res://scenes/mechs/MechArchetypes.gd")
 
 const PANEL_PAD_H    := UITheme.PAD_XL * 2
 const PANEL_PAD_V    := UITheme.PAD_XL * 2
@@ -36,8 +37,10 @@ var _settings_view:  Control = null
 var _stat_labels:    Dictionary = {}   # label_key -> Label
 var _level_target:   SpinBox = null
 var _wave_target:    SpinBox = null
-var _upgrade_target: OptionButton = null
 var _upgrade_choice: OptionButton = null
+var _selected_target_idx: int = 0      # index into the surviving-weapons array
+var _target_buttons: Array[Button] = []
+var _equipped_label: Label = null
 
 # Resolution presets shown in the settings dropdown. (0,0) is the
 # "Fullscreen" entry — handled specially.
@@ -186,16 +189,23 @@ func _build_debug_view() -> Control:
 
 	actions.add_child(_make_wave_jump_row())
 	actions.add_child(_make_level_jump_row())
-	actions.add_child(_make_add_upgrade_row())
-	var gold_btn  := _make_secondary_button("+500 GOLD")
-	var heal_btn  := _make_secondary_button("HEAL ALL MECHS")
-	var kill_btn  := _make_secondary_button("KILL ALL ENEMIES")
+	actions.add_child(_make_add_upgrade_section())
+	var gold_btn   := _make_secondary_button("+500 GOLD")
+	var heal_btn   := _make_secondary_button("HEAL ALL MECHS")
+	var kill_btn   := _make_secondary_button("KILL ALL ENEMIES")
+	var picker_btn := _make_secondary_button("TRIGGER UPGRADE PICKER")
 	gold_btn.pressed.connect(_dbg_gold)
 	heal_btn.pressed.connect(_dbg_heal)
 	kill_btn.pressed.connect(_dbg_kill_enemies)
+	picker_btn.pressed.connect(_dbg_trigger_picker)
 	actions.add_child(gold_btn)
 	actions.add_child(heal_btn)
 	actions.add_child(kill_btn)
+	actions.add_child(picker_btn)
+
+	col.add_child(_divider())
+	actions.add_child(_make_pattern_force_label())
+	actions.add_child(_make_pattern_force_grid())
 
 	col.add_child(_divider())
 
@@ -437,32 +447,71 @@ func _dbg_jump_to_level() -> void:
 	RunManager.set_level(target)
 	queue_free()
 
-# ── ADD UPGRADE row ──────────────────────────────────────────────────────────
-# Mech dropdown + upgrade dropdown + ADD button. Lets you grant a specific
-# upgrade to a specific mech without going through the level-up picker. The
-# upgrade list filters to entries whose target matches the selected mech, so
-# the second dropdown stays scoped.
-func _make_add_upgrade_row() -> Control:
-	var hbox := HBoxContainer.new()
-	hbox.custom_minimum_size = Vector2(BTN_W, 0.0)
-	hbox.add_theme_constant_override("separation", UITheme.PAD_S)
+# ── ADD UPGRADE section ──────────────────────────────────────────────────────
+# Three-row layout so a tester can see at a glance which mech they're touching
+# and what's already on it:
+#   1) tinted target buttons — one per surviving mech, archetype-coloured, the
+#      currently-selected one is highlighted
+#   2) equipped summary — text line listing what the selected mech already has
+#      with stack counts ("Rapid Gun ×2 · Bulwark · Twin Shot")
+#   3) available-upgrade dropdown + ADD — dropdown items are annotated so you
+#      can read at a glance what's already maxed or already taken
+# Replaces the old 3-control row that just said "GUN | Rapid Gun | ADD" with no
+# context for either side of the assignment.
+func _make_add_upgrade_section() -> Control:
+	var col := VBoxContainer.new()
+	col.custom_minimum_size = Vector2(BTN_W, 0.0)
+	col.add_theme_constant_override("separation", UITheme.PAD_S)
 
-	_upgrade_target = OptionButton.new()
-	_upgrade_target.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
-	_upgrade_target.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	for w in _get_run_weapons():
+	col.add_child(_make_target_buttons_row())
+	_equipped_label = _make_equipped_summary_label()
+	col.add_child(_equipped_label)
+	col.add_child(_make_upgrade_picker_row())
+
+	_refresh_equipped_summary()
+	_populate_upgrade_choices()
+	return col
+
+func _make_target_buttons_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", UITheme.PAD_S)
+	_target_buttons.clear()
+	var weapons := _get_run_weapons()
+	for i in weapons.size():
+		var w: Variant = weapons[i]
 		if w == null:
 			continue
-		_upgrade_target.add_item(String(w.weapon_name))
-	_upgrade_target.item_selected.connect(_on_upgrade_target_changed)
-	hbox.add_child(_upgrade_target)
+		var weapon_name := String(w.weapon_name)
+		var btn := Button.new()
+		btn.text = MechArchetypesCS.name_for(weapon_name)
+		btn.custom_minimum_size = Vector2(0.0, BTN_H * 0.75)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
+		btn.add_theme_color_override("font_color", MechArchetypesCS.color_for(weapon_name))
+		btn.pressed.connect(_dbg_select_upgrade_target.bind(i))
+		_target_buttons.append(btn)
+		hbox.add_child(btn)
+	_apply_target_button_styles()
+	return hbox
+
+func _make_equipped_summary_label() -> Label:
+	var l := Label.new()
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(BTN_W, 0.0)
+	UITheme.style_body(l)
+	return l
+
+func _make_upgrade_picker_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", UITheme.PAD_S)
 
 	_upgrade_choice = OptionButton.new()
 	_upgrade_choice.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
 	_upgrade_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_upgrade_choice.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hbox.add_child(_upgrade_choice)
-	_populate_upgrade_choices()
 
 	var btn := _make_secondary_button("ADD")
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -471,31 +520,103 @@ func _make_add_upgrade_row() -> Control:
 	hbox.add_child(btn)
 	return hbox
 
-func _on_upgrade_target_changed(_idx: int) -> void:
+func _dbg_select_upgrade_target(idx: int) -> void:
+	AudioManager.play("ui_click")
+	_selected_target_idx = idx
+	_apply_target_button_styles()
+	_refresh_equipped_summary()
 	_populate_upgrade_choices()
 
+# Bright the selected button, dim the others. Keeps the "which mech are we
+# touching" answer visible without making the user re-read the row.
+func _apply_target_button_styles() -> void:
+	for i in _target_buttons.size():
+		var b := _target_buttons[i]
+		if not is_instance_valid(b):
+			continue
+		var weapons := _get_run_weapons()
+		if i >= weapons.size() or weapons[i] == null:
+			continue
+		var tint: Color = MechArchetypesCS.color_for(String(weapons[i].weapon_name))
+		var is_selected := (i == _selected_target_idx)
+		var c := tint if is_selected else Color(tint.r, tint.g, tint.b, 0.55)
+		b.add_theme_color_override("font_color", c)
+		# Brighter font + stronger weight cue for the active mech.
+		var font_size := UITheme.FONT_LABEL_CAPS + (4 if is_selected else 0)
+		b.add_theme_font_size_override("font_size", font_size)
+
+func _selected_target_name() -> String:
+	var weapons := _get_run_weapons()
+	if _selected_target_idx < 0 or _selected_target_idx >= weapons.size():
+		return ""
+	var w: Variant = weapons[_selected_target_idx]
+	return String(w.weapon_name) if w != null else ""
+
+func _refresh_equipped_summary() -> void:
+	if _equipped_label == null:
+		return
+	var target_weapon := _selected_target_name()
+	if target_weapon == "":
+		_equipped_label.text = "(no mech selected)"
+		return
+	var parts: Array[String] = []
+	for d in Upgrades.ALL:
+		if String(d.target) != target_weapon:
+			continue
+		var stacks: int = RunManager.upgrade_stack_count(target_weapon, String(d.id))
+		if stacks <= 0:
+			continue
+		if bool(d.get("unique", false)):
+			parts.append(String(d.title))
+		else:
+			parts.append("%s ×%d" % [String(d.title), stacks])
+	var archetype_name := MechArchetypesCS.name_for(target_weapon)
+	if parts.is_empty():
+		_equipped_label.text = "%s — no upgrades yet" % archetype_name
+	else:
+		_equipped_label.text = "%s — %s" % [archetype_name, " · ".join(parts)]
+
+# Annotate each upgrade with its current stack state so the tester sees what
+# they're about to add: "Rapid Gun (×2/3)" / "Bulwark [MAX]" / "Sanctuary [TAKEN]".
+# Debug ADD ignores caps anyway, but the labels make the consequence obvious.
 func _populate_upgrade_choices() -> void:
-	if _upgrade_choice == null or _upgrade_target == null:
+	if _upgrade_choice == null:
 		return
 	_upgrade_choice.clear()
-	if _upgrade_target.item_count == 0:
+	var target_weapon := _selected_target_name()
+	if target_weapon == "":
 		return
-	var target_name := _upgrade_target.get_item_text(_upgrade_target.selected)
 	for d in Upgrades.ALL:
-		if String(d.target) == target_name:
-			_upgrade_choice.add_item(String(d.title))
+		if String(d.target) != target_weapon:
+			continue
+		var id := String(d.id)
+		var title := String(d.title)
+		var is_unique: bool = bool(d.get("unique", false))
+		var stacks: int = RunManager.upgrade_stack_count(target_weapon, id)
+		var label: String = title
+		if is_unique:
+			label = "%s [%s]" % [title, "TAKEN" if stacks > 0 else "RARE" if int(d.rarity) == 2 else "UNCOMMON"]
+		else:
+			if stacks >= RunManager.MAX_STACKS_COMMON:
+				label = "%s [MAX]" % title
+			else:
+				label = "%s (×%d/%d)" % [title, stacks, RunManager.MAX_STACKS_COMMON]
+		_upgrade_choice.add_item(label)
+		# Stash the upgrade id on the item metadata so _dbg_apply_upgrade doesn't
+		# have to reverse-parse the annotated label back into an upgrade.
+		_upgrade_choice.set_item_metadata(_upgrade_choice.item_count - 1, id)
 
 func _dbg_apply_upgrade() -> void:
 	AudioManager.play("ui_click")
-	if _upgrade_target == null or _upgrade_choice == null:
+	if _upgrade_choice == null or _upgrade_choice.item_count == 0:
 		return
-	if _upgrade_target.item_count == 0 or _upgrade_choice.item_count == 0:
+	var id_meta: Variant = _upgrade_choice.get_item_metadata(_upgrade_choice.selected)
+	if id_meta == null:
 		return
-	var target_name := _upgrade_target.get_item_text(_upgrade_target.selected)
-	var title       := _upgrade_choice.get_item_text(_upgrade_choice.selected)
+	var id := String(id_meta)
 	var upgrade: Dictionary = {}
 	for d in Upgrades.ALL:
-		if String(d.target) == target_name and String(d.title) == title:
+		if String(d.id) == id:
 			upgrade = d
 			break
 	if upgrade.is_empty():
@@ -505,6 +626,9 @@ func _dbg_apply_upgrade() -> void:
 		return
 	Upgrades.apply(upgrade, weapons)
 	RunManager.record_upgrade(upgrade)
+	# Refresh both readouts so the tester sees the change without re-opening.
+	_refresh_equipped_summary()
+	_populate_upgrade_choices()
 
 # Pulls the live weapons array off Game.gd. Game owns the canonical list and
 # replays it whenever a mech dies, so this stays in sync without us tracking it.
@@ -539,6 +663,59 @@ func _dbg_kill_enemies() -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if is_instance_valid(e) and e.has_method("take_damage"):
 			e.take_damage(99999.0, true)
+
+# Fires the level_up signal directly so the UpgradePicker plays its full
+# slot-machine + cards flow — useful for debugging the picker UI itself
+# without needing to grind XP. The receiver ignores the level number, so
+# RunManager.level / xp aren't touched. Use JUMP TO LEVEL for actual progression.
+func _dbg_trigger_picker() -> void:
+	AudioManager.play("ui_click")
+	RunManager.level_up.emit(RunManager.level)
+	queue_free()
+
+# ── Spawn pattern force ──────────────────────────────────────────────────────
+# Labels + ints map to WaveSpawner.Pattern enum order — keep in sync. Clicking
+# any button forces the next wave to that pattern AND fires it immediately
+# (closes the pause menu so the wave can play out). Lets a tester sample each
+# pattern in isolation without rolling and waiting.
+const _PATTERN_BUTTONS: Array = [
+	["ENCIRCLE",   0],
+	["FRONT",      1],
+	["L FLANK",    2],
+	["R FLANK",    3],
+	["REAR",       4],
+	["PINCER",     5],
+]
+
+func _make_pattern_force_label() -> Control:
+	var l := Label.new()
+	l.text = "FORCE PATTERN"
+	UITheme.style_label_caps(l)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return l
+
+func _make_pattern_force_grid() -> Control:
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", UITheme.PAD_S)
+	grid.add_theme_constant_override("v_separation", UITheme.PAD_S)
+	for entry in _PATTERN_BUTTONS:
+		var btn := _make_secondary_button(String(entry[0]))
+		btn.custom_minimum_size = Vector2(160.0, BTN_H)
+		btn.pressed.connect(_dbg_force_pattern.bind(int(entry[1])))
+		grid.add_child(btn)
+	return grid
+
+func _dbg_force_pattern(pattern: int) -> void:
+	AudioManager.play("ui_click")
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var spawner := scene.get_node_or_null("WaveSpawner")
+	if spawner == null or not spawner.has_method("force_next_pattern"):
+		return
+	spawner.force_next_pattern(pattern)
+	queue_free()
 
 # ── Stats ────────────────────────────────────────────────────────────────────
 
