@@ -23,6 +23,7 @@ const LEFT_CLICK_HINT_SCRIPT := preload("res://scenes/ui/LeftClickHint.gd")
 const PAUSE_MENU_SCRIPT     := preload("res://scenes/ui/PauseMenu.gd")
 const TUTORIAL_PROMPTS_SCRIPT := preload("res://scenes/ui/TutorialPrompts.gd")
 const WAVE_BANNER_SCRIPT      := preload("res://scenes/ui/WaveBanner.gd")
+const REPAIR_HUD_SCRIPT       := preload("res://scenes/ui/RepairHud.gd")
 
 const CAM_OFFSET  := Vector3(16.0, 16.0, 16.0)
 const CAM_SMOOTH  := 4.0
@@ -58,6 +59,10 @@ var _weapons: Array[Node3D] = []
 var _ult_bar:        CanvasLayer = null
 var _upgrade_picker: CanvasLayer = null
 var _repair_active: bool = false
+# Per-run cooldown after a successful repair so the player can't chain a heal
+# the moment one finishes — encourages dodge play between attempts.
+const REPAIR_COOLDOWN_AFTER_SUCCESS := 5.0
+var _repair_cooldown: float = 0.0
 var _alive_mechs:   int  = 0
 var _run_ended:     bool = false
 
@@ -116,6 +121,7 @@ func _ready() -> void:
 		wave_spawner.process_mode = Node.PROCESS_MODE_DISABLED
 		_spawn_controls_legend()
 		_spawn_ult_bar()
+		_spawn_repair_hud()
 		for n in get_tree().get_nodes_in_group("tutorial_late_ui"):
 			n.visible = false
 		_spawn_tutorial_prompts()
@@ -125,6 +131,7 @@ func _ready() -> void:
 		_spawn_xp_bar()
 		_spawn_gold_counter()
 		_spawn_ult_bar()
+		_spawn_repair_hud()
 		_spawn_upgrade_picker()
 		_spawn_drone_hint()
 		_spawn_left_click_hint()
@@ -215,6 +222,11 @@ func _spawn_wave_banner() -> void:
 	add_child(banner)
 	wave_spawner.wave_announced.connect(banner.show_wave)
 
+func _spawn_repair_hud() -> void:
+	var hud := CanvasLayer.new()
+	hud.set_script(REPAIR_HUD_SCRIPT)
+	add_child(hud)
+
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
 	if event is InputEventMouseButton and event.pressed:
@@ -234,6 +246,8 @@ func _process(delta: float) -> void:
 	_follow_camera(delta)
 	_check_drone_proximity()
 	_check_drone_visibility(delta)
+	if _repair_cooldown > 0.0:
+		_repair_cooldown = maxf(0.0, _repair_cooldown - delta)
 
 # Show a hint when a mech is roughly between the camera and the drone in
 # screen-space — that's when "the drone is hard to see" actually happens, not
@@ -388,7 +402,7 @@ func _on_mech_repair_pressed(_mech: Node3D) -> void:
 	_try_start_repair()
 
 func _try_start_repair() -> void:
-	if _repair_active or drones.is_empty():
+	if _repair_active or _repair_cooldown > 0.0 or drones.is_empty():
 		return
 	var drone := drones[0]
 	for mech in mechs:
@@ -415,6 +429,21 @@ func _try_start_repair() -> void:
 
 func _on_repair_completed(_mech: Node3D) -> void:
 	_repair_active = false
+	# Cooldown gate kicks in only on success; aborts/cancels (handled via the
+	# minigame's tree_exited path) leave the player free to retry immediately.
+	_repair_cooldown = REPAIR_COOLDOWN_AFTER_SUCCESS
+
+# Polled by MechOptionsPanel so the F-prompt can grey out and show a countdown
+# while the cooldown is ticking. Returns 0.0 when the button should be active.
+func repair_cooldown_remaining() -> float:
+	return _repair_cooldown
+
+# Same gate, normalized 0..1 for the recharge bar fill. 1.0 = just used,
+# 0.0 = ready.
+func repair_cooldown_fraction() -> float:
+	if REPAIR_COOLDOWN_AFTER_SUCCESS <= 0.0:
+		return 0.0
+	return clampf(_repair_cooldown / REPAIR_COOLDOWN_AFTER_SUCCESS, 0.0, 1.0)
 
 # --- Spawning ---
 

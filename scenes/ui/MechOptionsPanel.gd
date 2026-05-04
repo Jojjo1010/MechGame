@@ -16,9 +16,12 @@ var _line: Line2D = null
 var _enabled: bool = true
 
 # Label refs needed for runtime colour/text updates
-var _ult_action_lbl:   Label = null
-var _ult_subtitle_lbl: Label = null
-var _ult_badge_lbl:    Label = null   # the "E" inside the key chip
+var _ult_action_lbl:    Label = null
+var _ult_subtitle_lbl:  Label = null
+var _ult_badge_lbl:     Label = null   # the "E" inside the key chip
+var _repair_action_lbl: Label = null   # "Repair" / "Cooling Down"
+var _repair_sub_lbl:    Label = null   # "Damaged mech" / countdown
+var _repair_charge_fill: ColorRect = null   # bottom strip recharge bar
 
 # StyleBox refs needed for readiness colour changes
 var _btn_normal_style:        StyleBoxFlat = null
@@ -162,24 +165,33 @@ func _build_ui() -> void:
 	repair_hbox.add_child(repair_margin)
 	repair_margin.add_child(repair_text_col)
 
-	var repair_action_lbl := Label.new()
-	repair_action_lbl.text = "Repair"
-	repair_action_lbl.add_theme_font_size_override("font_size", 20)
-	repair_action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
-	repair_action_lbl.add_theme_constant_override("outline_size", 0)
-	repair_action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	repair_text_col.add_child(repair_action_lbl)
+	_repair_action_lbl = Label.new()
+	_repair_action_lbl.text = "Repair"
+	_repair_action_lbl.add_theme_font_size_override("font_size", 20)
+	_repair_action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
+	_repair_action_lbl.add_theme_constant_override("outline_size", 0)
+	_repair_action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	repair_text_col.add_child(_repair_action_lbl)
 
-	var repair_sub_lbl := Label.new()
-	repair_sub_lbl.text = "Damaged mech"
-	repair_sub_lbl.add_theme_font_size_override("font_size", 13)
-	repair_sub_lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.60, 0.85))
-	repair_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	repair_text_col.add_child(repair_sub_lbl)
+	_repair_sub_lbl = Label.new()
+	_repair_sub_lbl.text = "Damaged mech"
+	_repair_sub_lbl.add_theme_font_size_override("font_size", 13)
+	_repair_sub_lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.60, 0.85))
+	_repair_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	repair_text_col.add_child(_repair_sub_lbl)
 
 	_repair_btn.pressed.connect(_on_repair_pressed)
 	_repair_btn.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
 	vbox.add_child(_repair_btn)
+
+	# Recharge fill — same shape as the ult charge strip; amber to match the F
+	# key badge instead of the ult's blue→yellow lerp. Width is set per-frame
+	# from Game.repair_cooldown_fraction().
+	_repair_charge_fill = ColorRect.new()
+	_repair_charge_fill.color        = Color(1.00, 0.78, 0.35, 0.90)
+	_repair_charge_fill.size         = Vector2(0.0, 4.0)
+	_repair_charge_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_repair_btn.add_child(_repair_charge_fill)
 
 	add_child(_panel)
 
@@ -372,7 +384,34 @@ func _process(_delta: float) -> void:
 			_charge_fill.color    = Color(0.3, 0.7, 1.0, 0.9).lerp(
 				Color(1.0, 0.88, 0.1, 0.9), charge)
 
-	# ── Repair button visibility ──────────────────────────────────────────────
+	# ── Repair button visibility + cooldown state ─────────────────────────────
 	if _repair_btn != null and is_instance_valid(_repair_btn):
 		var needs: bool = _target_mech.has_method("needs_repair") and _target_mech.needs_repair()
 		_repair_btn.visible = needs
+		if needs:
+			# Game.gd owns the per-run cooldown — poll it so the button greys out
+			# and shows a countdown + recharge bar while the gate is closed.
+			var cd: float = 0.0
+			var cd_frac: float = 0.0
+			var p := get_parent()
+			if p != null and p.has_method("repair_cooldown_remaining"):
+				cd = float(p.call("repair_cooldown_remaining"))
+			if p != null and p.has_method("repair_cooldown_fraction"):
+				cd_frac = float(p.call("repair_cooldown_fraction"))
+			if cd > 0.0:
+				_repair_btn.disabled  = true
+				_repair_btn.modulate  = Color(1.0, 1.0, 1.0, 0.55)
+				_repair_action_lbl.text = "Cooling Down"
+				_repair_sub_lbl.text    = "%.1fs" % cd
+			else:
+				_repair_btn.disabled  = false
+				_repair_btn.modulate  = Color(1.0, 1.0, 1.0, 1.0)
+				_repair_action_lbl.text = "Repair"
+				_repair_sub_lbl.text    = "Damaged mech"
+			# Recharge bar — width grows L→R as cd_frac drops from 1.0 to 0.0.
+			# At full charge the strip spans the button; ready-state is full.
+			if _repair_charge_fill != null and is_instance_valid(_repair_charge_fill):
+				var btn_w: float = _repair_btn.size.x
+				var btn_h: float = _repair_btn.size.y
+				_repair_charge_fill.size     = Vector2(btn_w * (1.0 - cd_frac), 4.0)
+				_repair_charge_fill.position = Vector2(0.0, btn_h - 4.0)

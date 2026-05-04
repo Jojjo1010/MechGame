@@ -41,6 +41,9 @@ var is_elite:    bool = false
 var health: float = max_health
 var attack_timer: float = 0.0
 var target_mech: Node3D = null
+# Per-enemy speed jitter so a wave's spawns spread out into a natural-looking
+# horde instead of moving in lockstep. Sampled once at spawn from [0.9, 1.2].
+var _speed_mult: float = 1.0
 # Per-enemy phase offset for the staggered retarget cadence — without it every
 # enemy would re-evaluate target on the same frame and spike the cost.
 var _retarget_phase: int = 0
@@ -83,6 +86,7 @@ const RETARGET_INTERVAL_FRAMES := 10
 func _ready() -> void:
 	add_to_group("enemies")
 	_retarget_phase = randi() % RETARGET_INTERVAL_FRAMES
+	_speed_mult = randf_range(0.9, 1.2)
 	if not is_dummy:
 		_apply_wave_scaling()
 	health = max_health
@@ -344,7 +348,7 @@ func _process(delta: float) -> void:
 		var move_dir := dir + sep * SEPARATION_STRENGTH
 		if move_dir.length() > 0.01:
 			move_dir = move_dir.normalized()
-		position += move_dir * SPEED * _slow_mult * delta
+		position += move_dir * SPEED * _speed_mult * _slow_mult * delta
 		# Face movement direction
 		if move_dir.length() > 0.01:
 			rotation.y = atan2(move_dir.x, move_dir.z)

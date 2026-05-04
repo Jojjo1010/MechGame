@@ -8,13 +8,12 @@ const DAMAGE_PER_BOUNCE := 18.0
 const BOUNCES_PASSIVE   := 3
 const BOUNCE_RANGE      := 8.0
 
-# FTL-style beam ult: player picks a start point inside a placement radius,
-# then aims a fixed-length line. Beam traces between the two points, damaging
+# FTL-style beam ult: player picks a start point anywhere on the ground, then
+# aims a fixed-length line. Beam traces between the two points, damaging
 # anything the head passes.
 const ULT_BEAM_LENGTH      := 12.0   # fixed beam length — second click sets direction only
-const ULT_PLACEMENT_RADIUS := 14.0   # how far from the mech the start point can be placed
-const ULT_TRACE_SPEED      := 16.0   # world units per second along the line
-const ULT_HIT_RADIUS       := 0.55
+const ULT_TRACE_SPEED      := 22.0   # world units per second along the line — faster sweep, more decisive
+const ULT_HIT_RADIUS       := 1.3    # hitbox slightly outside the halo (1.0) so edge clips still register
 const ULT_DAMAGE_PER_HIT   := 60.0
 
 # Aim state — two-click pick: first click sets start, second click fires.
@@ -27,7 +26,6 @@ var _aim_start_marker:  MeshInstance3D = null
 var _aim_cursor_marker: MeshInstance3D = null
 var _aim_line:          MeshInstance3D = null  # core
 var _aim_line_halo:     MeshInstance3D = null  # halo
-var _aim_zone:          MeshInstance3D = null  # placement-radius ring around the mech
 
 func _on_setup() -> void:
 	weapon_name = "BEAM"
@@ -75,7 +73,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if not _aim_has_start:
-				_aim_start = _clamp_to_placement_radius(_ground_cursor)
+				_aim_start = _ground_cursor
 				_aim_has_start = true
 			else:
 				var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
@@ -88,17 +86,6 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_aiming()
 			get_viewport().set_input_as_handled()
-
-# Clamp a ground point to within the placement radius around the mech.
-func _clamp_to_placement_radius(point: Vector3) -> Vector3:
-	if _mech == null or not is_instance_valid(_mech):
-		return point
-	var diff: Vector3 = point - _mech.global_position
-	diff.y = 0.0
-	var dist := diff.length()
-	if dist <= ULT_PLACEMENT_RADIUS:
-		return point
-	return _mech.global_position + diff.normalized() * ULT_PLACEMENT_RADIUS
 
 # Compute the second-click endpoint at fixed beam length from the start point,
 # in the cursor direction. Length is constant; cursor only chooses direction.
@@ -314,9 +301,6 @@ func _build_preview() -> void:
 	_aim_root = Node3D.new()
 	get_tree().current_scene.add_child(_aim_root)
 
-	_aim_zone = _build_zone_ring(ULT_PLACEMENT_RADIUS)
-	_aim_root.add_child(_aim_zone)
-
 	_aim_cursor_marker = _build_marker(Color(1.00, 0.25, 0.18, 0.85), 0.45)
 	_aim_root.add_child(_aim_cursor_marker)
 
@@ -325,11 +309,12 @@ func _build_preview() -> void:
 	_aim_root.add_child(_aim_start_marker)
 
 	# Layered preview matching the fired laser visual: soft halo + bright core.
+	# Halo radius == ULT_HIT_RADIUS so the player aims at the actual hitbox.
 	_aim_line_halo = MeshInstance3D.new()
 	var halo_cap := CapsuleMesh.new()
-	halo_cap.radius = 0.45
+	halo_cap.radius = 1.0
 	halo_cap.height = 1.0
-	halo_cap.radial_segments = 8
+	halo_cap.radial_segments = 10
 	halo_cap.rings = 1
 	_aim_line_halo.mesh = halo_cap
 	_aim_line_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -348,9 +333,9 @@ func _build_preview() -> void:
 
 	_aim_line = MeshInstance3D.new()
 	var core_cap := CapsuleMesh.new()
-	core_cap.radius = 0.14
+	core_cap.radius = 0.30
 	core_cap.height = 1.0
-	core_cap.radial_segments = 8
+	core_cap.radial_segments = 10
 	core_cap.rings = 1
 	_aim_line.mesh = core_cap
 	_aim_line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -368,27 +353,6 @@ func _build_preview() -> void:
 	_aim_root.add_child(_aim_line)
 
 	_update_preview()
-
-func _build_zone_ring(radius: float) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = radius - 0.18
-	torus.outer_radius = radius
-	torus.rings = 96
-	torus.ring_segments = 6
-	mi.mesh = torus
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color              = Color(1.00, 0.25, 0.18, 0.55)
-	mat.emission_enabled          = true
-	mat.emission                  = Color(1.00, 0.10, 0.05)
-	mat.emission_energy_multiplier = 4.0
-	mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.no_depth_test             = true
-	mat.render_priority           = 7
-	mi.material_override = mat
-	return mi
 
 func _build_marker(color: Color, radius: float) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -415,14 +379,10 @@ func _update_preview() -> void:
 	if _aim_root == null or not is_instance_valid(_aim_root):
 		return
 	if not _aim_has_start:
-		# State 1: pick start within placement radius
-		var clamped := _clamp_to_placement_radius(_ground_cursor)
+		# State 1: pick start anywhere on the ground.
 		if _aim_cursor_marker != null:
 			_aim_cursor_marker.visible = true
-			_aim_cursor_marker.global_position = clamped + Vector3(0.0, 0.05, 0.0)
-		if _aim_zone != null and _mech != null and is_instance_valid(_mech):
-			_aim_zone.visible = true
-			_aim_zone.global_position = _mech.global_position + Vector3(0.0, 0.05, 0.0)
+			_aim_cursor_marker.global_position = _ground_cursor + Vector3(0.0, 0.05, 0.0)
 		if _aim_start_marker != null:
 			_aim_start_marker.visible = false
 		if _aim_line != null:
@@ -432,8 +392,6 @@ func _update_preview() -> void:
 		return
 	# State 2: start fixed; cursor only chooses direction at fixed length.
 	var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
-	if _aim_zone != null:
-		_aim_zone.visible = false
 	if _aim_start_marker != null:
 		_aim_start_marker.visible = true
 		_aim_start_marker.global_position = _aim_start + Vector3(0.0, 0.05, 0.0)
@@ -457,7 +415,6 @@ func _destroy_preview() -> void:
 	_aim_cursor_marker = null
 	_aim_line = null
 	_aim_line_halo = null
-	_aim_zone = null
 
 # Position + scale a capsule mesh so its endpoints are at `a` and `b`.
 # Uses a fresh CapsuleMesh sized to the segment (height = distance) and a basis
@@ -499,9 +456,9 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	# as the aim line "lit up" — punchier glow during its short visible window.
 	var halo := MeshInstance3D.new()
 	var halo_cap := CapsuleMesh.new()
-	halo_cap.radius = 0.45
+	halo_cap.radius = 1.0
 	halo_cap.height = 1.0
-	halo_cap.radial_segments = 8
+	halo_cap.radial_segments = 10
 	halo_cap.rings = 1
 	halo.mesh = halo_cap
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -519,9 +476,9 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 
 	var core := MeshInstance3D.new()
 	var core_cap := CapsuleMesh.new()
-	core_cap.radius = 0.14
+	core_cap.radius = 0.30
 	core_cap.height = 1.0
-	core_cap.radial_segments = 8
+	core_cap.radial_segments = 10
 	core_cap.rings = 1
 	core.mesh = core_cap
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -537,11 +494,12 @@ func _spawn_trace(start_pos: Vector3, end_pos: Vector3) -> void:
 	core.material_override = core_mat
 	get_tree().current_scene.add_child(core)
 
-	# Head sphere — same scale as passive head.
+	# Head sphere — bigger than the passive head so the leading edge reads
+	# against the wider beam without getting visually swallowed by the halo.
 	var head := MeshInstance3D.new()
 	var sph := SphereMesh.new()
-	sph.radius = 0.20
-	sph.height = 0.40
+	sph.radius = 0.42
+	sph.height = 0.84
 	head.mesh = sph
 	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var hmat := StandardMaterial3D.new()

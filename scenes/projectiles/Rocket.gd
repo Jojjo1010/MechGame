@@ -269,8 +269,15 @@ func _spawn_explosion_vfx(pos: Vector3) -> void:
 		AudioManager.play("garlic_ult", pos, -2.0, 0.85)
 		AudioManager.play("gun_ult",    pos, -4.0, 0.70)
 	else:
-		BurstVFX.spawn(pos, Color(1.0, 0.6, 0.15), 32, 8.5, 0.55, scene)
-		_spawn_blast_flash(pos, 1.0, 14.0, 7.0, 0.32)
+		# Scale particle reach + flash dome + impact light with the weapon's
+		# effective splash_radius so Bigger Boom upgrades show in the explosion
+		# instead of just silently widening the kill radius.
+		# Ratios derived from the baseline (INNATE_SPLASH 4.0 → speed 8.5 / sphere 1.0 / light 7.0).
+		var sr: float = 4.0
+		if is_instance_valid(_source_weapon):
+			sr = float(_source_weapon.get("splash_radius"))
+		BurstVFX.spawn(pos, Color(1.0, 0.6, 0.15), 32, sr * 2.1, 0.55, scene)
+		_spawn_blast_flash(pos, sr * 0.25, 14.0, sr * 1.75, 0.32)
 		AudioManager.play("garlic_ult", pos, -10.0, randf_range(1.05, 1.18))
 
 func _spawn_blast_flash(pos: Vector3, sphere_radius: float, light_energy: float, light_range: float, fade_time: float) -> void:
@@ -311,7 +318,8 @@ func _spawn_cluster(center: Vector3) -> void:
 		var sub_pos := center + off
 		for e in _source_weapon._enemies_in_radius(sub_pos, splash):
 			_source_weapon._apply_hit(e, cluster_dmg, sub_pos, (e.global_position - sub_pos).normalized())
-		BurstVFX.spawn(sub_pos, Color(1.0, 0.7, 0.2), 14, 5.5, 0.40, get_tree().current_scene)
+		# Sub-burst particle reach scales with this cluster's local splash too.
+		BurstVFX.spawn(sub_pos, Color(1.0, 0.7, 0.2), 14, splash * 2.1, 0.40, get_tree().current_scene)
 
 func _spawn_napalm(center: Vector3) -> void:
 	var zone := Node3D.new()

@@ -54,12 +54,16 @@ func _build() -> void:
 	_subtitle_label.add_theme_constant_override("outline_size", UITheme.OUTLINE_HEADING)
 	box.add_child(_subtitle_label)
 
-func show_wave(_number: int, title: String, subtitle: String) -> void:
+func show_wave(_number: int, _title: String, subtitle: String) -> void:
 	if _root == null or not is_instance_valid(_root):
 		return
-	_title_label.text = title
+	# "WAVE N" title suppressed — only the milestone subtitle ("FLANK ASSAULT",
+	# "PINCER", "LAST STAND") still pops. Regular waves now have no banner.
+	if subtitle == "":
+		return
+	_title_label.visible = false
 	_subtitle_label.text = subtitle
-	_subtitle_label.visible = subtitle != ""
+	_subtitle_label.visible = true
 
 	if _active_tween != null and _active_tween.is_valid():
 		_active_tween.kill()
