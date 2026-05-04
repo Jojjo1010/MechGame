@@ -17,6 +17,7 @@
     --gun: #ff8c1a;
     --garlic: #4dd933;
     --beam: #40b3ff;
+    --rocket: #e6a93a;
 
     --c-blue: #408cf2;
     --c-orange: #d95933;
@@ -30,6 +31,10 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  /* When the toc lives at the top of the doc, hash jumps need a little headroom
+     so the section heading isn't pinned to the very top edge. */
+  :target { scroll-margin-top: 16px; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -191,6 +196,7 @@
   .band-gun     { background: var(--gun); }
   .band-garlic  { background: var(--garlic); }
   .band-beam    { background: var(--beam); }
+  .band-rocket  { background: var(--rocket); }
 
   /* TABLE-LIKE STAT LIST */
   dl.stats { margin: 0; }
@@ -263,6 +269,45 @@
   }
   .upg .desc { color: var(--muted); font-size: 12px; margin: 1px 0 0; }
   .upg .apply { color: #ffd699; font-size: 11px; font-family: "SFMono-Regular", Consolas, monospace; margin: 2px 0 0; }
+
+  /* SCALING ACCORDION — collapsible per-stack table on each common upgrade.
+     Native <details>/<summary>; click to expand and see L1/L2/L3 values. */
+  .scaling { margin: 4px 0 0; }
+  .scaling > summary {
+    cursor: pointer;
+    color: var(--faint);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 2px 0;
+    list-style: none;
+    user-select: none;
+  }
+  .scaling > summary::-webkit-details-marker { display: none; }
+  .scaling > summary::before {
+    content: "▸ ";
+    color: var(--faint);
+    transition: transform 0.12s ease;
+    display: inline-block;
+  }
+  .scaling[open] > summary::before { content: "▾ "; }
+  .scaling > summary:hover { color: var(--text); }
+  .scaling-table {
+    width: 100%;
+    margin: 6px 0 0;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .scaling-table th, .scaling-table td {
+    text-align: left;
+    padding: 2px 8px 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .scaling-table th { color: var(--faint); font-weight: 500; }
+  .scaling-table td { color: var(--muted); }
+  .scaling-table td.lv { color: var(--text); font-weight: 600; width: 32px; }
+  .scaling-table tr:last-child td { border-bottom: none; }
 
   .rarity-label {
     font-size: 10.5px;
@@ -589,7 +634,7 @@ Mech 4 → Garlic</pre>
   <!-- WEAPONS -->
   <div id="weapons" class="group-header">
     <h2>Combat — Weapons</h2>
-    <p>Three weapons attached round-robin to mechs in <code>Game.gd</code>. Each has a passive auto-attack and a charged ult; both share the weapon-instance modifiers (see Modifiers below).</p>
+    <p>Four weapons assigned in fixed order to the line in <code>Game.gd</code> (<code>MECH_LINE_ORDER = ["GUN", "GARLIC", "BEAM", "ROCKET"]</code>). Each has a passive auto-attack and a charged ult; both share the weapon-instance modifiers (see Modifiers below).</p>
   </div>
 
   <div class="cols-3">
@@ -676,6 +721,35 @@ Mech 4 → Garlic</pre>
       </div>
       <p class="footer-src"><code>scenes/mechs/weapons/BouncyBeamWeapon.gd</code></p>
     </article>
+
+    <article class="card">
+      <header class="band band-rocket">
+        <h3>ROCKET (SALVO)</h3>
+        <p class="role">heavy splash ordnance</p>
+      </header>
+      <div class="body">
+        <h4>Passive</h4>
+        <dl class="stats">
+          <div><dt>Fire rate</dt><dd>1.6 s</dd></div>
+          <div><dt>Direct damage</dt><dd>75.0 (× damage_mult × combo)</dd></div>
+          <div><dt>Innate splash</dt><dd>4.0 u radius (× Bigger Boom)</dd></div>
+          <div><dt>Splash damage</dt><dd>50% of direct, applied to enemies in radius</dd></div>
+          <div><dt>Target</dt><dd>nearest enemy</dd></div>
+          <div><dt>Trajectory</dt><dd>orbital drop from y=25 with slight diagonal — reads cleanly without across-map arc</dd></div>
+          <div><dt>Visual</dt><dd>saffron muzzle flash + sky-drop trail; impact burst</dd></div>
+        </dl>
+        <h4>Ult — Drone Strike (orbital)</h4>
+        <dl class="stats">
+          <div><dt>Cooldown</dt><dd>12.0 s</dd></div>
+          <div><dt>Damage</dt><dd>75 × 7.0 = 525 (× damage_mult × combo)</dd></div>
+          <div><dt>Splash radius</dt><dd>7.0 u (matches the marker ring)</dd></div>
+          <div><dt>Aim mode</dt><dd>E enters marking → ring follows the drone. LMB or E-again commits, RMB cancels (no cooldown spent).</dd></div>
+          <div><dt>Marker</dt><dd>saffron ground annulus + crosshair pip; alpha pulses for readability under bloom</dd></div>
+          <div><dt>Behavior</dt><dd>marked spot is locked at commit; rocket drops vertically onto that XZ regardless of where the drone moves after</dd></div>
+        </dl>
+      </div>
+      <p class="footer-src"><code>scenes/mechs/weapons/RocketWeapon.gd · scenes/projectiles/Rocket.gd</code></p>
+    </article>
   </div>
 
   <!-- COMBAT MODIFIERS -->
@@ -736,14 +810,14 @@ if splash_radius &gt; 0
     <div class="cols-3">
       <div>
         <h3>XP &amp; leveling</h3>
-        <p style="color:var(--muted); font-size:12px;">Curve: <code>xp_to_next = round(10 × 1.45^(level − 1))</code></p>
+        <p style="color:var(--muted); font-size:12px;">Curve: <code>xp_to_next = roundi(18 × 1.65^(level − 1))</code> — XP needed to reach the next level.</p>
         <table class="mod">
           <tbody>
-            <tr><td class="def">level 1</td><td>10</td><td class="def">level 6</td><td>64</td></tr>
-            <tr><td class="def">level 2</td><td>15</td><td class="def">level 7</td><td>92</td></tr>
-            <tr><td class="def">level 3</td><td>21</td><td class="def">level 8</td><td>134</td></tr>
-            <tr><td class="def">level 4</td><td>30</td><td class="def">level 9</td><td>195</td></tr>
-            <tr><td class="def">level 5</td><td>44</td><td class="def">level 10</td><td>282</td></tr>
+            <tr><td class="def">level 2</td><td>18</td><td class="def">level 7</td><td>221</td></tr>
+            <tr><td class="def">level 3</td><td>30</td><td class="def">level 8</td><td>365</td></tr>
+            <tr><td class="def">level 4</td><td>49</td><td class="def">level 9</td><td>602</td></tr>
+            <tr><td class="def">level 5</td><td>81</td><td class="def">level 10</td><td>994</td></tr>
+            <tr><td class="def">level 6</td><td>134</td><td class="def">level 11</td><td>1640</td></tr>
           </tbody>
         </table>
         <p style="color:var(--muted); font-size:11.5px; margin-top:12px;">
@@ -786,7 +860,10 @@ if splash_radius &gt; 0
   <!-- UPGRADE CATALOG -->
   <div id="catalog" class="group-header">
     <h2>Upgrade Catalog</h2>
-    <p>17 entries in <code>src/Upgrades.gd ALL</code> — 12 Common + 5 Uncommon + <strong>0 Rare</strong>. Each entry has <code>id / title / description / rarity / target</code>; uncommons have <code>unique=true</code>.</p>
+    <p>20 entries in <code>src/Upgrades.gd ALL</code> — 12 Common + 4 Uncommon + 4 Rare. Each entry has <code>id / title / description / rarity / target</code>; uncommons and rares have <code>unique=true</code> and drop from the pool once taken.</p>
+    <p style="color: var(--muted); font-size: 12.5px;">
+      <strong>Reading the scaling:</strong> percent upgrades are <em>multiplicative</em> and compound each stack — a +25% upgrade applied 3× yields ×1.25³ ≈ <strong>×1.953</strong> (≈+95%), not +75%. Flat upgrades like Twin Shot or Long Chain are <em>additive</em>: each stack adds the listed bonus to the base. Common upgrades stack up to 3×; Withering and Bulwark add to per-stack bonuses applied separately. Click <em>per-stack scaling</em> on any common to see the L1/L2/L3 numbers spelled out.
+    </p>
   </div>
 
   <div class="cols-3">
@@ -794,15 +871,60 @@ if splash_radius &gt; 0
       <header class="band band-gun"><h3>GUN UPGRADES</h3></header>
       <div class="body">
         <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
-        <div class="upg"><span class="name">Rapid Gun</span><span class="id">gun_firerate</span><p class="desc">Gun: +25% fire rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
-        <div class="upg"><span class="name">Heavy Slugs</span><span class="id">gun_damage</span><p class="desc">Gun: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
-        <div class="upg"><span class="name">Twin Shot</span><span class="id">gun_projectile</span><p class="desc">Gun: +1 bullet per shot</p><p class="apply">projectile_count_bonus += 1</p></div>
+        <div class="upg">
+          <span class="name">Rapid Gun</span><span class="id">gun_firerate</span>
+          <p class="desc">+25% fire rate per stack (×1.25 multiplicative — compounds each stack)</p>
+          <p class="apply">fire_rate_mult ×= 1.25</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.25</td><td>+25% fire rate</td></tr>
+                <tr><td class="lv">2</td><td>×1.5625</td><td>+56% fire rate</td></tr>
+                <tr><td class="lv">3</td><td>×1.953</td><td>+95% fire rate (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Headshot</span><span class="id">gun_headshot</span>
+          <p class="desc">Every Nth shot crits 6× — period drops 3 → 2 → 1 across stacks</p>
+          <p class="apply">headshot_count += 1; period = max(1, 4 − headshot_count)</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Period</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>3</td><td>every 3rd shot crits 6×</td></tr>
+                <tr><td class="lv">2</td><td>2</td><td>every 2nd shot crits 6×</td></tr>
+                <tr><td class="lv">3</td><td>1</td><td>every shot crits 6× (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Twin Shot</span><span class="id">gun_projectile</span>
+          <p class="desc">+1 bullet per shot per stack (additive; gun base = 1 bullet)</p>
+          <p class="apply">projectile_count_bonus += 1</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Bonus</th><th>Total bullets / shot</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>+1</td><td>2</td></tr>
+                <tr><td class="lv">2</td><td>+2</td><td>3</td></tr>
+                <tr><td class="lv">3</td><td>+3</td><td>4 (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
 
         <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
         <div class="upg"><span class="name">Explosive Rounds</span><span class="id">gun_splash</span><p class="desc">Gun: bullets do AOE on impact</p><p class="apply">splash_radius = 2.5  (50% dmg to splash)</p></div>
 
-        <p class="rarity-label rare">Rare — rarity 2</p>
-        <p class="rarity-label empty">— none defined. Upgrades.gd ALL has 0 entries with rarity = 2.</p>
+        <p class="rarity-label rare">Rare — rarity 2, unique</p>
+        <div class="upg"><span class="name">Hollow Rounds</span><span class="id">gun_pierce</span><p class="desc">Bullets pierce 2 extra enemies before disappearing</p><p class="apply">pierce_count = 2  (Bullet.gd tracks _pierce_remaining + _hit_enemies set)</p></div>
       </div>
     </article>
 
@@ -810,15 +932,60 @@ if splash_radius &gt; 0
       <header class="band band-garlic"><h3>GARLIC UPGRADES</h3></header>
       <div class="body">
         <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
-        <div class="upg"><span class="name">Quick Pulse</span><span class="id">garlic_firerate</span><p class="desc">Garlic: +25% pulse rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
-        <div class="upg"><span class="name">Toxic Aura</span><span class="id">garlic_damage</span><p class="desc">Garlic: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
-        <div class="upg"><span class="name">Wide Aura</span><span class="id">garlic_range</span><p class="desc">Garlic: +20% radius</p><p class="apply">range_mult ×= 1.20</p></div>
+        <div class="upg">
+          <span class="name">Withering</span><span class="id">garlic_wither</span>
+          <p class="desc">Same-enemy pulses build wither stacks (max 3/enemy); each wither stack adds +25% damage per upgrade stack</p>
+          <p class="apply">withering_per_stack += 0.25  (total bonus = withering_per_stack × wither_stacks)</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Upg</th><th>Per wither stack</th><th>At 3 wither stacks</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>+25% dmg</td><td>+75% dmg</td></tr>
+                <tr><td class="lv">2</td><td>+50% dmg</td><td>+150% dmg</td></tr>
+                <tr><td class="lv">3</td><td>+75% dmg</td><td>+225% dmg (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Bulwark</span><span class="id">garlic_bulwark</span>
+          <p class="desc">Mechs in aura take −25% damage per stack (additive)</p>
+          <p class="apply">bulwark_dmg_reduction += 0.25  (final dmg ×= max(0, 1 − reduction))</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Reduction</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>0.25</td><td>−25% damage taken</td></tr>
+                <tr><td class="lv">2</td><td>0.50</td><td>−50% damage taken</td></tr>
+                <tr><td class="lv">3</td><td>0.75</td><td>−75% damage taken (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Wide Aura</span><span class="id">garlic_range</span>
+          <p class="desc">+20% radius per stack (×1.20 multiplicative — compounds each stack)</p>
+          <p class="apply">range_mult ×= 1.20</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.20</td><td>+20% radius</td></tr>
+                <tr><td class="lv">2</td><td>×1.44</td><td>+44% radius</td></tr>
+                <tr><td class="lv">3</td><td>×1.728</td><td>+73% radius (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
 
         <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
-        <div class="upg"><span class="name">Crippling Spores</span><span class="id">garlic_slow</span><p class="desc">Garlic: aura slows enemies 50% for 1.5s</p><p class="apply">slow_mult = 0.5; slow_duration = 1.5</p></div>
+        <div class="upg"><span class="name">Crippling Spores</span><span class="id">garlic_slow</span><p class="desc">Garlic: aura slows enemies 70% for 2.5s</p><p class="apply">slow_mult = 0.3; slow_duration = 2.5</p></div>
 
-        <p class="rarity-label rare">Rare — rarity 2</p>
-        <p class="rarity-label empty">— none defined. Upgrades.gd ALL has 0 entries with rarity = 2.</p>
+        <p class="rarity-label rare">Rare — rarity 2, unique</p>
+        <div class="upg"><span class="name">Sanctuary</span><span class="id">garlic_sanctuary</span><p class="desc">Mechs inside the aura regen 2 HP/s</p><p class="apply">aura_regen_per_sec = 2.0  (Mech._update_bulwark_status accumulates the strongest nearby Garlic regen)</p></div>
       </div>
     </article>
 
@@ -826,15 +993,121 @@ if splash_radius &gt; 0
       <header class="band band-beam"><h3>BEAM UPGRADES</h3></header>
       <div class="body">
         <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
-        <div class="upg"><span class="name">Rapid Beam</span><span class="id">beam_firerate</span><p class="desc">Beam: +25% fire rate</p><p class="apply">fire_rate_mult ×= 1.25</p></div>
-        <div class="upg"><span class="name">Hot Beam</span><span class="id">beam_damage</span><p class="desc">Beam: +20% damage</p><p class="apply">damage_mult ×= 1.20</p></div>
-        <div class="upg"><span class="name">Long Chain</span><span class="id">beam_bounces</span><p class="desc">Beam: +1 bounce</p><p class="apply">projectile_count_bonus += 1</p></div>
+        <div class="upg">
+          <span class="name">Rapid Beam</span><span class="id">beam_firerate</span>
+          <p class="desc">+25% fire rate per stack (×1.25 multiplicative — compounds each stack)</p>
+          <p class="apply">fire_rate_mult ×= 1.25</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.25</td><td>+25% fire rate</td></tr>
+                <tr><td class="lv">2</td><td>×1.5625</td><td>+56% fire rate</td></tr>
+                <tr><td class="lv">3</td><td>×1.953</td><td>+95% fire rate (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Hot Beam</span><span class="id">beam_damage</span>
+          <p class="desc">+20% damage per stack (×1.20 multiplicative — compounds each stack)</p>
+          <p class="apply">damage_mult ×= 1.20</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.20</td><td>+20% damage</td></tr>
+                <tr><td class="lv">2</td><td>×1.44</td><td>+44% damage</td></tr>
+                <tr><td class="lv">3</td><td>×1.728</td><td>+73% damage (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Long Chain</span><span class="id">beam_bounces</span>
+          <p class="desc">+1 bounce per stack (additive; beam base = 3 bounces)</p>
+          <p class="apply">projectile_count_bonus += 1  (BouncyBeam fires BOUNCES_PASSIVE + bonus)</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Bonus</th><th>Total bounces</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>+1</td><td>4</td></tr>
+                <tr><td class="lv">2</td><td>+2</td><td>5</td></tr>
+                <tr><td class="lv">3</td><td>+3</td><td>6 (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
 
         <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
         <div class="upg"><span class="name">Static Discharge</span><span class="id">beam_splash</span><p class="desc">Beam: bounces splash damage to nearby enemies</p><p class="apply">splash_radius = 2.0  (50% dmg to splash)</p></div>
 
-        <p class="rarity-label rare">Rare — rarity 2</p>
-        <p class="rarity-label empty">— none defined. Upgrades.gd ALL has 0 entries with rarity = 2.</p>
+        <p class="rarity-label rare">Rare — rarity 2, unique</p>
+        <div class="upg"><span class="name">Overcharge</span><span class="id">beam_overcharge</span><p class="desc">+50% damage, +2 bounces, +30% range</p><p class="apply">damage_mult ×= 1.5; projectile_count_bonus += 2; range_mult ×= 1.3</p></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <header class="band band-rocket"><h3>ROCKET UPGRADES</h3></header>
+      <div class="body">
+        <p class="rarity-label common">Common — rarity 0, stacks up to 3×</p>
+        <div class="upg">
+          <span class="name">Quick Reload</span><span class="id">rocket_firerate</span>
+          <p class="desc">+25% fire rate per stack (×1.25 multiplicative — compounds each stack)</p>
+          <p class="apply">fire_rate_mult ×= 1.25</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.25</td><td>+25% fire rate</td></tr>
+                <tr><td class="lv">2</td><td>×1.5625</td><td>+56% fire rate</td></tr>
+                <tr><td class="lv">3</td><td>×1.953</td><td>+95% fire rate (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Bigger Boom</span><span class="id">rocket_radius</span>
+          <p class="desc">+30% splash radius per stack (×1.30 multiplicative — compounds each stack)</p>
+          <p class="apply">splash_radius ×= 1.30</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.30</td><td>+30% radius</td></tr>
+                <tr><td class="lv">2</td><td>×1.69</td><td>+69% radius</td></tr>
+                <tr><td class="lv">3</td><td>×2.197</td><td>+120% radius (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div class="upg">
+          <span class="name">Heavy Warhead</span><span class="id">rocket_damage</span>
+          <p class="desc">+25% damage per stack (×1.25 multiplicative — compounds each stack)</p>
+          <p class="apply">damage_mult ×= 1.25</p>
+          <details class="scaling">
+            <summary>per-stack scaling</summary>
+            <table class="scaling-table">
+              <thead><tr><th>Stack</th><th>Multiplier</th><th>Effective</th></tr></thead>
+              <tbody>
+                <tr><td class="lv">1</td><td>×1.25</td><td>+25% damage</td></tr>
+                <tr><td class="lv">2</td><td>×1.5625</td><td>+56% damage</td></tr>
+                <tr><td class="lv">3</td><td>×1.953</td><td>+95% damage (max)</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+
+        <p class="rarity-label uncommon">Uncommon — rarity 1, unique</p>
+        <div class="upg"><span class="name">Cluster Munition</span><span class="id">rocket_cluster</span><p class="desc">Each impact spawns 3 micro-detonations around it</p><p class="apply">cluster_count = 3</p></div>
+
+        <p class="rarity-label rare">Rare — rarity 2, unique</p>
+        <div class="upg"><span class="name">Napalm Payload</span><span class="id">rocket_napalm</span><p class="desc">Impacts leave a burn zone for 4s</p><p class="apply">napalm_burn_dps = 8.0; napalm_radius = 4.0; napalm_duration = 4.0</p></div>
       </div>
     </article>
   </div>
@@ -1112,9 +1385,31 @@ if splash_radius &gt; 0
 
   <footer class="footer">
     <hr>
-    Generated by reading every <code>.gd</code> file in <code>C:\Users\Johanna\Desktop\MechGame</code> on 2026-04-30. Numbers, formulas, and signal names are taken verbatim from source — if anything here drifts from the code, the code is the truth. Update this doc by re-running the documentation pass after meaningful gameplay changes (especially: <code>Upgrades.gd ALL</code>, weapon constants, <code>RunManager</code> caps/curves, <code>SaveData</code> slot costs).
+    Generated by reading every <code>.gd</code> file in <code>C:\Users\Johanna\Desktop\MechGame</code>; last refreshed 2026-05-04 (level-up curve + full upgrade catalog including all four rare upgrades). Numbers, formulas, and signal names are taken verbatim from source — if anything here drifts from the code, the code is the truth. Update this doc by re-running the documentation pass after meaningful gameplay changes (especially: <code>Upgrades.gd ALL</code>, weapon constants, <code>RunManager</code> caps/curves, <code>SaveData</code> slot costs).
   </footer>
 </main>
 
+<script>
+  // Programmatic anchor scroll. Native href="#id" works in a real browser, but
+  // some embedded previews swallow URL-hash navigation — this guarantees the
+  // jump regardless of host context. Also lets us use scrollIntoView's smooth
+  // behavior consistently across viewers.
+  (function () {
+    document.querySelectorAll('nav.toc a[href^="#"]').forEach(function (a) {
+      a.addEventListener('click', function (ev) {
+        var id = a.getAttribute('href').slice(1);
+        var target = document.getElementById(id);
+        if (!target) return;
+        ev.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Update the URL hash without re-triggering native scroll, so deep-
+        // linking and back/forward still work.
+        if (history.replaceState) {
+          history.replaceState(null, '', '#' + id);
+        }
+      });
+    });
+  })();
+</script>
 </body>
 </html>
