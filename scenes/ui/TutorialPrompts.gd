@@ -223,7 +223,7 @@ func _enter_state(new_state: State) -> void:
 	match new_state:
 		State.WASD_SHOWING:
 			_wasd_seen.clear()
-			_show_prompt(KeyChip.make_wasd_cluster(KEY_FONT), "move", "MOVE THE DRONE")
+			_show_prompt(KeyChip.make_movement_cluster(KEY_FONT), "move", "MOVE THE DRONE")
 		State.SHIFT_SHOWING:
 			_spawn_shift_dummies()
 			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH THROUGH ENEMIES")
@@ -421,8 +421,9 @@ func _process(delta: float) -> void:
 			# MIN_PROMPT_TIME gate: a player who's already pressing W when this
 			# state enters would otherwise satisfy the trigger on the same
 			# frame and skip the prompt entirely. Player must press all four
-			# WASD keys at least once before advancing — pressing only W
-			# shouldn't end the lesson on the whole cluster.
+			# directions at least once before advancing — pressing only forward
+			# shouldn't end the lesson on the whole cluster. Either WASD or
+			# arrow keys count for each logical direction.
 			_track_wasd_seen()
 			if _state_timer >= MIN_PROMPT_TIME and _wasd_all_seen():
 				_enter_state(State.WASD_FADING)
@@ -754,11 +755,14 @@ func _force_damage_for_repair() -> Node3D:
 
 # ── Conditions ───────────────────────────────────────────────────────────────
 
+# Track logical directions (up/left/down/right) so a player can satisfy the
+# tutorial with arrow keys, WASD, or any mix. Using string keys so dict size
+# directly tracks how many directions have been touched.
 func _track_wasd_seen() -> void:
-	if Input.is_key_pressed(KEY_W): _wasd_seen[KEY_W] = true
-	if Input.is_key_pressed(KEY_A): _wasd_seen[KEY_A] = true
-	if Input.is_key_pressed(KEY_S): _wasd_seen[KEY_S] = true
-	if Input.is_key_pressed(KEY_D): _wasd_seen[KEY_D] = true
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    _wasd_seen["up"]    = true
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):  _wasd_seen["left"]  = true
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  _wasd_seen["down"]  = true
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): _wasd_seen["right"] = true
 
 func _wasd_all_seen() -> bool:
 	return _wasd_seen.size() >= 4

@@ -6,7 +6,11 @@ const SEQ_LEN    := 4
 const KEY_LABELS := ["W", "A", "S", "D"]
 const KEY_DIRS   := ["UP", "LEFT", "DOWN", "RIGHT"]
 const ARROW_CHARS := ["↑", "←", "↓", "→"]   # W A S D
-const KEY_CODES  := [KEY_W, KEY_A, KEY_S, KEY_D]
+# Either WASD or arrow keys count as the matching direction — the on-screen
+# glyphs are arrow-shaped anyway, so an arrow-key player would naturally try
+# them. Index pairs across the two arrays match up: KEY_W = KEY_UP, etc.
+const KEY_CODES_PRIMARY := [KEY_W, KEY_A, KEY_S, KEY_D]
+const KEY_CODES_ARROWS  := [KEY_UP, KEY_LEFT, KEY_DOWN, KEY_RIGHT]
 
 const BOX_W := 150.0
 const BOX_H := 150.0
@@ -420,8 +424,8 @@ func _input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
-	for i in KEY_CODES.size():
-		if key_event.keycode == KEY_CODES[i]:
+	for i in KEY_CODES_PRIMARY.size():
+		if key_event.keycode == KEY_CODES_PRIMARY[i] or key_event.keycode == KEY_CODES_ARROWS[i]:
 			_on_key(i)
 			get_viewport().set_input_as_handled()
 			return

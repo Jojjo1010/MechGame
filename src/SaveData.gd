@@ -59,7 +59,9 @@ func _apply_window_settings() -> void:
 		if window_size.x > 0 and window_size.y > 0:
 			DisplayServer.window_set_size(window_size)
 			# Re-center after resize so the window doesn't end up off-screen.
+			# Integer division is intentional — window_set_position takes a Vector2i.
 			var screen := DisplayServer.screen_get_size()
+			@warning_ignore("integer_division")
 			var pos := (screen - window_size) / 2
 			DisplayServer.window_set_position(pos)
 
