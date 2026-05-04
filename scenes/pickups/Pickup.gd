@@ -110,11 +110,11 @@ static func _flush_xp() -> void:
 # Greedy decompose into HUGE → BIG → SMALL. SMALL absorbs the remainder as a
 # single variable-value gem (it already supports any 1+ value), so a 47-XP
 # pile is 4 BIG (40) + 1 SMALL (7), not 7 individual SMALLs.
-static func _spawn_xp_pile(value: int, center: Vector3, parent: Node) -> void:
-	if value <= 0:
+static func _spawn_xp_pile(p_value: int, center: Vector3, parent: Node) -> void:
+	if p_value <= 0:
 		return
-	var huge_count: int = value / XP_HUGE_VAL
-	var rem: int        = value - huge_count * XP_HUGE_VAL
+	var huge_count: int = p_value / XP_HUGE_VAL
+	var rem: int        = p_value - huge_count * XP_HUGE_VAL
 	var big_count: int  = rem / XP_BIG_VAL
 	rem                -= big_count * XP_BIG_VAL
 	for i in huge_count:
@@ -173,11 +173,11 @@ static func _flush_gold() -> void:
 		_spawn_gold_pile(int(bucket["value"]), center, parent)
 
 # Same greedy decompose pattern as XP, just with gold tier values.
-static func _spawn_gold_pile(value: int, center: Vector3, parent: Node) -> void:
-	if value <= 0:
+static func _spawn_gold_pile(p_value: int, center: Vector3, parent: Node) -> void:
+	if p_value <= 0:
 		return
-	var huge_count: int = value / GOLD_HUGE_VAL
-	var rem: int        = value - huge_count * GOLD_HUGE_VAL
+	var huge_count: int = p_value / GOLD_HUGE_VAL
+	var rem: int        = p_value - huge_count * GOLD_HUGE_VAL
 	var big_count: int  = rem / GOLD_BIG_VAL
 	rem                -= big_count * GOLD_BIG_VAL
 	for i in huge_count:

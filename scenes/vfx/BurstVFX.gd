@@ -39,12 +39,19 @@ static func spawn(pos: Vector3, color: Color, count: int, speed: float, lifetime
 	p.emitting = true
 	_active_count += 1
 
-	scene_root.get_tree().create_timer(lifetime + 0.5).timeout.connect(_on_burst_done.bind(p))
-
-static func _on_burst_done(p: GPUParticles3D) -> void:
-	_active_count = maxi(0, _active_count - 1)
-	if is_instance_valid(p):
-		p.queue_free()
+	# WeakRef + lambda instead of bind(p): if the scene reloads before this
+	# fires, the bound GPUParticles3D reference goes stale and Godot's strict
+	# Callable bind throws "Cannot convert argument 1 from Object to Object"
+	# trying to pass a freed Object as a typed param. Capturing through a
+	# weakref sidesteps that — we can null-check inside the lambda safely.
+	var ref := weakref(p)
+	scene_root.get_tree().create_timer(lifetime + 0.5).timeout.connect(
+		func() -> void:
+			_active_count = maxi(0, _active_count - 1)
+			var alive: Variant = ref.get_ref()
+			if alive != null and is_instance_valid(alive):
+				(alive as Node).queue_free()
+	)
 
 static func _build_shared_mesh() -> void:
 	_shared_mesh = SphereMesh.new()
