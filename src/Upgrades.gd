@@ -15,52 +15,55 @@ const RARITY_RARE     := 2
 const RARITY_WEIGHTS  := [70.0, 25.0, 5.0]
 
 const ALL := [
-	# Each weapon has the same shape: 3 stat commons + 1 unique uncommon mechanic.
-	# Descriptions don't repeat the weapon name — the card already shows it via
-	# the title and archetype tint.
+	# Each weapon has the same shape: 3 stat commons + 1 unique uncommon + 1 unique rare.
+	# Descriptions don't repeat the weapon name — the card already shows it via the
+	# title and archetype tint. Stack semantics are spelled out in parens so the
+	# player can read at a glance whether a "+25%" stacks multiplicatively (×1.25
+	# compounding each stack) or additively (+25 percentage points each stack);
+	# this came up as the #1 confusion in playtest feedback.
 	# ── Gun ───────────────────────────────────────────────────────────────────
-	{id="gun_firerate",   title="Rapid Gun",      description="+25% fire rate",
+	{id="gun_firerate",   title="Rapid Gun",      description="+25% fire rate per stack (×1.25 multiplicative)",
 	 rarity=0, target="GUN"},
-	{id="gun_headshot",   title="Headshot",       description="Every Nth shot crits 6× — N drops 4→3→2→1",
+	{id="gun_headshot",   title="Headshot",       description="Every Nth shot crits 6× — N: 3 → 2 → 1 across stacks",
 	 rarity=0, target="GUN"},
-	{id="gun_projectile", title="Twin Shot",      description="+1 bullet per shot",
+	{id="gun_projectile", title="Twin Shot",      description="+1 bullet per shot per stack (additive, max +3)",
 	 rarity=0, target="GUN"},
-	{id="gun_splash",     title="Explosive Rounds", description="Bullets do AOE on impact",
+	{id="gun_splash",     title="Explosive Rounds", description="Bullets do AOE on impact (50% dmg in 2.5m)",
 	 rarity=1, target="GUN", unique=true},
-	{id="gun_pierce",     title="Hollow Rounds",  description="Bullets pierce 2 extra enemies",
+	{id="gun_pierce",     title="Hollow Rounds",  description="Bullets pierce 2 extra enemies before stopping",
 	 rarity=2, target="GUN", unique=true},
 	# ── Garlic ────────────────────────────────────────────────────────────────
-	{id="garlic_wither",   title="Withering",     description="Pulses on the same enemy stack damage (max 3 wither stacks)",
+	{id="garlic_wither",   title="Withering",     description="Same-enemy pulses build wither stacks (max 3); +25% damage per wither stack per upgrade stack",
 	 rarity=0, target="GARLIC"},
-	{id="garlic_bulwark",  title="Bulwark",       description="Mechs inside the aura take less damage",
+	{id="garlic_bulwark",  title="Bulwark",       description="Mechs in aura take −25% damage per stack (additive, max −75%)",
 	 rarity=0, target="GARLIC"},
-	{id="garlic_range",    title="Wide Aura",     description="+20% radius",
+	{id="garlic_range",    title="Wide Aura",     description="+20% radius per stack (×1.20 multiplicative)",
 	 rarity=0, target="GARLIC"},
 	{id="garlic_slow",     title="Crippling Spores", description="Aura slows enemies 70% for 2.5s",
 	 rarity=1, target="GARLIC", unique=true},
-	{id="garlic_sanctuary", title="Sanctuary",     description="Mechs inside the aura regen 2 HP/s",
+	{id="garlic_sanctuary", title="Sanctuary",     description="Mechs in aura regen 2 HP/s",
 	 rarity=2, target="GARLIC", unique=true},
 	# ── Beam ──────────────────────────────────────────────────────────────────
-	{id="beam_firerate",   title="Rapid Beam",    description="+25% fire rate",
+	{id="beam_firerate",   title="Rapid Beam",    description="+25% fire rate per stack (×1.25 multiplicative)",
 	 rarity=0, target="BEAM"},
-	{id="beam_damage",     title="Hot Beam",      description="+20% damage",
+	{id="beam_damage",     title="Hot Beam",      description="+20% damage per stack (×1.20 multiplicative)",
 	 rarity=0, target="BEAM"},
-	{id="beam_bounces",    title="Long Chain",    description="+1 bounce",
+	{id="beam_bounces",    title="Long Chain",    description="+1 bounce per stack (additive, max +3)",
 	 rarity=0, target="BEAM"},
-	{id="beam_splash",     title="Static Discharge", description="Bounces splash damage to nearby enemies",
+	{id="beam_splash",     title="Static Discharge", description="Bounces splash damage to nearby enemies (50% dmg in 2m)",
 	 rarity=1, target="BEAM", unique=true},
 	{id="beam_overcharge", title="Overcharge",     description="+50% damage, +2 bounces, +30% range",
 	 rarity=2, target="BEAM", unique=true},
 	# ── Rocket ────────────────────────────────────────────────────────────────
-	{id="rocket_firerate", title="Quick Reload",   description="+25% fire rate",
+	{id="rocket_firerate", title="Quick Reload",   description="+25% fire rate per stack (×1.25 multiplicative)",
 	 rarity=0, target="ROCKET"},
-	{id="rocket_radius",   title="Bigger Boom",    description="+30% splash radius",
+	{id="rocket_radius",   title="Bigger Boom",    description="+30% splash radius per stack (×1.30 multiplicative)",
 	 rarity=0, target="ROCKET"},
-	{id="rocket_damage",   title="Heavy Warhead",  description="+25% damage",
+	{id="rocket_damage",   title="Heavy Warhead",  description="+25% damage per stack (×1.25 multiplicative)",
 	 rarity=0, target="ROCKET"},
 	{id="rocket_cluster",  title="Cluster Munition", description="Each impact spawns 3 micro-detonations around it",
 	 rarity=1, target="ROCKET", unique=true},
-	{id="rocket_napalm",   title="Napalm Payload", description="Impacts leave a burn zone for 4s",
+	{id="rocket_napalm",   title="Napalm Payload", description="Impacts leave a burn zone for 4s (8 dps in 4m)",
 	 rarity=2, target="ROCKET", unique=true},
 ]
 
