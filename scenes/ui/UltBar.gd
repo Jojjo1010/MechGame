@@ -40,6 +40,13 @@ var _slot_colors:   Array[Color]     = []   # archetype tint per slot, used by c
 var _upgrade_grids: Array[HBoxContainer] = []
 var _upgrade_states: Array[Dictionary]   = []   # per slot: { id → { count, badge, count_lbl } }
 
+# Rocket-strike state. ROCKET fires from anywhere via the global R key, so its
+# slot uses an "R" chip that pulses to hot pink during aim mode and brightens
+# to lime when ready. _rocket_weapon is the weapon ref we poll each frame.
+var _rocket_weapon:     Node3D       = null
+var _rocket_chip_style: StyleBoxFlat = null
+var _rocket_chip_label: Label        = null
+
 func _ready() -> void:
 	layer = 6
 
@@ -130,7 +137,15 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var bar_y := 14.0 + NAME_FONT + 14.0
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + 14.0) - KEY_CHIP_SIZE - 14.0 - 14.0
 
-	var chip := _make_ult_chip()
+	# ROCKET fires globally on R, not on E from the proximity panel, so its
+	# slot shows an "R" chip in the archetype tint instead of the generic ult
+	# glyph. Per-frame poll in _process recolours the border by ready / aim state.
+	var chip: PanelContainer
+	if String(weapon.weapon_name) == "ROCKET":
+		chip = _make_rocket_strike_chip(color)
+		_rocket_weapon = weapon
+	else:
+		chip = _make_ult_chip()
 	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, bar_y + (BAR_H - KEY_CHIP_SIZE) * 0.5)
 	root.add_child(chip)
 
@@ -236,6 +251,66 @@ func _make_ult_chip() -> PanelContainer:
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.add_child(icon)
 	return chip
+
+# Saffron-tinted "R" key chip for the ROCKET slot. The style + label refs are
+# stashed on UltBar fields so _process can repaint the border based on the
+# weapon's ready / aim state without rebuilding the chip.
+func _make_rocket_strike_chip(accent: Color) -> PanelContainer:
+	var chip := PanelContainer.new()
+	chip.size = Vector2(KEY_CHIP_SIZE, KEY_CHIP_SIZE)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = UITheme.COLOR_PANEL_ALPHA
+	style.border_color = accent
+	style.border_width_left   = 2
+	style.border_width_right  = 2
+	style.border_width_top    = 2
+	style.border_width_bottom = 4
+	style.set_corner_radius_all(4)
+	chip.add_theme_stylebox_override("panel", style)
+	_rocket_chip_style = style
+
+	var lbl := Label.new()
+	lbl.text = "R"
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", accent)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_child(lbl)
+	_rocket_chip_label = lbl
+	return chip
+
+# ── Per-frame ROCKET strike state ────────────────────────────────────────────
+# Polls the rocket weapon and recolours its R chip to advertise current state:
+#   AIMING  → hot pink (committed, click to fire)
+#   READY   → bright lime (press R to start aim)
+#   COOLING → archetype saffron (charging — bar shows %)
+func _process(_delta: float) -> void:
+	if _rocket_weapon == null or not is_instance_valid(_rocket_weapon):
+		return
+	if _rocket_chip_style == null or _rocket_chip_label == null:
+		return
+	var aiming: bool   = bool(_rocket_weapon.call("is_aim_mode"))
+	var ready_now: bool = bool(_rocket_weapon.call("is_ready"))
+	var border: Color
+	var label_col: Color
+	if aiming:
+		border    = UITheme.COLOR_ACCENT_HOT
+		label_col = UITheme.COLOR_ACCENT_HOT
+	elif ready_now:
+		border    = UITheme.COLOR_BORDER_BRIGHT
+		label_col = UITheme.COLOR_BORDER_BRIGHT
+	else:
+		# Saffron base = ROCKET archetype tint at slot color.
+		var slot_idx := _weapon_names.find("ROCKET")
+		var base: Color = _slot_colors[slot_idx] if slot_idx >= 0 and slot_idx < _slot_colors.size() else UITheme.COLOR_ACCENT_LIME
+		border    = base
+		label_col = base
+	_rocket_chip_style.border_color = border
+	_rocket_chip_label.add_theme_color_override("font_color", label_col)
 
 # ── Charge fill ───────────────────────────────────────────────────────────────
 func _on_charge(idx: int, value: float) -> void:

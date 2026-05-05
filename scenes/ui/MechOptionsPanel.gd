@@ -272,12 +272,19 @@ func _refresh_btn_text() -> void:
 		return
 	var w := _target_mech.get("weapon") as Node3D
 	var name_str := "Ultimate"
+	var is_rocket := false
 	if w != null:
 		var raw_name: Variant = w.get("weapon_name")
 		if raw_name != null:
 			name_str = str(raw_name)
+			is_rocket = (str(raw_name) == "ROCKET")
 	_ult_action_lbl.text   = name_str
 	_ult_subtitle_lbl.text = "Press to activate"
+	# ROCKET activates from anywhere via the global R key + RocketStrikeHud, so
+	# the proximity prompt + E hookup for it is hidden here. The button stays in
+	# the layout for the other archetypes; only this slot is conditional.
+	if _ult_btn != null and is_instance_valid(_ult_btn):
+		_ult_btn.visible = not is_rocket
 
 func _on_ult_pressed() -> void:
 	AudioManager.play("ui_click")
@@ -300,6 +307,11 @@ func _fire_ult() -> void:
 	if _target_mech == null:
 		return
 	var w := _target_mech.get("weapon") as Node3D
+	# ROCKET is driven by the global R key (Game._trigger_rocket_strike) so
+	# E never fires it from the panel even though the panel can be shown next
+	# to the rocket mech.
+	if w != null and str(w.get("weapon_name")) == "ROCKET":
+		return
 	if w == null or not w.has_method("activate_ult"):
 		return
 	var fired: bool = w.activate_ult()

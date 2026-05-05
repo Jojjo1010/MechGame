@@ -227,6 +227,19 @@ func _spawn_repair_hud() -> void:
 	hud.set_script(REPAIR_HUD_SCRIPT)
 	add_child(hud)
 
+# ROCKET fires from anywhere via the global R key. Surfaces to the rocket
+# weapon (which handles "if marking → commit, else → start_marking").
+func _trigger_rocket_strike() -> void:
+	var rocket := _find_rocket_weapon()
+	if rocket != null and rocket.has_method("activate_ult"):
+		rocket.call("activate_ult")
+
+func _find_rocket_weapon() -> Node3D:
+	for w in _weapons:
+		if w != null and is_instance_valid(w) and str(w.get("weapon_name")) == "ROCKET":
+			return w
+	return null
+
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
 	if event is InputEventMouseButton and event.pressed:
@@ -240,6 +253,13 @@ func _input(event: InputEvent) -> void:
 			# this path can't open a pause menu over the upgrade picker / death
 			# screen / repair minigame, all of which already pause the tree.
 			_open_pause_menu()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_R:
+			# Global rocket strike — works from anywhere, no proximity gate. The
+			# rocket weapon's activate_ult is "press once to enter marking mode,
+			# press again (or left-click) to commit", so re-pressing R finishes
+			# the strike too.
+			_trigger_rocket_strike()
 			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
