@@ -252,7 +252,9 @@ func _try_dash() -> void:
 # once per enemy per dash, and spawn a hit-through VFX.
 func _dash_punch_through() -> void:
 	EnemyGridCS.ensure_fresh(get_tree())
-	for e in EnemyGridCS.query(global_position, DASH_HIT_RADIUS):
+	# Pad the candidate query so shielded enemies' bonus hit radius (up to
+	# +0.5) lets the dash catch them on the edge of the punch-through volume.
+	for e in EnemyGridCS.query(global_position, DASH_HIT_RADIUS + 0.6):
 		if e == null or not is_instance_valid(e):
 			continue
 		var enemy_id: int = e.get_instance_id()
@@ -260,9 +262,18 @@ func _dash_punch_through() -> void:
 			continue
 		var diff: Vector3 = e.global_position - global_position
 		diff.y = 0.0
-		if diff.length() > DASH_HIT_RADIUS:
+		var effective_radius: float = DASH_HIT_RADIUS
+		if e.has_method("hit_radius_bonus"):
+			effective_radius += float(e.call("hit_radius_bonus"))
+		if diff.length() > effective_radius:
 			continue
 		_dash_hit_set[enemy_id] = true
+		# Shielded enemies absorb the dash for the shield only — they survive
+		# the hit and become damageable. Mech fire still has to finish them.
+		if e.has_method("is_shielded_active") and e.call("is_shielded_active"):
+			if e.has_method("break_shield"):
+				e.call("break_shield")
+			continue
 		if e.has_method("take_damage"):
 			e.take_damage(DASH_DAMAGE, true)   # render as crit so the number shouts
 		if e.has_method("apply_knockback"):

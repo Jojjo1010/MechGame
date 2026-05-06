@@ -92,14 +92,19 @@ func _process(delta: float) -> void:
 
 	# Query the spatial grid instead of scanning the whole enemies group every
 	# frame — at high enemy/bullet counts the O(B*E) tree scan dominates.
+	# Pad the query by 0.6 so shielded enemies (whose hit_radius_bonus widens
+	# their effective hitbox up to +0.5) aren't excluded from the candidate set.
 	EnemyGridCS.ensure_fresh(get_tree())
-	for enemy in EnemyGridCS.query(global_position, HIT_RADIUS):
+	for enemy in EnemyGridCS.query(global_position, HIT_RADIUS + 0.6):
 		if not is_instance_valid(enemy):
 			continue
 		if enemy in _hit_enemies:
 			continue
 		var dist := global_position.distance_to(enemy.global_position + Vector3(0.0, 0.8, 0.0))
-		if dist < HIT_RADIUS:
+		var effective_radius: float = HIT_RADIUS
+		if enemy.has_method("hit_radius_bonus"):
+			effective_radius += float(enemy.call("hit_radius_bonus"))
+		if dist < effective_radius:
 			_hit_enemies.append(enemy)
 			if is_instance_valid(_source_weapon):
 				_source_weapon._apply_hit(enemy, _base_damage, global_position, direction, _is_crit, _bonus_knockback)

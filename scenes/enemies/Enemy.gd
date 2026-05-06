@@ -37,6 +37,28 @@ const ELITE_SCALE   := 1.10
 
 var wave_number: int  = 1
 var is_elite:    bool = false
+# Shielded variant: drone has to dash through to break the overshield before
+# any damage source (mech fire, splash, DOT, etc.) can land. Stamped pre-_ready
+# by WaveSpawner; kept mutually exclusive with is_elite.
+var is_shielded: bool = false
+var _shield_active:  bool = false
+var _shield_bubble:  MeshInstance3D = null
+var _shield_bubble_mat: StandardMaterial3D = null
+var _shield_icon:    Label3D = null
+const SHIELD_HP_MULT     := 1.4   # tankier than baseline so the dash reads as a meaningful payoff
+const SHIELD_SCALE       := 1.30  # bigger than a normal enemy — reads as "armored / heavy" before the bubble even shows
+const SHIELD_BUBBLE_R    := 0.95  # world-space radius (in local space; inherits SHIELD_SCALE)
+const SHIELD_ICON_HEIGHT := 3.4   # above the head, distinct from HP-bar slot
+const SHIELD_HIT_RADIUS_BONUS := 0.5  # extra reach added to bullet + dash hit checks against shielded targets
+
+# Public hit-radius hook used by Bullet + Drone dash. Returns the extra world-
+# space reach to add on top of the projectile's own hit radius. Default is 0;
+# shielded variants extend their hitbox so the dash + bullets register on the
+# bigger silhouette without needing perfect aim.
+func hit_radius_bonus() -> float:
+	if is_shielded:
+		return SHIELD_HIT_RADIUS_BONUS
+	return 0.0
 
 var health: float = max_health
 var attack_timer: float = 0.0
@@ -90,7 +112,12 @@ func _ready() -> void:
 	if not is_dummy:
 		_apply_wave_scaling()
 	health = max_health
-	var base_scale: float = 0.6 * (ELITE_SCALE if is_elite else 1.0)
+	var size_mult: float = 1.0
+	if is_elite:
+		size_mult = ELITE_SCALE
+	elif is_shielded:
+		size_mult = SHIELD_SCALE
+	var base_scale: float = 0.6 * size_mult
 	scale = Vector3(base_scale, base_scale, base_scale)
 	# Build shared white overlay material for hit flash
 	_flash_mat = StandardMaterial3D.new()
@@ -107,12 +134,17 @@ func _ready() -> void:
 	_add_blob_shadow(0.5, 2.5)
 	# HP bar is lazy-created on first hit — splash/AOE often kills enemies
 	# without ever damaging them solo, so the bar stays unbuilt for those.
+	if is_shielded and not is_dummy:
+		_build_shield_visual()
 
 func _apply_wave_scaling() -> void:
-	# HP: linear ramp, capped. Elites are an additional flat multiplier on top.
+	# HP: linear ramp, capped. Elites and shielded each apply a separate flat
+	# multiplier — they're mutually exclusive at spawn time so only one fires.
 	var hp_mult: float = minf(1.0 + HP_PER_WAVE * float(wave_number - 1), HP_MULT_CAP)
 	if is_elite:
 		hp_mult *= ELITE_HP_MULT
+	elif is_shielded:
+		hp_mult *= SHIELD_HP_MULT
 	max_health *= hp_mult
 
 	# Visual: replace the body/head material_overrides with tier-tinted (or
@@ -127,6 +159,15 @@ func _apply_wave_scaling() -> void:
 	head_mi.material_override = _make_head_mat(palette.head, palette.emission, palette.emission_energy)
 
 func _palette_for(wave: int, elite: bool) -> Dictionary:
+	if is_shielded:
+		# Cool steel body + cyan head — reads as "armored / coded blue, dash me"
+		# against the red horde and gold elites.
+		return {
+			body            = Color(0.55, 0.62, 0.72),
+			head            = Color(0.30, 0.78, 0.95),
+			emission        = Color(0.30, 0.85, 1.00),
+			emission_energy = 1.1,
+		}
 	if elite:
 		# Gold body + hot-magenta head with a stronger glow — reads instantly
 		# as "different / priority target" against the red palette.
@@ -429,6 +470,11 @@ func _tick_flash(delta: float) -> void:
 # AOEs) so a single rocket impact doesn't paint 5+ numbers across the cluster.
 # Direct bullet/primary hits leave it true so per-shot feedback survives.
 func take_damage(amount: float, is_crit: bool = false, show_number: bool = true) -> void:
+	# Overshield absorbs every damage source — direct hits, splash, DOT, aura
+	# pulses. Drone dash calls break_shield() instead, which removes _shield_active
+	# and lets subsequent damage land normally.
+	if _shield_active:
+		return
 	health = maxf(0.0, health - amount)
 	_flash_hit()
 	# Killing blows skip the bar — the enemy is about to queue_free anyway.
@@ -476,5 +522,65 @@ func _spawn_pickups() -> void:
 	# few BIG/HUGE coins at the cluster center instead of N×3 SMALL coins.
 	if is_elite:
 		Pickup.queue_gold(3, global_position, scene)
+	elif is_shielded:
+		Pickup.queue_gold(2, global_position, scene)   # mid-tier reward — between normal and elite
 	elif randf() < 0.35:
 		Pickup.queue_gold(1, global_position, scene)
+
+# ── Shielded variant ─────────────────────────────────────────────────────────
+
+func is_shielded_active() -> bool:
+	return _shield_active
+
+# Drone-dash entry point. Pops the bubble + icon, spawns a cyan break burst,
+# and flips _shield_active so subsequent damage lands. Idempotent — second
+# dash through the same enemy in one pass is a no-op.
+func break_shield() -> void:
+	if not _shield_active:
+		return
+	_shield_active = false
+	if is_instance_valid(_shield_bubble):
+		_shield_bubble.queue_free()
+	_shield_bubble = null
+	_shield_bubble_mat = null
+	if is_instance_valid(_shield_icon):
+		_shield_icon.queue_free()
+	_shield_icon = null
+	BurstVFX.spawn(global_position + Vector3(0.0, 1.0, 0.0),
+		Color(0.4, 0.85, 1.0), 28, 8.5, 0.55, get_tree().current_scene)
+	AudioManager.play("bullet_impact", global_position, -3.0, 1.6)
+
+func _build_shield_visual() -> void:
+	# Translucent cyan bubble around the body — sized larger than the enemy AABB
+	# so it reads as a "force-field shell" rather than a tinted skin.
+	_shield_bubble = MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = SHIELD_BUBBLE_R
+	sph.height = SHIELD_BUBBLE_R * 2.0
+	_shield_bubble.mesh = sph
+	_shield_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shield_bubble_mat = StandardMaterial3D.new()
+	_shield_bubble_mat.albedo_color = Color(0.30, 0.85, 1.00, 0.32)
+	_shield_bubble_mat.emission_enabled = true
+	_shield_bubble_mat.emission = Color(0.20, 0.70, 1.00)
+	_shield_bubble_mat.emission_energy_multiplier = 2.0
+	_shield_bubble_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shield_bubble_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shield_bubble.material_override = _shield_bubble_mat
+	_shield_bubble.position = Vector3(0.0, 1.0, 0.0)   # roughly chest-level
+	add_child(_shield_bubble)
+
+	# Floating shield-icon glyph above the head — telegraphs "this one needs the
+	# dash" before the player even sees the bubble against busy backgrounds.
+	_shield_icon = Label3D.new()
+	_shield_icon.text = "🛡"
+	_shield_icon.font_size = 56
+	_shield_icon.outline_size = 12
+	_shield_icon.modulate = Color(0.40, 0.90, 1.00)
+	_shield_icon.outline_modulate = Color(0.0, 0.05, 0.15, 1.0)
+	_shield_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_shield_icon.no_depth_test = true
+	_shield_icon.position = Vector3(0.0, SHIELD_ICON_HEIGHT, 0.0)
+	add_child(_shield_icon)
+
+	_shield_active = true

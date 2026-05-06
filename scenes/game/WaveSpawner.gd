@@ -16,6 +16,17 @@ const ELITE_START_WAVE := 5
 const ELITE_RAMP_END   := 30
 const ELITE_MAX_CHANCE := 0.15
 
+# Shielded variant — drone has to dash through to break the bubble before any
+# damage lands. Spawns in groups of 2-4 every 2-3 waves once the player has
+# their bearings (wave >= 5).
+const SHIELD_START_WAVE     := 5
+const SHIELD_INTERVAL_MIN   := 2
+const SHIELD_INTERVAL_MAX   := 3
+const SHIELD_GROUP_MIN      := 2
+const SHIELD_GROUP_MAX      := 3
+var _waves_since_shielded:  int = 0
+var _next_shielded_interval: int = 2
+
 # ── Spawn patterns ────────────────────────────────────────────────────────────
 # Each wave picks a pattern that decides where its enemies appear. Solves two
 # things at once: damage no longer funnels onto the lead mech (different
@@ -127,6 +138,19 @@ func _spawn_wave() -> void:
 	for i in count:
 		get_tree().create_timer(i * interval).timeout.connect(_spawn_one)
 
+	# Shielded group: piggybacks on the wave's pattern. Counter rolls a fresh
+	# 2..3 interval after each group fires, so the cadence varies wave-to-wave.
+	if wave_number >= SHIELD_START_WAVE:
+		_waves_since_shielded += 1
+		if _waves_since_shielded >= _next_shielded_interval:
+			_waves_since_shielded = 0
+			_next_shielded_interval = randi_range(SHIELD_INTERVAL_MIN, SHIELD_INTERVAL_MAX)
+			var group_size := randi_range(SHIELD_GROUP_MIN, SHIELD_GROUP_MAX)
+			# Stagger inside the same SPAWN_SPREAD window so shielded enemies
+			# arrive interleaved with the regular wave instead of in a bolus.
+			for i in group_size:
+				get_tree().create_timer(float(i) * (SPAWN_SPREAD / float(group_size))).timeout.connect(_spawn_shielded_one)
+
 	if wave_number >= RunManager.WIN_WAVE:
 		# Final wave: stop spawning. Wait until after the staggered spawns finish
 		# (+1s grace) before we start polling for an empty field, so we don't
@@ -151,6 +175,17 @@ func _spawn_one() -> void:
 	# in one place rather than restamping after the fact.
 	enemy.wave_number = wave_number
 	enemy.is_elite    = _roll_elite()
+	enemies_container.add_child(enemy)
+	enemy.global_position = pos
+
+# Same shape as _spawn_one but stamps is_shielded instead. Mutually exclusive
+# with elite — both flags drive priority-target visuals and we don't want them
+# stacking on the same enemy.
+func _spawn_shielded_one() -> void:
+	var pos := _spawn_position_for_pattern(_current_pattern)
+	var enemy: Node3D = ENEMY_SCENE.instantiate()
+	enemy.wave_number = wave_number
+	enemy.is_shielded = true
 	enemies_container.add_child(enemy)
 	enemy.global_position = pos
 
