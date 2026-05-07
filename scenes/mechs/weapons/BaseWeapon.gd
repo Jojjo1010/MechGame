@@ -26,6 +26,12 @@ var range_mult:             float = 1.0
 var projectile_count_bonus: int   = 0     # Gun: extra bullets, Beam: extra bounces
 var dot_dps:                float = 0.0   # damage-over-time applied on hit
 var knockback_force:        float = 0.0   # impulse magnitude on hit (0 = none)
+# Per-weapon multiplier on the BASE_KNOCKBACK + knockback_force + bonus_knockback
+# total in _apply_hit. 1.0 = full shove (default), 0.0 = no knockback at all,
+# 0.5 = half-strength. GARLIC runs at 0.5 because the original full shove kept
+# enemies off the rear mechs entirely — half lets the pulse still read as
+# feedback without making AEGIS defensive on its own.
+var knockback_mult:         float = 1.0
 var splash_radius:          float = 0.0   # secondary AOE radius around hit (0 = none)
 var slow_mult:              float = 1.0   # 1.0 = no slow, 0.5 = half speed
 var slow_duration:          float = 0.0   # seconds the slow lasts
@@ -264,11 +270,11 @@ func _apply_hit(enemy: Object, base_damage: float, hit_pos: Vector3, hit_dir: Ve
 		enemy.apply_dot(dot_dps, DOT_DURATION)
 	if slow_duration > 0.0 and slow_mult < 1.0 and enemy.has_method("apply_slow"):
 		enemy.apply_slow(slow_mult, slow_duration)
-	if enemy.has_method("apply_knockback"):
+	if knockback_mult > 0.0 and enemy.has_method("apply_knockback"):
 		var dir := hit_dir
 		dir.y = 0.0
 		if dir.length_squared() > 0.001:
-			enemy.apply_knockback(dir.normalized() * (BASE_KNOCKBACK + knockback_force + bonus_knockback))
+			enemy.apply_knockback(dir.normalized() * ((BASE_KNOCKBACK + knockback_force + bonus_knockback) * knockback_mult))
 	if splash_radius > 0.0:
 		var splash_dmg := dmg * SPLASH_DAMAGE_FRAC
 		for other in _enemies_in_radius(hit_pos, splash_radius):

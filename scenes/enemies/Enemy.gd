@@ -8,7 +8,7 @@ const EnemyGridCS    = preload("res://scenes/enemies/EnemyGrid.gd")
 
 const SPEED := 4.5
 const ATTACK_RANGE := 1.4
-const ATTACK_DAMAGE := 8.0
+const ATTACK_DAMAGE := 6.0
 const ATTACK_INTERVAL := 1.0
 
 # Separation: enemies push each other apart when too close

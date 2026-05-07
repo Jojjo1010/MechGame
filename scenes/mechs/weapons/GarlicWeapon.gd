@@ -6,12 +6,19 @@ const AURA_RADIUS     := 4.5
 const DAMAGE_PER_TICK := 10.0
 const ULT_RADIUS      := 10.0
 const ULT_DAMAGE      := 75.0
-const KNOCKBACK_FORCE := 38.0
+# Half-strength knockback — the original 38 ult force trapped the rear of the
+# line so enemies couldn't reach the back mechs; full opt-out (the previous
+# disable_knockback) made AEGIS feel inert. 0.5× lets the shove still read as
+# feedback without being defensive on its own.
+const ULT_KNOCKBACK_FORCE := 19.0
 
 var _aura_ring: MeshInstance3D = null
 
 func _on_setup() -> void:
 	weapon_name = "GARLIC"
+	# Half-strength shove on aura pulses + ult so the rear of the line still
+	# gets reached (full BASE_KNOCKBACK kept enemies trapped at the aura edge).
+	knockback_mult = 0.5
 	_build_aura_ring()
 
 func _build_aura_ring() -> void:
@@ -86,8 +93,9 @@ func _fire_ult() -> void:
 			var diff: Vector3 = e.global_position - _mech.global_position
 			diff.y = 0.0
 			if diff.length_squared() > 0.001:
-				# Ult always punches; stack any extra knockback from upgrades on top
-				var force := KNOCKBACK_FORCE + knockback_force
+				# Halved from the original 38 — still a clear "shockwave thump"
+				# but doesn't lock enemies out of the rear of the formation.
+				var force := ULT_KNOCKBACK_FORCE + knockback_force
 				e.apply_knockback(diff.normalized() * force)
 	_spawn_shockwave(radius)
 	AudioManager.play("garlic_ult", _mech.global_position, -2.0)
