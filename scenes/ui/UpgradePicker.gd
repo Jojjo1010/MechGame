@@ -299,7 +299,10 @@ func _refresh_equipped_slots() -> void:
 func _make_slot_column(owned: Dictionary, owned_ids: Array, slot_i: int) -> Control:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 4)
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Top-align so the hex sits at the same Y across columns regardless of
+	# how many lines the label below wraps to. ALIGNMENT_CENTER pushed the
+	# 1-line columns lower than the 2-line ones, staggering the row.
+	col.alignment = BoxContainer.ALIGNMENT_BEGIN
 	# Pin column width to the hex so longer upgrade names ("Napalm Payload")
 	# don't push their column wider than an "empty" column. Label autowraps
 	# inside this fixed width if needed.
@@ -424,16 +427,17 @@ func _make_placeholder_card(seed_value: int = 0) -> Control:
 	card.add_child(back)
 	return card
 
-# Hot-pink NEW pill shown next to the rarity tag for fresh / unique picks.
-# Uses the standard "ready / committed" hot-pink accent so it pops against
-# the dark card and the archetype-tinted border.
+# Quiet NEW pill shown next to the rarity tag for fresh / unique picks.
+# Dark fill + hairline border keeps it neutral so it advertises freshness
+# without adding a third strong accent color to the card.
 func _make_new_badge() -> Control:
 	var pill := PanelContainer.new()
 	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.COLOR_ACCENT_HOT
+	style.bg_color = UITheme.COLOR_DEEP
 	style.set_corner_radius_all(4)
-	style.set_border_width_all(0)
+	style.set_border_width_all(1)
+	style.border_color = Color("#6e716e")
 	style.content_margin_left   = 8.0
 	style.content_margin_right  = 8.0
 	style.content_margin_top    = 2.0
@@ -441,8 +445,8 @@ func _make_new_badge() -> Control:
 	pill.add_theme_stylebox_override("panel", style)
 	var lbl := Label.new()
 	lbl.text = "NEW"
-	lbl.add_theme_font_size_override("font_size", 18)
-	lbl.add_theme_color_override("font_color",      UITheme.COLOR_TEXT_INVERSE)
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color",      Color("#c0c4bf"))
 	lbl.add_theme_constant_override("outline_size", 0)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_child(lbl)
@@ -465,10 +469,11 @@ func _make_card(upgrade: Dictionary) -> Control:
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = PANEL_BG_2
 	bg.set_corner_radius_all(10)
-	bg.set_border_width_all(3)
-	# Solid archetype tint so cards read as committed surfaces, not washed-out
-	# overlays. Hover swaps to bright lime (matches "live" UI signal).
-	bg.border_color = target_color
+	bg.set_border_width_all(2)
+	# Neutral mid-grey border — the rarity tag, mech identity in the title,
+	# and the icon hex already carry the color story. Stays out of the way of
+	# the rarity-tinted UNCOMMON / RARE accent colors.
+	bg.border_color = Color("#6e716e")
 	bg.content_margin_left   = 24
 	bg.content_margin_right  = 24
 	bg.content_margin_top    = 16
@@ -477,7 +482,12 @@ func _make_card(upgrade: Dictionary) -> Control:
 
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
-	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Top-align so two-line wrapped descriptions (e.g. "+3 micro-blasts/impact")
+	# don't push the icon + title down compared to neighbouring cards. Each
+	# card still SIZE_FILLs to the tallest sibling's height, so a worst-case
+	# wrapping card pins the height for the whole row and shorter cards just
+	# leave empty space at the bottom.
+	v.alignment = BoxContainer.ALIGNMENT_BEGIN
 	v.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(v)

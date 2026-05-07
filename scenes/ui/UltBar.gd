@@ -13,6 +13,10 @@ const MARGIN_BOT          := 24.0
 const MARGIN_LEFT         := 24.0
 const PORTRAIT_SIZE       := 96.0
 const PORTRAIT_BORDER     := 4.0
+# Horizontal gap between the portrait's layout footprint and the text column.
+# Sized to clear the pop-out portrait's sideways overhang (~17px each side
+# from POP_WIDTH_RATIO 1.35) plus a 14px visual breathing gap.
+const PORTRAIT_RIGHT_GAP  := 32.0
 # Inventory has one slot per possible unique upgrade type per weapon. The
 # run-side cap is RunManager.MAX_TYPES_PER_TARGET (= 2) — each mech can carry
 # at most two distinct upgrade types, with stacks reflected via the count pill.
@@ -122,7 +126,10 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	root.add_child(portrait)
 
 	# ── Header row: weapon name + [E] chip + charge bar ───────────────────────
-	var header_x := x + 14.0 + PORTRAIT_SIZE + 14.0
+	# Pop-out portrait extends ~17px past the layout footprint on the right;
+	# PORTRAIT_RIGHT_GAP (32) clears that overhang plus a 14px breathing gap
+	# before the text column.
+	var header_x := x + 14.0 + PORTRAIT_SIZE + PORTRAIT_RIGHT_GAP
 
 	var name_lbl := Label.new()
 	# Archetype name (VOLLEY / AEGIS / ARC) — display label tinted with the
@@ -140,7 +147,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	# Charge bar — under the name with a comfortable gap. Computed first so the
 	# ult chip can be vertically centered with it.
 	var bar_y := 14.0 + NAME_FONT + 14.0
-	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + 14.0) - KEY_CHIP_SIZE - 14.0 - 14.0
+	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + PORTRAIT_RIGHT_GAP) - KEY_CHIP_SIZE - 14.0 - 14.0
 
 	# Each slot advertises its actual control: ROCKET fires globally on R, the
 	# rest fire on E from the proximity panel. The R chip recolours per-frame
@@ -200,11 +207,12 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_on_charge(slot_idx, weapon.get_charge())
 
 # ── Portrait construction ─────────────────────────────────────────────────────
-# pop_out=false keeps the mech model contained inside its 96px box so the head
-# and shoulders don't bleed sideways into the archetype name label.
+# pop_out=true (default) gives the bigger hero-shot mech with head and shoulders
+# bleeding past the layout footprint. PORTRAIT_RIGHT_GAP below leaves enough
+# room for that sideways overhang so it doesn't collide with the name label.
 func _build_portrait(weapon_name: String) -> Control:
 	var p: Control = MechPortraitCS.new()
-	p.call("setup", weapon_name, PORTRAIT_SIZE, PORTRAIT_BORDER, false)
+	p.call("setup", weapon_name, PORTRAIT_SIZE, PORTRAIT_BORDER)
 	return p
 
 # ── Key chip matching MechOptionsPanel style ──────────────────────────────────
