@@ -17,6 +17,12 @@ const ULT_BAR_BOT := 24.0
 const GAP_ABOVE_ULT := 55.0
 const KEY_CHIP_SIZE := 36.0
 const DRONE_ICON_SIZE := 56.0
+# Mirror MechPortrait's pop_out behavior — render the drone larger than its
+# layout footprint so the body and ring bleed past the bordered area like a
+# hero shot. POP_W is gentler than POP_H so the sideways overhang doesn't
+# push into the text column to its right.
+const DRONE_POP_W_RATIO := 1.20
+const DRONE_POP_H_RATIO := 1.55
 # Bar height matches UltBar.BAR_H so the repair cooldown reads at the same
 # weight as a mech's ult charge bar instead of looking like a thin afterthought.
 const BAR_H := 14.0
@@ -54,20 +60,26 @@ func _build() -> void:
 	var panel := PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Mirror UltBar slot styling — same dark fill, amber-at-0.55-alpha hairline
+	# border (UltBar uses archetype tint × 0.55), and corner radius 16 so the
+	# repair pill reads as "another bar in the family" rather than a different
+	# component.
 	var sb := StyleBoxFlat.new()
 	sb.bg_color     = UITheme.COLOR_PANEL_ALPHA
 	sb.border_color = Color(AMBER.r, AMBER.g, AMBER.b, 0.55)
 	sb.set_border_width_all(int(UITheme.PANEL_BORDER_W))
-	sb.set_corner_radius_all(12)
-	sb.content_margin_left   = 10
-	sb.content_margin_right  = 12
-	sb.content_margin_top    = 6
-	sb.content_margin_bottom = 6
+	sb.set_corner_radius_all(16)
+	sb.content_margin_left   = 14
+	sb.content_margin_right  = 14
+	sb.content_margin_top    = 10
+	sb.content_margin_bottom = 10
 	panel.add_theme_stylebox_override("panel", sb)
 	_root.add_child(panel)
 
+	# Layout mirrors a single UltBar slot:
+	#   [drone portrait] [ name (top) | bar ──── F chip (right) ]
 	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 12)
+	hbox.add_theme_constant_override("separation", 14)
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hbox)
 
@@ -76,15 +88,15 @@ func _build() -> void:
 	# the repair bar reads as "the drone's action" at the same identity-level.
 	hbox.add_child(_make_drone_portrait())
 
-	hbox.add_child(_make_key_chip("F", AMBER))
-
 	var text_col := VBoxContainer.new()
 	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_col.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	text_col.add_theme_constant_override("separation", 4)
+	text_col.add_theme_constant_override("separation", 6)
 	text_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(text_col)
 
+	# Name row — REPAIR in amber (mirrors archetype-tinted name in UltBar)
+	# and the status text right-aligned in the same row.
 	var label_row := HBoxContainer.new()
 	label_row.add_theme_constant_override("separation", 8)
 	label_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -92,8 +104,8 @@ func _build() -> void:
 
 	var action_lbl := Label.new()
 	action_lbl.text = "REPAIR"
-	action_lbl.add_theme_font_size_override("font_size", 16)
-	action_lbl.add_theme_color_override("font_color", Color.WHITE)
+	action_lbl.add_theme_font_size_override("font_size", 22)
+	action_lbl.add_theme_color_override("font_color", AMBER)
 	action_lbl.add_theme_constant_override("outline_size", 0)
 	action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label_row.add_child(action_lbl)
@@ -105,15 +117,24 @@ func _build() -> void:
 	_sub_lbl.add_theme_constant_override("outline_size", 0)
 	_sub_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_sub_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	_sub_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label_row.add_child(_sub_lbl)
+
+	# Bar row — bar fills, F key chip pinned to the right end at bar level
+	# (matches UltBar's per-slot E/R chip placement).
+	var bar_row := HBoxContainer.new()
+	bar_row.add_theme_constant_override("separation", 12)
+	bar_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_col.add_child(bar_row)
 
 	_bar_bg = ColorRect.new()
 	_bar_bg.color = UITheme.COLOR_DEEP
 	_bar_bg.custom_minimum_size = Vector2(0.0, BAR_H)
 	_bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bar_bg.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text_col.add_child(_bar_bg)
+	bar_row.add_child(_bar_bg)
 
 	_bar_fill = ColorRect.new()
 	_bar_fill.color = AMBER
@@ -121,18 +142,36 @@ func _build() -> void:
 	_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bar_bg.add_child(_bar_fill)
 
+	bar_row.add_child(_make_key_chip("F", AMBER))
+
 # Live 3D drone bust — uses the same scene as the in-game drone so the HUD
 # portrait stays in sync if the model changes. The script is stripped from
 # the instance so player-control logic doesn't run inside the viewport.
+#
+# Layout footprint is DRONE_ICON_SIZE square, but the rendered viewport is
+# larger and bottom-anchored so the drone visually extends above and a bit
+# to the sides — same hero-shot pop as MechPortrait's pop_out=true.
 func _make_drone_portrait() -> Control:
+	var outer := Control.new()
+	outer.custom_minimum_size = Vector2(DRONE_ICON_SIZE, DRONE_ICON_SIZE)
+	outer.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	outer.clip_contents = false
+	outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var pop_w := DRONE_ICON_SIZE * DRONE_POP_W_RATIO
+	var pop_h := DRONE_ICON_SIZE * DRONE_POP_H_RATIO
+
 	var container := SubViewportContainer.new()
-	container.custom_minimum_size = Vector2(DRONE_ICON_SIZE, DRONE_ICON_SIZE)
+	container.size = Vector2(pop_w, pop_h)
+	# Bottom-center within the layout footprint so head/ring extend up and
+	# slightly sideways past the box, feet/exhaust stay anchored on the line.
+	container.position = Vector2((DRONE_ICON_SIZE - pop_w) * 0.5, DRONE_ICON_SIZE - pop_h)
 	container.stretch = true
-	container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	outer.add_child(container)
 
 	var vp := SubViewport.new()
-	vp.size = Vector2i(int(DRONE_ICON_SIZE), int(DRONE_ICON_SIZE))
+	vp.size = Vector2i(int(pop_w), int(pop_h))
 	vp.transparent_bg = true
 	vp.handle_input_locally = false
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -158,7 +197,7 @@ func _make_drone_portrait() -> Control:
 	cam.current = true
 	vp.add_child(cam)
 
-	return container
+	return outer
 
 func _make_key_chip(text: String, accent: Color) -> Control:
 	# Mirrors MechOptionsPanel._make_key_badge — beveled-key feel via a thicker
