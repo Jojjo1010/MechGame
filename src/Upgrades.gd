@@ -14,6 +14,16 @@ const RARITY_RARE     := 2
 # Relative pick weights per rarity. Common ~70%, uncommon ~25%, rare ~5%.
 const RARITY_WEIGHTS  := [70.0, 25.0, 5.0]
 
+# Per-weapon base stats — duplicated from the weapon scripts so progression()
+# can compute "before → after" without importing every weapon class. Keep in
+# sync with FIRE_RATE / BULLET_BASE_DAMAGE / etc. in scenes/mechs/weapons/*.
+const BASE_STATS := {
+	"GUN":    {"fire_period": 0.8,  "bullet_dmg": 20.0},
+	"GARLIC": {"fire_period": 0.65, "tick_dmg":   10.0, "aura_radius":   4.5},
+	"BEAM":   {"fire_period": 1.3,  "bounce_dmg": 18.0, "bounces":       3},
+	"ROCKET": {"fire_period": 1.6,  "rocket_dmg": 75.0, "splash_radius": 4.0},
+}
+
 const ALL := [
 	# Each weapon has the same shape: 3 stat commons + 1 unique uncommon + 1 unique rare.
 	# Descriptions don't repeat the weapon name — the card already shows it via the
@@ -184,3 +194,97 @@ static func _rocket_napalm(weapons: Array) -> void:
 			w.napalm_burn_dps = 8.0
 			w.napalm_radius   = 4.0
 			w.napalm_duration = 4.0
+
+# Hades-style before/after for the upgrade picker card. Returns a dict with
+# keys {stat, delta, before, after} computed against the current state of the
+# matching weapon, or {} for upgrades with no clean numeric progression.
+static func progression(upgrade: Dictionary, weapons: Array) -> Dictionary:
+	var target: String = String(upgrade.get("target", ""))
+	var w: Object = null
+	for weapon in weapons:
+		if weapon != null and String(weapon.weapon_name) == target:
+			w = weapon
+			break
+	if w == null:
+		return {}
+	var b: Dictionary = BASE_STATS.get(target, {})
+	match String(upgrade.id):
+		# ── Gun ──────────────────────────────────────────────────────────────
+		"gun_firerate":
+			var cur := 1.0 / float(b.fire_period) * float(w.fire_rate_mult)
+			return {"stat":"fire rate", "delta":"+25%",
+				"before":"%.2f/s" % cur, "after":"%.2f/s" % (cur * 1.25)}
+		"gun_headshot":
+			var labels := ["—", "every 3rd shot", "every 2nd shot", "every shot"]
+			var n: int = clampi(int(w.headshot_count), 0, 3)
+			return {"stat":"headshot ×6", "delta":"crit",
+				"before":labels[n], "after":labels[mini(n + 1, 3)]}
+		"gun_projectile":
+			var n := 1 + int(w.projectile_count_bonus)
+			return {"stat":"bullets/shot", "delta":"+1",
+				"before":"%d" % n, "after":"%d" % (n + 1)}
+		"gun_splash":
+			return {"stat":"splash on hit", "delta":"AoE",
+				"before":"off", "after":"2.5m, 50% dmg"}
+		"gun_pierce":
+			return {"stat":"pierce", "delta":"+2 enemies",
+				"before":"0 enemies", "after":"2 enemies"}
+		# ── Garlic ───────────────────────────────────────────────────────────
+		"garlic_wither":
+			var cur := float(w.withering_per_stack) * 100.0
+			return {"stat":"wither/stack", "delta":"+25%",
+				"before":"+%d%%" % int(cur), "after":"+%d%%" % int(cur + 25.0)}
+		"garlic_bulwark":
+			var cur := float(w.bulwark_dmg_reduction) * 100.0
+			return {"stat":"dmg taken in aura", "delta":"−25%",
+				"before":"−%d%%" % int(cur), "after":"−%d%%" % int(cur + 25.0)}
+		"garlic_range":
+			var cur := float(b.aura_radius) * float(w.range_mult)
+			return {"stat":"aura radius", "delta":"+20%",
+				"before":"%.1fm" % cur, "after":"%.1fm" % (cur * 1.20)}
+		"garlic_slow":
+			return {"stat":"slow on hit", "delta":"70% / 2.5s",
+				"before":"off", "after":"70%, 2.5s"}
+		"garlic_sanctuary":
+			return {"stat":"regen in aura", "delta":"+2 HP/s",
+				"before":"0 HP/s", "after":"2 HP/s"}
+		# ── Beam ─────────────────────────────────────────────────────────────
+		"beam_firerate":
+			var cur := 1.0 / float(b.fire_period) * float(w.fire_rate_mult)
+			return {"stat":"fire rate", "delta":"+25%",
+				"before":"%.2f/s" % cur, "after":"%.2f/s" % (cur * 1.25)}
+		"beam_damage":
+			var cur := float(b.bounce_dmg) * float(w.damage_mult)
+			return {"stat":"damage", "delta":"+20%",
+				"before":"%.1f" % cur, "after":"%.1f" % (cur * 1.20)}
+		"beam_bounces":
+			var n := int(b.bounces) + int(w.projectile_count_bonus)
+			return {"stat":"bounces", "delta":"+1",
+				"before":"%d" % n, "after":"%d" % (n + 1)}
+		"beam_splash":
+			return {"stat":"splash on bounce", "delta":"AoE",
+				"before":"off", "after":"2.0m, 50% dmg"}
+		"beam_overcharge":
+			var cur := float(b.bounce_dmg) * float(w.damage_mult)
+			return {"stat":"damage / bounces / range", "delta":"+50% / +2 / +30%",
+				"before":"%.1f" % cur, "after":"%.1f" % (cur * 1.5)}
+		# ── Rocket ───────────────────────────────────────────────────────────
+		"rocket_firerate":
+			var cur := 1.0 / float(b.fire_period) * float(w.fire_rate_mult)
+			return {"stat":"fire rate", "delta":"+25%",
+				"before":"%.2f/s" % cur, "after":"%.2f/s" % (cur * 1.25)}
+		"rocket_radius":
+			var cur := float(w.splash_radius)
+			return {"stat":"splash radius", "delta":"+30%",
+				"before":"%.1fm" % cur, "after":"%.1fm" % (cur * 1.30)}
+		"rocket_damage":
+			var cur := float(b.rocket_dmg) * float(w.damage_mult)
+			return {"stat":"damage", "delta":"+25%",
+				"before":"%.1f" % cur, "after":"%.1f" % (cur * 1.25)}
+		"rocket_cluster":
+			return {"stat":"micro-blasts/impact", "delta":"+3",
+				"before":"0", "after":"3"}
+		"rocket_napalm":
+			return {"stat":"napalm zone", "delta":"8 dps × 4s, 4m",
+				"before":"off", "after":"8 dps × 4s"}
+	return {}

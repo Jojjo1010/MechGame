@@ -75,12 +75,12 @@ func _arc_pos(t: float) -> Vector3:
 func _build_mesh() -> void:
 	# Rocket geometry: gray body cylinder + red nose cone + 3 radial fins +
 	# a glowing exhaust at the back. The whole assembly is a child Node3D
-	# rotated +90° X so its local Y aligns with parent forward (-Z) — look_at
-	# in _orient_along then aims the nose along travel.
+	# rotated −90° X so its local +Y (nose end) aligns with parent forward
+	# (−Z) — look_at in _orient_along then aims the nose along travel.
 	_mesh_node = MeshInstance3D.new()
 	_mesh_node.mesh = null
 	_mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	_mesh_node.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	_mesh_node.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	add_child(_mesh_node)
 
 	var body_radius: float = 0.28 if _is_ult else 0.22

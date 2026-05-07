@@ -6,8 +6,9 @@ extends CanvasLayer
 # frame — same pattern MechOptionsPanel uses for its inline countdown.
 
 const PANEL_W := 320.0
-const PANEL_H := 56.0
+const PANEL_H := 88.0
 const MARGIN_LEFT := 24.0
+const DRONE_SCENE := preload("res://scenes/drones/Drone.tscn")
 # Mirrors UltBar.SLOT_H / MARGIN_BOT — keeping these as local consts (not
 # imports) because UltBar isn't a class_name and inheriting it just for two
 # constants is heavier than the duplication.
@@ -15,7 +16,10 @@ const ULT_BAR_H   := 144.0
 const ULT_BAR_BOT := 24.0
 const GAP_ABOVE_ULT := 55.0
 const KEY_CHIP_SIZE := 36.0
-const BAR_H := 6.0
+const DRONE_ICON_SIZE := 56.0
+# Bar height matches UltBar.BAR_H so the repair cooldown reads at the same
+# weight as a mech's ult charge bar instead of looking like a thin afterthought.
+const BAR_H := 14.0
 
 const READY_LABEL_COLOR   := Color(0.70, 1.00, 0.70, 0.92)
 const COOLING_LABEL_COLOR := Color(1.00, 0.78, 0.35, 0.92)
@@ -67,6 +71,11 @@ func _build() -> void:
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hbox)
 
+	# Drone "portrait" — actual 3D drone rendered in a SubViewport, mirroring
+	# the per-mech portraits that anchor each ult cooldown slot in UltBar so
+	# the repair bar reads as "the drone's action" at the same identity-level.
+	hbox.add_child(_make_drone_portrait())
+
 	hbox.add_child(_make_key_chip("F", AMBER))
 
 	var text_col := VBoxContainer.new()
@@ -111,6 +120,45 @@ func _build() -> void:
 	_bar_fill.size  = Vector2(0.0, BAR_H)
 	_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bar_bg.add_child(_bar_fill)
+
+# Live 3D drone bust — uses the same scene as the in-game drone so the HUD
+# portrait stays in sync if the model changes. The script is stripped from
+# the instance so player-control logic doesn't run inside the viewport.
+func _make_drone_portrait() -> Control:
+	var container := SubViewportContainer.new()
+	container.custom_minimum_size = Vector2(DRONE_ICON_SIZE, DRONE_ICON_SIZE)
+	container.stretch = true
+	container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var vp := SubViewport.new()
+	vp.size = Vector2i(int(DRONE_ICON_SIZE), int(DRONE_ICON_SIZE))
+	vp.transparent_bg = true
+	vp.handle_input_locally = false
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.own_world_3d = true
+	container.add_child(vp)
+
+	var drone := DRONE_SCENE.instantiate()
+	drone.set_script(null)
+	# Tilt slightly forward so the ring reads as a disc rather than a flat
+	# line, and the cyan body sphere catches the key light.
+	if drone is Node3D:
+		(drone as Node3D).rotation_degrees = Vector3(-12.0, 0.0, 0.0)
+	vp.add_child(drone)
+
+	var key := DirectionalLight3D.new()
+	key.rotation_degrees = Vector3(-30.0, 35.0, 0.0)
+	key.light_energy = 1.1
+	vp.add_child(key)
+
+	var cam := Camera3D.new()
+	cam.position = Vector3(0.0, 0.05, 2.2)
+	cam.fov = 38.0
+	cam.current = true
+	vp.add_child(cam)
+
+	return container
 
 func _make_key_chip(text: String, accent: Color) -> Control:
 	# Mirrors MechOptionsPanel._make_key_badge — beveled-key feel via a thicker

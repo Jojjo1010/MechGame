@@ -18,7 +18,10 @@ var _enabled: bool = true
 # Label refs needed for runtime colour/text updates
 var _ult_action_lbl:    Label = null
 var _ult_subtitle_lbl:  Label = null
-var _ult_badge_lbl:     Label = null   # the "E" inside the key chip
+var _ult_badge_lbl:     Label = null   # the "E" / "R" inside the key chip
+# Subtitle shown when the ult isn't ready. Switches to the remote-trigger
+# message when targeting the ROCKET mech so _process doesn't stomp it.
+var _ult_subtitle_idle: String = "Press to activate"
 var _repair_action_lbl: Label = null   # "Repair" / "Cooling Down"
 var _repair_sub_lbl:    Label = null   # "Damaged mech" / countdown
 var _repair_charge_fill: ColorRect = null   # bottom strip recharge bar
@@ -278,13 +281,20 @@ func _refresh_btn_text() -> void:
 		if raw_name != null:
 			name_str = str(raw_name)
 			is_rocket = (str(raw_name) == "ROCKET")
-	_ult_action_lbl.text   = name_str
-	_ult_subtitle_lbl.text = "Press to activate"
-	# ROCKET activates from anywhere via the global R key + RocketStrikeHud, so
-	# the proximity prompt + E hookup for it is hidden here. The button stays in
-	# the layout for the other archetypes; only this slot is conditional.
+	_ult_action_lbl.text = name_str
+	# ROCKET fires globally on R, so the proximity prompt advertises that
+	# instead of the standard "press E here" affordance.
+	if is_rocket:
+		_ult_subtitle_idle = "Trigger remotely from anywhere"
+		if _ult_badge_lbl != null:
+			_ult_badge_lbl.text = "R"
+	else:
+		_ult_subtitle_idle = "Press to activate"
+		if _ult_badge_lbl != null:
+			_ult_badge_lbl.text = "E"
+	_ult_subtitle_lbl.text = _ult_subtitle_idle
 	if _ult_btn != null and is_instance_valid(_ult_btn):
-		_ult_btn.visible = not is_rocket
+		_ult_btn.visible = true
 
 func _on_ult_pressed() -> void:
 	AudioManager.play("ui_click")
@@ -299,6 +309,12 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_E:
+			# ROCKET's prompt advertises R, not E — Game._input handles the
+			# global R key, so don't double-bind E to it here.
+			if _target_mech != null:
+				var w := _target_mech.get("weapon") as Node3D
+				if w != null and str(w.get("weapon_name")) == "ROCKET":
+					return
 			_fire_ult()
 		elif event.keycode == KEY_F:
 			_fire_repair()
@@ -307,11 +323,6 @@ func _fire_ult() -> void:
 	if _target_mech == null:
 		return
 	var w := _target_mech.get("weapon") as Node3D
-	# ROCKET is driven by the global R key (Game._trigger_rocket_strike) so
-	# E never fires it from the panel even though the panel can be shown next
-	# to the rocket mech.
-	if w != null and str(w.get("weapon_name")) == "ROCKET":
-		return
 	if w == null or not w.has_method("activate_ult"):
 		return
 	var fired: bool = w.activate_ult()
@@ -378,7 +389,7 @@ func _process(_delta: float) -> void:
 		_btn_hover_style.bg_color  = Color(0.12, 0.10, 0.22, 0.92)
 		_ult_action_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
 		if _ult_subtitle_lbl != null:
-			_ult_subtitle_lbl.text = "Press to activate"
+			_ult_subtitle_lbl.text = _ult_subtitle_idle
 
 	# ── Charge fill bar ───────────────────────────────────────────────────────
 	if _charge_fill != null and is_instance_valid(_charge_fill):

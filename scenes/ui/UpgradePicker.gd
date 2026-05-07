@@ -35,8 +35,10 @@ const MAIN_PANEL_PAD := 28
 const N_OFFERS := 3   # how many boons offered per level-up
 
 # ── Palette aliases (single source of truth: UITheme) ────────────────────────
-const BACKDROP      := Color(0.0, 0.0, 0.0, 0.78)
-const PANEL_BG      := UITheme.COLOR_PANEL_ALPHA
+# Backdrop near-opaque + panels solid: cards read as a clean fixed surface
+# rather than a translucent overlay washed out by the world behind.
+const BACKDROP      := Color(0.0, 0.0, 0.0, 0.92)
+const PANEL_BG      := UITheme.COLOR_PANEL
 const PANEL_BG_2    := UITheme.COLOR_PANEL
 const TEXT_LIGHT    := UITheme.COLOR_TEXT_PRIMARY
 const TEXT_DIM      := UITheme.COLOR_TEXT_SECONDARY
@@ -44,13 +46,17 @@ const BORDER_DIM    := UITheme.COLOR_BORDER_HAIR
 const BORDER_DARK   := UITheme.COLOR_OUTLINE
 
 # ── Rarity styling — lime stays "live", hot pink reserved for rare ───────────
+# COMMON uses a brighter mid-lime than the dim hairline color so the icon hex
+# reads cleanly on the card; uncommon stays full-accent lime, rare stays hot
+# pink. Common label still uses muted text to keep the rarity hierarchy
+# legible at a glance.
 const RARITY_DATA := [
-	{name = "COMMON",   fill = UITheme.COLOR_BORDER_HAIR},
+	{name = "COMMON",   fill = Color("#92c12a")},
 	{name = "UNCOMMON", fill = UITheme.COLOR_ACCENT_LIME},
 	{name = "RARE",     fill = UITheme.COLOR_ACCENT_HOT},
 ]
 const RARITY_TEXT := [
-	UITheme.COLOR_TEXT_MUTED,
+	UITheme.COLOR_TEXT_SECONDARY,
 	UITheme.COLOR_BORDER_BRIGHT,
 	UITheme.COLOR_ACCENT_HOT,
 ]
@@ -204,6 +210,13 @@ func _on_level_up(_new_level: int) -> void:
 	_show_picker()
 
 func _show_picker() -> void:
+	# If the level-up triggered while a weapon was in aim mode, Game.gd left
+	# Engine.time_scale at the slow-mo value. The picker pauses gameplay
+	# anyway, so kick time back to 1.0 — otherwise the carousel spin and card
+	# flips inherit the slow-mo cadence. Game._check_drone_proximity rewrites
+	# this on the first unpaused tick after the picker closes.
+	Engine.time_scale = 1.0
+
 	# Build list of targets that still have available upgrades.
 	_available_pools.clear()
 	var available_targets: Array = []
@@ -287,16 +300,24 @@ func _make_slot_column(owned: Dictionary, owned_ids: Array, slot_i: int) -> Cont
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 4)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Pin column width to the hex so longer upgrade names ("Napalm Payload")
+	# don't push their column wider than an "empty" column. Label autowraps
+	# inside this fixed width if needed.
+	col.custom_minimum_size = Vector2(SLOT_HEX_W, 0.0)
 
 	var hex := Control.new()
 	hex.set_script(ICON_DIAMOND)
 	hex.custom_minimum_size = Vector2(SLOT_HEX_W, SLOT_HEX_H)
+	hex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	hex.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	hex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(hex)
 
 	var name_lbl := Label.new()
 	name_lbl.add_theme_font_size_override("font_size", 20)
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.custom_minimum_size = Vector2(SLOT_HEX_W, 0.0)
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(name_lbl)
 
 	if slot_i < owned_ids.size():
@@ -403,6 +424,30 @@ func _make_placeholder_card(seed_value: int = 0) -> Control:
 	card.add_child(back)
 	return card
 
+# Hot-pink NEW pill shown next to the rarity tag for fresh / unique picks.
+# Uses the standard "ready / committed" hot-pink accent so it pops against
+# the dark card and the archetype-tinted border.
+func _make_new_badge() -> Control:
+	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = UITheme.COLOR_ACCENT_HOT
+	style.set_corner_radius_all(4)
+	style.set_border_width_all(0)
+	style.content_margin_left   = 8.0
+	style.content_margin_right  = 8.0
+	style.content_margin_top    = 2.0
+	style.content_margin_bottom = 2.0
+	pill.add_theme_stylebox_override("panel", style)
+	var lbl := Label.new()
+	lbl.text = "NEW"
+	lbl.add_theme_font_size_override("font_size", 18)
+	lbl.add_theme_color_override("font_color",      UITheme.COLOR_TEXT_INVERSE)
+	lbl.add_theme_constant_override("outline_size", 0)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_child(lbl)
+	return pill
+
 func _make_card(upgrade: Dictionary) -> Control:
 	var rarity_idx: int = clampi(int(upgrade.get("rarity", 0)), 0, RARITY_DATA.size() - 1)
 	var rarity: Dictionary = RARITY_DATA[rarity_idx]
@@ -421,7 +466,9 @@ func _make_card(upgrade: Dictionary) -> Control:
 	bg.bg_color = PANEL_BG_2
 	bg.set_corner_radius_all(10)
 	bg.set_border_width_all(3)
-	bg.border_color = Color(target_color.r, target_color.g, target_color.b, 0.55)
+	# Solid archetype tint so cards read as committed surfaces, not washed-out
+	# overlays. Hover swaps to bright lime (matches "live" UI signal).
+	bg.border_color = target_color
 	bg.content_margin_left   = 24
 	bg.content_margin_right  = 24
 	bg.content_margin_top    = 16
@@ -435,9 +482,9 @@ func _make_card(upgrade: Dictionary) -> Control:
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(v)
 
-	# Hover/click overlay — invisible Button stretching across the card.
-	# Stylebox tween on hover would be nicer but the click + audio is the
-	# functional requirement.
+	# Hover/click overlay — invisible Button stretching across the card. On
+	# hover, brighten the card border + lift the card slightly so the player
+	# sees their pointer is committing to a real choice.
 	var click := Button.new()
 	click.flat = true
 	click.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -446,17 +493,41 @@ func _make_card(upgrade: Dictionary) -> Control:
 	click.add_theme_stylebox_override("pressed",  StyleBoxEmpty.new())
 	click.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
 	click.pressed.connect(_on_card_pressed.bind(upgrade))
-	click.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
+	# Hover keeps the archetype hue — a small lighten + the scale lift carry
+	# the affordance, so the card doesn't snap to a different color entirely.
+	var idle_border: Color = bg.border_color
+	var hover_border: Color = idle_border.lightened(0.25)
+	click.mouse_entered.connect(func() -> void:
+		AudioManager.play("ui_hover")
+		bg.border_color = hover_border
+		card.scale = Vector2(1.03, 1.03)
+		card.pivot_offset = card.size * 0.5)
+	click.mouse_exited.connect(func() -> void:
+		bg.border_color = idle_border
+		card.scale = Vector2.ONE)
 	card.add_child(click)
 
-	# Rarity tag
+	# Top row: rarity tag + (when fresh / unique) a NEW badge in hot pink.
+	# CenterContainer keeps the row centered whether the badge is present or
+	# not, so cards line up regardless.
+	var top_row := HBoxContainer.new()
+	top_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	top_row.add_theme_constant_override("separation", 12)
+	top_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(top_row)
+
 	var rarity_lbl := Label.new()
 	rarity_lbl.text = String(rarity.name)
 	rarity_lbl.add_theme_font_size_override("font_size", 22)
 	rarity_lbl.add_theme_color_override("font_color", RARITY_TEXT[rarity_idx])
-	rarity_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rarity_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(rarity_lbl)
+	top_row.add_child(rarity_lbl)
+
+	var fresh_pick: bool = bool(upgrade.get("unique", false)) \
+		or RunManager.upgrade_stack_count(target_str, String(upgrade.id)) <= 0
+	if fresh_pick:
+		top_row.add_child(_make_new_badge())
 
 	# Hex icon
 	var icon_row := CenterContainer.new()
@@ -491,32 +562,44 @@ func _make_card(upgrade: Dictionary) -> Control:
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(sep)
 
-	# Description
-	var desc_lbl := Label.new()
-	desc_lbl.text = String(upgrade.description)
-	desc_lbl.add_theme_font_size_override("font_size", 22)
-	desc_lbl.add_theme_color_override("font_color", TEXT_DIM)
-	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(desc_lbl)
-
-	# Level indicator at the bottom — "NEW" for fresh picks, "Level X → Level X+1"
-	# for stacking commons. Caps the post-pick number at MAX_STACKS_COMMON.
-	var stacks_lbl := Label.new()
+	# Hades-style progression block: concrete before → after for the matching
+	# weapon's current state. Replaces the "+25% per stack (×1.25 multiplicative)"
+	# description with numbers the player can read directly.
 	var current_stacks := RunManager.upgrade_stack_count(target_str, id)
-	if bool(upgrade.get("unique", false)):
-		stacks_lbl.text = "unique slot"
-	elif current_stacks <= 0:
-		stacks_lbl.text = "NEW"
+	var prog: Dictionary = Upgrades.progression(upgrade, _weapons)
+	if prog.is_empty():
+		var desc_lbl := Label.new()
+		desc_lbl.text = String(upgrade.description)
+		desc_lbl.add_theme_font_size_override("font_size", 22)
+		desc_lbl.add_theme_color_override("font_color", TEXT_DIM)
+		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(desc_lbl)
 	else:
-		var next_level: int = mini(current_stacks + 1, RunManager.MAX_STACKS_COMMON)
-		stacks_lbl.text = "Level %d  →  Level %d" % [current_stacks, next_level]
-	stacks_lbl.add_theme_font_size_override("font_size", 18)
-	stacks_lbl.add_theme_color_override("font_color", TEXT_DIM)
-	stacks_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stacks_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(stacks_lbl)
+		var delta_lbl := Label.new()
+		delta_lbl.text = "%s %s" % [String(prog.delta), String(prog.stat)]
+		delta_lbl.add_theme_font_size_override("font_size", 26)
+		delta_lbl.add_theme_color_override("font_color", TEXT_LIGHT)
+		delta_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		delta_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		delta_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(delta_lbl)
+
+		# Level N maps to (stacks + 1) so the base / unowned state reads as
+		# Level 1 — picking it for the first time advances to Level 2.
+		var prog_lbl := Label.new()
+		var before := String(prog.before)
+		var after  := String(prog.after)
+		var cur_lvl: int = current_stacks + 1
+		var nxt_lvl: int = current_stacks + 2
+		prog_lbl.text = "Level %d  %s   →   Level %d  %s" % [cur_lvl, before, nxt_lvl, after]
+		prog_lbl.add_theme_font_size_override("font_size", 20)
+		prog_lbl.add_theme_color_override("font_color", TEXT_LIGHT)
+		prog_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		prog_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		prog_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(prog_lbl)
 
 	return card
 

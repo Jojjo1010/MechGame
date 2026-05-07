@@ -13,9 +13,11 @@ const MARGIN_BOT          := 24.0
 const MARGIN_LEFT         := 24.0
 const PORTRAIT_SIZE       := 96.0
 const PORTRAIT_BORDER     := 4.0
-const UPGRADE_SLOT_SIZE   := 48.0
+# Inventory has one slot per possible unique upgrade per weapon: 3 commons +
+# 1 uncommon + 1 rare. Slot size is sized so 5 fit in the available bar width.
+const MAX_UPGRADE_SLOTS   := 5
+const UPGRADE_SLOT_SIZE   := 32.0
 const UPGRADE_SLOT_GAP    := 8.0
-const UPGRADE_GRID_COLS   := 6
 const NAME_FONT           := 26
 const KEY_CHIP_SIZE       := 36.0
 const BAR_H               := 14.0
@@ -38,7 +40,8 @@ var _bar_bgs:       Array[ColorRect] = []
 var _weapon_names:  Array[String]    = []
 var _slot_colors:   Array[Color]     = []   # archetype tint per slot, used by charge fill
 var _upgrade_grids: Array[HBoxContainer] = []
-var _upgrade_states: Array[Dictionary]   = []   # per slot: { id → { count, badge, count_lbl } }
+var _upgrade_states: Array[Dictionary]   = []   # per slot: { id → { count, slot_idx, count_lbl, count_pill } }
+var _upgrade_slot_panels: Array[Array]    = []   # per mech: array of empty/filled placeholder PanelContainers
 
 # Rocket-strike state. ROCKET fires from anywhere via the global R key, so its
 # slot uses an "R" chip that pulses to hot pink during aim mode and brightens
@@ -61,6 +64,7 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 	_slot_colors.clear()
 	_upgrade_grids.clear()
 	_upgrade_states.clear()
+	_upgrade_slot_panels.clear()
 
 	var slot_count := weapons.size()
 	if slot_count == 0:
@@ -137,15 +141,15 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var bar_y := 14.0 + NAME_FONT + 14.0
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + 14.0) - KEY_CHIP_SIZE - 14.0 - 14.0
 
-	# ROCKET fires globally on R, not on E from the proximity panel, so its
-	# slot shows an "R" chip in the archetype tint instead of the generic ult
-	# glyph. Per-frame poll in _process recolours the border by ready / aim state.
+	# Each slot advertises its actual control: ROCKET fires globally on R, the
+	# rest fire on E from the proximity panel. The R chip recolours per-frame
+	# based on ready / aim state; the E chip is static.
 	var chip: PanelContainer
 	if String(weapon.weapon_name) == "ROCKET":
 		chip = _make_rocket_strike_chip(color)
 		_rocket_weapon = weapon
 	else:
-		chip = _make_ult_chip()
+		chip = _make_key_chip("E")
 	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, bar_y + (BAR_H - KEY_CHIP_SIZE) * 0.5)
 	root.add_child(chip)
 
@@ -166,6 +170,10 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_charge_fills.append(fill)
 
 	# ── Upgrade inventory grid (Ball x Pit-style row of small slots) ──────────
+	# Slots are pre-created empty so the row stays a constant strip of squares
+	# regardless of how many upgrades have been picked. _fill_slot swaps an
+	# empty placeholder into a populated badge in-place — same dimensions either
+	# state, so the layout never shifts when a level-up lands.
 	var grid := HBoxContainer.new()
 	grid.add_theme_constant_override("separation", int(UPGRADE_SLOT_GAP))
 	grid.position = Vector2(header_x, bar_y + BAR_H + 8.0)
@@ -174,6 +182,13 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	root.add_child(grid)
 	_upgrade_grids.append(grid)
 	_upgrade_states.append({})
+
+	var slot_panels: Array = []
+	for j in MAX_UPGRADE_SLOTS:
+		var slot_panel := _make_empty_slot()
+		grid.add_child(slot_panel)
+		slot_panels.append(slot_panel)
+	_upgrade_slot_panels.append(slot_panels)
 
 	# ── Connect charge signal ─────────────────────────────────────────────────
 	var slot_idx := idx
@@ -184,9 +199,11 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	_on_charge(slot_idx, weapon.get_charge())
 
 # ── Portrait construction ─────────────────────────────────────────────────────
+# pop_out=false keeps the mech model contained inside its 96px box so the head
+# and shoulders don't bleed sideways into the archetype name label.
 func _build_portrait(weapon_name: String) -> Control:
 	var p: Control = MechPortraitCS.new()
-	p.call("setup", weapon_name, PORTRAIT_SIZE, PORTRAIT_BORDER)
+	p.call("setup", weapon_name, PORTRAIT_SIZE, PORTRAIT_BORDER, false)
 	return p
 
 # ── Key chip matching MechOptionsPanel style ──────────────────────────────────
@@ -220,36 +237,6 @@ func _make_key_chip(text: String) -> PanelContainer:
 	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.add_child(lbl)
-	return chip
-
-# Same chip frame as _make_key_chip but the content is the ult starburst glyph
-# (ActionGlyphs.ult) instead of a key letter — communicates "this charges your
-# ult" at a glance.
-func _make_ult_chip() -> PanelContainer:
-	var chip := PanelContainer.new()
-	chip.size = Vector2(KEY_CHIP_SIZE, KEY_CHIP_SIZE)
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.COLOR_PANEL_ALPHA
-	style.border_color = UITheme.COLOR_ACCENT_LIME
-	style.border_width_left   = 2
-	style.border_width_right  = 2
-	style.border_width_top    = 2
-	style.border_width_bottom = 4
-	style.set_corner_radius_all(4)
-	style.content_margin_left   = 0.0
-	style.content_margin_right  = 0.0
-	style.content_margin_top    = 0.0
-	style.content_margin_bottom = 0.0
-	chip.add_theme_stylebox_override("panel", style)
-
-	var icon := ActionIcon.new()
-	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	icon.action_id = "ult"
-	icon.accent    = UITheme.COLOR_ACCENT_LIME
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.add_child(icon)
 	return chip
 
 # Saffron-tinted "R" key chip for the ROCKET slot. The style + label refs are
@@ -336,10 +323,10 @@ func _apply_upgrade_to_grid(upgrade: Dictionary) -> void:
 	var target: String = String(upgrade.get("target", ""))
 	if target == "" or target == "LINE":
 		return   # LINE upgrades aren't tied to a specific mech
-	for slot_idx in _weapon_names.size():
-		if _weapon_names[slot_idx] != target:
+	for mech_idx in _weapon_names.size():
+		if _weapon_names[mech_idx] != target:
 			continue
-		var state: Dictionary = _upgrade_states[slot_idx]
+		var state: Dictionary = _upgrade_states[mech_idx]
 		var id: String = String(upgrade.id)
 		if state.has(id):
 			# Stack count — flip the level pill on and update it to "xN".
@@ -351,30 +338,48 @@ func _apply_upgrade_to_grid(upgrade: Dictionary) -> void:
 			if count_pill != null:
 				count_pill.visible = true
 		else:
-			var badge := _make_upgrade_badge(upgrade)
-			_upgrade_grids[slot_idx].add_child(badge)
+			var slots: Array = _upgrade_slot_panels[mech_idx]
+			var slot_idx: int = state.size()
+			if slot_idx >= slots.size():
+				return   # safety: more unique upgrades than slots — shouldn't happen
+			var panel: PanelContainer = slots[slot_idx]
+			_fill_slot(panel, upgrade)
 			state[id] = {
 				"count":      1,
-				"badge":      badge,
-				"count_lbl":  badge.get_meta("count_lbl"),
-				"count_pill": badge.get_meta("count_pill"),
+				"slot_idx":   slot_idx,
+				"count_lbl":  panel.get_meta("count_lbl"),
+				"count_pill": panel.get_meta("count_pill"),
 			}
 
-func _make_upgrade_badge(upgrade: Dictionary) -> Control:
-	var rarity_idx: int = clampi(int(upgrade.get("rarity", 0)), 0, RARITY_BORDERS.size() - 1)
-	var border: Color = RARITY_BORDERS[rarity_idx]
-
+# Empty placeholder slot — same outer dimensions as a filled badge so the row
+# never shifts when an upgrade lands. Dim hairline border, no icon.
+func _make_empty_slot() -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(UPGRADE_SLOT_SIZE, UPGRADE_SLOT_SIZE)
+	panel.set_h_size_flags(Control.SIZE_SHRINK_CENTER)
+	panel.set_v_size_flags(Control.SIZE_SHRINK_CENTER)
+	panel.clip_contents = true
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = UITheme.COLOR_PANEL_ALPHA
 	style.set_corner_radius_all(6)
+	style.set_border_width_all(1)
+	style.border_color = Color(UITheme.COLOR_BORDER_HAIR.r, UITheme.COLOR_BORDER_HAIR.g, UITheme.COLOR_BORDER_HAIR.b, 0.35)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.set_meta("style", style)
+	return panel
+
+# Populate an empty placeholder with an upgrade's icon, rarity border, tooltip,
+# and a hidden stack-count pill. Reuses the panel's existing dimensions so the
+# slot stays the same square size in either state.
+func _fill_slot(panel: PanelContainer, upgrade: Dictionary) -> void:
+	var rarity_idx: int = clampi(int(upgrade.get("rarity", 0)), 0, RARITY_BORDERS.size() - 1)
+	var border: Color = RARITY_BORDERS[rarity_idx]
+
+	var style: StyleBoxFlat = panel.get_meta("style")
 	style.set_border_width_all(2)
 	style.border_color = border
-	panel.add_theme_stylebox_override("panel", style)
 
-	# Tooltip = full upgrade name (built-in mouse tooltip; works on PanelContainer)
 	panel.tooltip_text = "%s — %s" % [upgrade.get("title", ""), upgrade.get("description", "")]
 
 	# PanelContainer fits each direct child to the content rect, which would
@@ -384,19 +389,26 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	contents.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(contents)
 
-	# Center procedural glyph — same renderer used in UpgradePicker.
+	# Inset the glyph by a few px on each side so it can't visually crowd or
+	# overrun the badge border. clip_contents on the panel still belt-and-braces
+	# clips anything UpgradeGlyphs draws past its rect.
 	var icon: Control = UpgradeBadgeIconCS.new()
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	const ICON_INSET := 4.0
+	icon.offset_left   = ICON_INSET
+	icon.offset_top    = ICON_INSET
+	icon.offset_right  = -ICON_INSET
+	icon.offset_bottom = -ICON_INSET
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	contents.add_child(icon)
 	icon.call("setup", String(upgrade.id), UITheme.COLOR_TEXT_PRIMARY)
 
-	# Level pill in bottom-right (hidden until count > 1). Dark fill with a
-	# hairline border keeps the "xN" legible against the icon glyph behind it.
+	# Level pill in bottom-right (hidden until count > 1). Sized to fit inside
+	# the smaller 32px slot without overflowing.
 	var count_pill := PanelContainer.new()
 	count_pill.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	count_pill.offset_left   = -36.0
-	count_pill.offset_top    = -24.0
+	count_pill.offset_left   = -22.0
+	count_pill.offset_top    = -14.0
 	count_pill.offset_right  = -2.0
 	count_pill.offset_bottom = -2.0
 	count_pill.visible = false
@@ -404,17 +416,17 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 
 	var pill_style := StyleBoxFlat.new()
 	pill_style.bg_color = UITheme.COLOR_DEEP
-	pill_style.set_corner_radius_all(4)
+	pill_style.set_corner_radius_all(3)
 	pill_style.set_border_width_all(0)
-	pill_style.content_margin_left   = 2.0
-	pill_style.content_margin_right  = 2.0
+	pill_style.content_margin_left   = 1.0
+	pill_style.content_margin_right  = 1.0
 	pill_style.content_margin_top    = 0.0
 	pill_style.content_margin_bottom = 0.0
 	count_pill.add_theme_stylebox_override("panel", pill_style)
 
 	var count_lbl := Label.new()
 	count_lbl.text = "x1"
-	count_lbl.add_theme_font_size_override("font_size", 18)
+	count_lbl.add_theme_font_size_override("font_size", 11)
 	count_lbl.add_theme_color_override("font_color", UITheme.COLOR_TEXT_PRIMARY)
 	count_lbl.add_theme_constant_override("outline_size", 0)
 	count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -425,5 +437,3 @@ func _make_upgrade_badge(upgrade: Dictionary) -> Control:
 	contents.add_child(count_pill)
 	panel.set_meta("count_lbl",  count_lbl)
 	panel.set_meta("count_pill", count_pill)
-
-	return panel
