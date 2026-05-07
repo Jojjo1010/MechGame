@@ -19,9 +19,11 @@ var _enabled: bool = true
 var _ult_action_lbl:    Label = null
 var _ult_subtitle_lbl:  Label = null
 var _ult_badge_lbl:     Label = null   # the "E" / "R" inside the key chip
-# Subtitle shown when the ult isn't ready. Switches to the remote-trigger
-# message when targeting the ROCKET mech so _process doesn't stomp it.
-var _ult_subtitle_idle: String = "Press to activate"
+# Subtitle shown when the ult isn't ready / when it's ready. Both switch to
+# remote-trigger phrasing for the ROCKET mech so the prompt always advertises
+# the global R control rather than the proximity-bound default.
+var _ult_subtitle_idle:  String = "Press to activate"
+var _ult_subtitle_ready: String = "Ready!"
 var _repair_action_lbl: Label = null   # "Repair" / "Cooling Down"
 var _repair_sub_lbl:    Label = null   # "Damaged mech" / countdown
 var _repair_charge_fill: ColorRect = null   # bottom strip recharge bar
@@ -40,7 +42,11 @@ func setup(camera: Camera3D) -> void:
 # ─────────────────────────────────────────────────────────────────────────────
 func _build_ui() -> void:
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(220.0, 0.0)
+	# 260 px gives enough horizontal room for the ROCKET prompt's longer
+	# "trigger from anywhere" subtitle without the ult button's clip_contents
+	# truncating the text. clip_contents has to stay on so the charge-fill
+	# strip doesn't visually leak past the button's rounded corners.
+	_panel.custom_minimum_size = Vector2(260.0, 0.0)
 	_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 
 	var vbox := VBoxContainer.new()
@@ -282,14 +288,17 @@ func _refresh_btn_text() -> void:
 			name_str = str(raw_name)
 			is_rocket = (str(raw_name) == "ROCKET")
 	_ult_action_lbl.text = name_str
-	# ROCKET fires globally on R, so the proximity prompt advertises that
-	# instead of the standard "press E here" affordance.
+	# ROCKET fires globally on R, so the proximity prompt advertises that in
+	# both ready and cooling states instead of the standard "press E here"
+	# affordance.
 	if is_rocket:
-		_ult_subtitle_idle = "Trigger remotely from anywhere"
+		_ult_subtitle_idle  = "Triggers from anywhere"
+		_ult_subtitle_ready = "Ready — fires anywhere"
 		if _ult_badge_lbl != null:
 			_ult_badge_lbl.text = "R"
 	else:
-		_ult_subtitle_idle = "Press to activate"
+		_ult_subtitle_idle  = "Press to activate"
+		_ult_subtitle_ready = "Ready!"
 		if _ult_badge_lbl != null:
 			_ult_badge_lbl.text = "E"
 	_ult_subtitle_lbl.text = _ult_subtitle_idle
@@ -383,7 +392,7 @@ func _process(_delta: float) -> void:
 		_btn_hover_style.bg_color  = Color(0.08, 0.26, 0.10, 0.92)
 		_ult_action_lbl.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55, 1.0))
 		if _ult_subtitle_lbl != null:
-			_ult_subtitle_lbl.text = "Ready!"
+			_ult_subtitle_lbl.text = _ult_subtitle_ready
 	else:
 		_btn_normal_style.bg_color = Color(0.05, 0.04, 0.09, 0.86)
 		_btn_hover_style.bg_color  = Color(0.12, 0.10, 0.22, 0.92)

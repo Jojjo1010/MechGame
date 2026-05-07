@@ -13,10 +13,11 @@ const MARGIN_BOT          := 24.0
 const MARGIN_LEFT         := 24.0
 const PORTRAIT_SIZE       := 96.0
 const PORTRAIT_BORDER     := 4.0
-# Inventory has one slot per possible unique upgrade per weapon: 3 commons +
-# 1 uncommon + 1 rare. Slot size is sized so 5 fit in the available bar width.
-const MAX_UPGRADE_SLOTS   := 5
-const UPGRADE_SLOT_SIZE   := 32.0
+# Inventory has one slot per possible unique upgrade type per weapon. The
+# run-side cap is RunManager.MAX_TYPES_PER_TARGET (= 2) — each mech can carry
+# at most two distinct upgrade types, with stacks reflected via the count pill.
+const MAX_UPGRADE_SLOTS   := 2
+const UPGRADE_SLOT_SIZE   := 48.0
 const UPGRADE_SLOT_GAP    := 8.0
 const NAME_FONT           := 26
 const KEY_CHIP_SIZE       := 36.0
@@ -403,12 +404,12 @@ func _fill_slot(panel: PanelContainer, upgrade: Dictionary) -> void:
 	contents.add_child(icon)
 	icon.call("setup", String(upgrade.id), UITheme.COLOR_TEXT_PRIMARY)
 
-	# Level pill in bottom-right (hidden until count > 1). Sized to fit inside
-	# the smaller 32px slot without overflowing.
+	# Level pill in bottom-right (hidden until count > 1). Sized for the 48px
+	# slot — dark fill + small font keep the "xN" legible against the icon.
 	var count_pill := PanelContainer.new()
 	count_pill.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	count_pill.offset_left   = -22.0
-	count_pill.offset_top    = -14.0
+	count_pill.offset_left   = -36.0
+	count_pill.offset_top    = -24.0
 	count_pill.offset_right  = -2.0
 	count_pill.offset_bottom = -2.0
 	count_pill.visible = false
@@ -416,17 +417,17 @@ func _fill_slot(panel: PanelContainer, upgrade: Dictionary) -> void:
 
 	var pill_style := StyleBoxFlat.new()
 	pill_style.bg_color = UITheme.COLOR_DEEP
-	pill_style.set_corner_radius_all(3)
+	pill_style.set_corner_radius_all(4)
 	pill_style.set_border_width_all(0)
-	pill_style.content_margin_left   = 1.0
-	pill_style.content_margin_right  = 1.0
+	pill_style.content_margin_left   = 2.0
+	pill_style.content_margin_right  = 2.0
 	pill_style.content_margin_top    = 0.0
 	pill_style.content_margin_bottom = 0.0
 	count_pill.add_theme_stylebox_override("panel", pill_style)
 
 	var count_lbl := Label.new()
 	count_lbl.text = "x1"
-	count_lbl.add_theme_font_size_override("font_size", 11)
+	count_lbl.add_theme_font_size_override("font_size", 18)
 	count_lbl.add_theme_color_override("font_color", UITheme.COLOR_TEXT_PRIMARY)
 	count_lbl.add_theme_constant_override("outline_size", 0)
 	count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

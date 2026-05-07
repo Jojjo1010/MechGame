@@ -655,6 +655,10 @@ func _add_permanent_outline() -> void:
 func _on_died() -> void:
 	is_alive = false
 	ability_active = false
+	# Burn was previously a "needs repair" state — once dead, the mech can't
+	# be repaired, so kill the flames + light + audio loop instead of letting
+	# them ride on the falling corpse.
+	stop_burning()
 	# Stop being targeted as an ally / aura source. Joining mech_corpses lets
 	# alive mechs detect us as something to jump over.
 	if is_in_group("mechs"):
