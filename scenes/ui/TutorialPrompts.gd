@@ -223,10 +223,10 @@ func _enter_state(new_state: State) -> void:
 	match new_state:
 		State.WASD_SHOWING:
 			_wasd_seen.clear()
-			_show_prompt(KeyChip.make_movement_cluster(KEY_FONT), "move", "MOVE THE DRONE")
+			_show_prompt(_chip_for_movement(), "move", "MOVE THE DRONE")
 		State.SHIFT_SHOWING:
 			_spawn_shift_dummies()
-			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH THROUGH ENEMIES")
+			_show_prompt(_chip_for_action("dash"), "dash", "DASH THROUGH ENEMIES")
 		State.ULT_INTRO:
 			# _target_mech / _ult_mech_idx are set by _advance_to_next_ult()
 			# before this state is entered.
@@ -234,16 +234,16 @@ func _enter_state(new_state: State) -> void:
 			_force_target_ult_ready()
 			_show_intro_for(_target_mech)
 		State.ULT_SHOWING_E:
-			_show_prompt(KeyChip.make_key_cap("E", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
+			_show_prompt(_chip_for_action("ult"), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
 		State.ULT_SHOWING_LMB:
 			# Inline swap — modal stays visible. Reads as the second beat of
 			# one ult-firing action instead of a fresh prompt that surprises
 			# the player after they "already fired".
-			_swap_prompt(_make_lmb_chip(), "ult", "AIM & FIRE")
+			_swap_prompt(_chip_for_aim_confirm(), "ult", "AIM & FIRE")
 		State.REPAIR_SHOWING:
 			_repair_mech = _force_damage_for_repair()
 			_attach_marker_to(_repair_mech)
-			_show_prompt(KeyChip.make_key_cap("F", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "repair", "REPAIR MARKED MECH")
+			_show_prompt(_chip_for_action("repair"), "repair", "REPAIR MARKED MECH")
 		State.WASD_FADING, State.SHIFT_FADING:
 			_complete_and_fade()
 		State.ULT_FADING:
@@ -371,6 +371,29 @@ func _make_lmb_chip() -> Control:
 	m.accent              = UITheme.COLOR_ACCENT_LIME
 	m.custom_minimum_size = Vector2(56.0, KeyChip.KEY_SIZE * 2.0 + KeyChip.KEY_GAP)
 	return m
+
+# Chip for an action's primary binding on the active device — keyboard caps
+# stay in their existing sizing tier; gamepad chips use the same cap shape with
+# the face-button / shoulder label so the prompt rhythm doesn't shift.
+func _chip_for_action(action: String) -> Control:
+	var label := InputHints.glyph_for(action)
+	var w: float = KeyChip.SHIFT_W if label.length() > 1 else KeyChip.KEY_SIZE
+	var h: float = KeyChip.SHIFT_H if label.length() > 1 else KeyChip.KEY_SIZE
+	var font: int = SHIFT_FONT if label.length() > 1 else KEY_FONT
+	return KeyChip.make_key_cap(label, w, h, font)
+
+# Movement: keyboard shows the dual WASD/arrows cluster, gamepad collapses to
+# a single "L STICK" wide cap so the prompt row stays balanced.
+func _chip_for_movement() -> Control:
+	if InputHints.device == InputHints.DEVICE_GAMEPAD:
+		return KeyChip.make_key_cap("L STICK", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
+	return KeyChip.make_movement_cluster(KEY_FONT)
+
+# AIM & FIRE step: keyboard shows the LMB mouse glyph, gamepad shows the A cap.
+func _chip_for_aim_confirm() -> Control:
+	if InputHints.device == InputHints.DEVICE_GAMEPAD:
+		return KeyChip.make_key_cap("A", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
+	return _make_lmb_chip()
 
 
 # ── Per-frame ────────────────────────────────────────────────────────────────

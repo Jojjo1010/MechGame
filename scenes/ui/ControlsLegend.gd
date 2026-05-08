@@ -11,6 +11,15 @@ const ENTRIES := [
 	{key = "Scroll",   icon = "zoom",   action = "Zoom"},
 ]
 
+# Gamepad equivalents — same row order so the legend's vertical rhythm doesn't
+# jump when the player switches devices. MOVEMENT collapses to a single L
+# stick cap, Shift becomes A, Scroll becomes the trigger pair.
+const GAMEPAD_ENTRIES := [
+	{key = "L_STICK",   icon = "move", action = "Move drone"},
+	{key = "BTN_A",     icon = "dash", action = "Dash"},
+	{key = "TRIGGERS",  icon = "zoom", action = "Zoom"},
+]
+
 # All spacing/size values follow the 8 px design system. Type scale uses its
 # own modular ladder (16/20/24/28/32) and is defined separately. Key-cap
 # sizing lives in KeyChip — referenced here, not duplicated.
@@ -31,6 +40,8 @@ const PANEL_CORNER_R := 16   # rounded — gentle, not pill-shaped
 const XP_BAR_BOTTOM := 64.0
 const PANEL_TOP_GAP := 24.0
 
+var _col: VBoxContainer = null
+
 func _ready() -> void:
 	layer = 10
 
@@ -40,14 +51,21 @@ func _ready() -> void:
 	add_child(anchor)
 
 	# Bare list — no panel, no border, no title. Just the rows of chip + icon + label.
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", ROW_GAP)
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.position = Vector2(20.0, XP_BAR_BOTTOM + PANEL_TOP_GAP)
-	anchor.add_child(col)
+	_col = VBoxContainer.new()
+	_col.add_theme_constant_override("separation", ROW_GAP)
+	_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_col.position = Vector2(20.0, XP_BAR_BOTTOM + PANEL_TOP_GAP)
+	anchor.add_child(_col)
 
-	for entry in ENTRIES:
-		col.add_child(_make_row(entry.key, entry.icon, entry.action))
+	_rebuild_rows()
+	InputHints.device_changed.connect(func(_d: int) -> void: _rebuild_rows())
+
+func _rebuild_rows() -> void:
+	for child in _col.get_children():
+		child.queue_free()
+	var entries: Array = GAMEPAD_ENTRIES if InputHints.device == InputHints.DEVICE_GAMEPAD else ENTRIES
+	for entry in entries:
+		_col.add_child(_make_row(entry.key, entry.icon, entry.action))
 
 func _make_divider() -> Control:
 	# Hairline neutral divider — not lime; lime is reserved for key chips.
@@ -93,6 +111,9 @@ func _make_chip(key_text: String) -> Control:
 		"MOVEMENT": return KeyChip.make_movement_cluster(KEY_FONT)
 		"Shift":    return KeyChip.make_key_cap("SHIFT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
 		"Scroll":   return _make_mouse_chip()
+		"L_STICK":  return KeyChip.make_key_cap("L STICK", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
+		"BTN_A":    return KeyChip.make_key_cap("A",       KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
+		"TRIGGERS": return KeyChip.make_key_cap("LT/RT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
 		_:          return KeyChip.make_key_cap(key_text, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
 
 func _make_mouse_chip() -> Control:

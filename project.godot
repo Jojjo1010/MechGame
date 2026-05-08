@@ -23,6 +23,7 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 RunManager="*res://src/RunManager.gd"
 AudioManager="*res://src/AudioManager.gd"
 SaveData="*res://src/SaveData.gd"
+InputHints="*res://src/InputHints.gd"
 
 [display]
 

@@ -26,6 +26,7 @@ var _ult_subtitle_idle:  String = "Press to activate"
 var _ult_subtitle_ready: String = "Ready!"
 var _repair_action_lbl: Label = null   # "Repair" / "Cooling Down"
 var _repair_sub_lbl:    Label = null   # "Damaged mech" / countdown
+var _repair_badge_lbl:  Label = null   # the "F" / "Y" inside the key chip
 var _repair_charge_fill: ColorRect = null   # bottom strip recharge bar
 
 # StyleBox refs needed for readiness colour changes
@@ -78,10 +79,14 @@ func _build_ui() -> void:
 	_repair_btn_normal_style = repair_pkg.normal
 	_repair_action_lbl       = repair_pkg.action_lbl
 	_repair_sub_lbl          = repair_pkg.sub_lbl
+	_repair_badge_lbl        = repair_pkg.badge_lbl
 	_repair_btn.visible      = false
 	_repair_btn.pressed.connect(_on_repair_pressed)
 	_repair_btn.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
 	vbox.add_child(_repair_btn)
+	# Initial glyph + subscribe so badges flip when the player switches devices.
+	_apply_input_glyphs()
+	InputHints.device_changed.connect(func(_d: int) -> void: _apply_input_glyphs())
 
 	# Recharge fill — same shape as the ult charge strip; amber to match the F
 	# key badge instead of the ult's blue→yellow lerp. Width is set per-frame
@@ -257,13 +262,10 @@ func _refresh_btn_text() -> void:
 	if is_rocket:
 		_ult_subtitle_idle  = "Triggers from anywhere"
 		_ult_subtitle_ready = "Ready — fires anywhere"
-		if _ult_badge_lbl != null:
-			_ult_badge_lbl.text = "R"
 	else:
 		_ult_subtitle_idle  = "Press to activate"
 		_ult_subtitle_ready = "Ready!"
-		if _ult_badge_lbl != null:
-			_ult_badge_lbl.text = "E"
+	_apply_input_glyphs()
 	_ult_subtitle_lbl.text = _ult_subtitle_idle
 	if _ult_btn != null and is_instance_valid(_ult_btn):
 		_ult_btn.visible = true
@@ -271,6 +273,18 @@ func _refresh_btn_text() -> void:
 func _on_ult_pressed() -> void:
 	AudioManager.play("ui_click")
 	_fire_ult()
+
+# Set both badges to the active device's prompt label. ROCKET uses the global
+# rocket_strike action (R / RB) instead of the per-mech ult.
+func _apply_input_glyphs() -> void:
+	if _ult_badge_lbl != null:
+		var is_rocket := false
+		if _target_mech != null:
+			var w := _target_mech.get("weapon") as Node3D
+			is_rocket = w != null and w.weapon_name == "ROCKET"
+		_ult_badge_lbl.text = InputHints.glyph_for("rocket_strike") if is_rocket else InputHints.glyph_for("ult")
+	if _repair_badge_lbl != null:
+		_repair_badge_lbl.text = InputHints.glyph_for("repair")
 
 func _on_repair_pressed() -> void:
 	AudioManager.play("ui_click")
