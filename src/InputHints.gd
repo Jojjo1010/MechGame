@@ -56,11 +56,15 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey or event is InputEventMouseButton:
 		new_device = DEVICE_KBM
 	elif event is InputEventJoypadButton:
+		var b := event as InputEventJoypadButton
+		if b.pressed:
+			print("[InputHints] joypad button ", b.button_index, " device ", b.device)
 		new_device = DEVICE_GAMEPAD
 	elif event is InputEventJoypadMotion:
 		var motion := event as InputEventJoypadMotion
 		if absf(motion.axis_value) < STICK_DEFLECTION_MIN:
 			return
+		print("[InputHints] joypad axis ", motion.axis, " value ", motion.axis_value, " device ", motion.device)
 		new_device = DEVICE_GAMEPAD
 	if new_device != device:
 		device = new_device
