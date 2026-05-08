@@ -27,6 +27,7 @@ var _spotter_toggle:   bool    = false  # alternates targeting: false = nearest 
 
 func _on_setup() -> void:
 	weapon_name = "GUN"
+	uses_aim_mode_ult = true
 	_aim_dir = Vector3(0.0, 0.0, -1.0)
 
 func notify_drone_nearby(nearby: bool) -> void:

@@ -29,6 +29,7 @@ var _aim_line_halo:     MeshInstance3D = null  # halo
 
 func _on_setup() -> void:
 	weapon_name = "BEAM"
+	uses_aim_mode_ult = true
 
 func get_fire_rate() -> float:
 	return FIRE_RATE

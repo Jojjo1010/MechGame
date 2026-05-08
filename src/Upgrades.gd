@@ -160,20 +160,19 @@ static func apply(upgrade: Dictionary, weapons: Array) -> void:
 		"rocket_napalm":    _rocket_napalm(weapons)
 		_:                  push_warning("Unknown upgrade id: %s" % upgrade.id)
 
-static func _scale(weapons: Array, target: String, prop: String, factor: float) -> void:
+static func _apply_to_weapon(weapons: Array, target: String, callback: Callable) -> void:
 	for w in weapons:
 		if w != null and w.weapon_name == target:
-			w.set(prop, w.get(prop) * factor)
+			callback.call(w)
+
+static func _scale(weapons: Array, target: String, prop: String, factor: float) -> void:
+	_apply_to_weapon(weapons, target, func(w): w.set(prop, w.get(prop) * factor))
 
 static func _add(weapons: Array, target: String, prop: String, amount: Variant) -> void:
-	for w in weapons:
-		if w != null and w.weapon_name == target:
-			w.set(prop, w.get(prop) + amount)
+	_apply_to_weapon(weapons, target, func(w): w.set(prop, w.get(prop) + amount))
 
 static func _set_prop(weapons: Array, target: String, prop: String, value: Variant) -> void:
-	for w in weapons:
-		if w != null and w.weapon_name == target:
-			w.set(prop, value)
+	_apply_to_weapon(weapons, target, func(w): w.set(prop, value))
 
 static func _beam_overcharge(weapons: Array) -> void:
 	for w in weapons:

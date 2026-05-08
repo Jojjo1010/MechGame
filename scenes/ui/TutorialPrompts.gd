@@ -528,8 +528,8 @@ func _advance_to_next_ult() -> void:
 	_enter_state(State.REPAIR_SHOWING)
 
 func _target_uses_aim_mode() -> bool:
-	var name_str := _weapon_name_for(_target_mech)
-	return name_str == "GUN" or name_str == "BEAM" or name_str == "ROCKET"
+	var w := _weapon_for(_target_mech)
+	return w != null and w.uses_aim_mode_ult
 
 func _weapon_name_for(mech: Node3D) -> String:
 	if mech == null or not is_instance_valid(mech):

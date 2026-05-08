@@ -213,7 +213,7 @@ func _update_bulwark_status(delta: float) -> void:
 		var w: Variant = m.get("weapon")
 		if w == null or not is_instance_valid(w):
 			continue
-		if String(w.get("weapon_name")) != "GARLIC":
+		if w.weapon_name != "GARLIC":
 			continue
 		var br: Variant = w.get("bulwark_dmg_reduction")
 		var rg: Variant = w.get("aura_regen_per_sec")

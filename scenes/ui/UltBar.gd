@@ -54,6 +54,14 @@ var _upgrade_slot_panels: Array[Array]    = []   # per mech: array of empty/fill
 var _rocket_weapon:     Node3D       = null
 var _rocket_chip_style: StyleBoxFlat = null
 var _rocket_chip_label: Label        = null
+# State-keyed cache so _process only repaints the R chip on a true transition
+# (aim ↔ ready ↔ cooling). Re-applying a theme override every frame mutates
+# Godot's theme cache and triggers redraws even when nothing changed.
+const _ROCKET_STATE_NONE    := -1
+const _ROCKET_STATE_AIMING  := 0
+const _ROCKET_STATE_READY   := 1
+const _ROCKET_STATE_COOLING := 2
+var _last_rocket_state: int = _ROCKET_STATE_NONE
 
 func _ready() -> void:
 	layer = 6
@@ -153,7 +161,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	# rest fire on E from the proximity panel. The R chip recolours per-frame
 	# based on ready / aim state; the E chip is static.
 	var chip: PanelContainer
-	if String(weapon.weapon_name) == "ROCKET":
+	if weapon.weapon_name == "ROCKET":
 		chip = _make_rocket_strike_chip(color)
 		_rocket_weapon = weapon
 	else:
@@ -289,14 +297,24 @@ func _process(_delta: float) -> void:
 		return
 	if _rocket_chip_style == null or _rocket_chip_label == null:
 		return
-	var aiming: bool   = bool(_rocket_weapon.call("is_aim_mode"))
+	var aiming: bool    = bool(_rocket_weapon.call("is_aim_mode"))
 	var ready_now: bool = bool(_rocket_weapon.call("is_ready"))
+	var state: int
+	if aiming:
+		state = _ROCKET_STATE_AIMING
+	elif ready_now:
+		state = _ROCKET_STATE_READY
+	else:
+		state = _ROCKET_STATE_COOLING
+	if state == _last_rocket_state:
+		return
+	_last_rocket_state = state
 	var border: Color
 	var label_col: Color
-	if aiming:
+	if state == _ROCKET_STATE_AIMING:
 		border    = UITheme.COLOR_ACCENT_HOT
 		label_col = UITheme.COLOR_ACCENT_HOT
-	elif ready_now:
+	elif state == _ROCKET_STATE_READY:
 		border    = UITheme.COLOR_BORDER_BRIGHT
 		label_col = UITheme.COLOR_BORDER_BRIGHT
 	else:

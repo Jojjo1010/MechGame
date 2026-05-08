@@ -8,6 +8,11 @@ const SHOOT_RANGE := 22.0
 const ULT_WINDUP_DURATION := 0.45  # pre-fire telegraph so the ult reads as a moment
 
 var weapon_name:    String = "WEAPON"
+# Type-level flag: true if activate_ult enters an interactive aim/mark mode
+# (subclass overrides activate_ult to set _aiming=true and waits for click to
+# fire). Used by TutorialPrompts to decide whether to teach the LMB-confirm
+# step. Distinct from is_aim_mode() which reports the *current* aim state.
+var uses_aim_mode_ult: bool = false
 var _mech:          Node3D = null
 var _mech_color:    Color  = Color.WHITE
 var _cooldown_timer: float = 0.0   # counts down from get_ult_cooldown() to 0

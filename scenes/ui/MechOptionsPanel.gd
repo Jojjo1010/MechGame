@@ -54,69 +54,13 @@ func _build_ui() -> void:
 	_panel.add_child(vbox)
 
 	# ── Ultimate button ───────────────────────────────────────────────────────
-	_ult_btn = Button.new()
-	_ult_btn.text                = ""        # we draw custom content below
-	_ult_btn.flat                = false
-	_ult_btn.clip_contents       = true      # keeps charge fill inside bounds
-	_ult_btn.custom_minimum_size = Vector2(0.0, 58.0)
-	_ult_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
-	_btn_normal_style          = StyleBoxFlat.new()
-	_btn_normal_style.bg_color = Color(0.05, 0.04, 0.09, 0.86)
-	_btn_normal_style.set_border_width_all(0)
-	_btn_normal_style.set_corner_radius_all(6)
-	_ult_btn.add_theme_stylebox_override("normal",  _btn_normal_style)
-
-	_btn_hover_style          = _btn_normal_style.duplicate()
-	_btn_hover_style.bg_color = Color(0.12, 0.10, 0.22, 0.92)
-	_ult_btn.add_theme_stylebox_override("hover",   _btn_hover_style)
-
-	var ult_pressed_style          := _btn_normal_style.duplicate()
-	ult_pressed_style.bg_color      = Color(0.03, 0.02, 0.06, 0.96)
-	_ult_btn.add_theme_stylebox_override("pressed", ult_pressed_style)
-
-	# Inner layout: key chip | text column
-	var ult_hbox := HBoxContainer.new()
-	ult_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ult_hbox.add_theme_constant_override("separation", 0)
-	ult_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ult_btn.add_child(ult_hbox)
-
-	var ult_badge_panel := _make_key_badge("E", Color(0.90, 0.88, 0.80, 1.0), 58.0)
-	ult_hbox.add_child(ult_badge_panel)
-	# Store label ref so we can tint it when ready/not-ready
-	_ult_badge_lbl = ult_badge_panel.get_child(0) as Label
-
-	var ult_text_col := VBoxContainer.new()
-	ult_text_col.set_v_size_flags(Control.SIZE_SHRINK_CENTER)
-	ult_text_col.add_theme_constant_override("separation", 1)
-	ult_text_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Small left/right padding inside the text column
-	var ult_margin := MarginContainer.new()
-	ult_margin.add_theme_constant_override("margin_left",  14)
-	ult_margin.add_theme_constant_override("margin_right",  8)
-	ult_margin.add_theme_constant_override("margin_top",    0)
-	ult_margin.add_theme_constant_override("margin_bottom", 0)
-	ult_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ult_margin.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-	ult_hbox.add_child(ult_margin)
-	ult_margin.add_child(ult_text_col)
-
-	_ult_action_lbl = Label.new()
-	_ult_action_lbl.text = "Ultimate"
-	_ult_action_lbl.add_theme_font_size_override("font_size", 20)
-	_ult_action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
-	_ult_action_lbl.add_theme_constant_override("outline_size", 0)
-	_ult_action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ult_text_col.add_child(_ult_action_lbl)
-
-	_ult_subtitle_lbl = Label.new()
-	_ult_subtitle_lbl.text = "Press to activate"
-	_ult_subtitle_lbl.add_theme_font_size_override("font_size", 13)
-	_ult_subtitle_lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.60, 0.85))
-	_ult_subtitle_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ult_text_col.add_child(_ult_subtitle_lbl)
-
+	var ult_pkg := _build_action_button("E", Color(0.90, 0.88, 0.80, 1.0), 58.0, "Ultimate", "Press to activate")
+	_ult_btn          = ult_pkg.btn
+	_btn_normal_style = ult_pkg.normal
+	_btn_hover_style  = ult_pkg.hover  # _process recolours these on ready/not-ready
+	_ult_action_lbl   = ult_pkg.action_lbl
+	_ult_subtitle_lbl = ult_pkg.sub_lbl
+	_ult_badge_lbl    = ult_pkg.badge_lbl
 	_ult_btn.pressed.connect(_on_ult_pressed)
 	_ult_btn.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
 	vbox.add_child(_ult_btn)
@@ -129,66 +73,12 @@ func _build_ui() -> void:
 	_ult_btn.add_child(_charge_fill)
 
 	# ── Repair button ─────────────────────────────────────────────────────────
-	_repair_btn = Button.new()
-	_repair_btn.text                = ""
-	_repair_btn.flat                = false
-	_repair_btn.clip_contents       = true
-	_repair_btn.custom_minimum_size = Vector2(0.0, 52.0)
-	_repair_btn.visible             = false
-	_repair_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
-	_repair_btn_normal_style          = StyleBoxFlat.new()
-	_repair_btn_normal_style.bg_color = Color(0.05, 0.04, 0.09, 0.86)
-	_repair_btn_normal_style.set_border_width_all(0)
-	_repair_btn_normal_style.set_corner_radius_all(6)
-	_repair_btn.add_theme_stylebox_override("normal",  _repair_btn_normal_style)
-
-	var repair_hover          := _repair_btn_normal_style.duplicate()
-	repair_hover.bg_color      = Color(0.12, 0.10, 0.22, 0.92)
-	_repair_btn.add_theme_stylebox_override("hover",   repair_hover)
-
-	var repair_pressed_style          := _repair_btn_normal_style.duplicate()
-	repair_pressed_style.bg_color      = Color(0.03, 0.02, 0.06, 0.96)
-	_repair_btn.add_theme_stylebox_override("pressed", repair_pressed_style)
-
-	var repair_hbox := HBoxContainer.new()
-	repair_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	repair_hbox.add_theme_constant_override("separation", 0)
-	repair_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_repair_btn.add_child(repair_hbox)
-
-	# Amber badge for repair to distinguish it from ult
-	repair_hbox.add_child(_make_key_badge("F", Color(1.00, 0.78, 0.35, 1.0), 52.0))
-
-	var repair_text_col := VBoxContainer.new()
-	repair_text_col.set_v_size_flags(Control.SIZE_SHRINK_CENTER)
-	repair_text_col.add_theme_constant_override("separation", 1)
-	repair_text_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var repair_margin := MarginContainer.new()
-	repair_margin.add_theme_constant_override("margin_left",  14)
-	repair_margin.add_theme_constant_override("margin_right",  8)
-	repair_margin.add_theme_constant_override("margin_top",    0)
-	repair_margin.add_theme_constant_override("margin_bottom", 0)
-	repair_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	repair_margin.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-	repair_hbox.add_child(repair_margin)
-	repair_margin.add_child(repair_text_col)
-
-	_repair_action_lbl = Label.new()
-	_repair_action_lbl.text = "Repair"
-	_repair_action_lbl.add_theme_font_size_override("font_size", 20)
-	_repair_action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
-	_repair_action_lbl.add_theme_constant_override("outline_size", 0)
-	_repair_action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	repair_text_col.add_child(_repair_action_lbl)
-
-	_repair_sub_lbl = Label.new()
-	_repair_sub_lbl.text = "Damaged mech"
-	_repair_sub_lbl.add_theme_font_size_override("font_size", 13)
-	_repair_sub_lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.60, 0.85))
-	_repair_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	repair_text_col.add_child(_repair_sub_lbl)
-
+	var repair_pkg := _build_action_button("F", Color(1.00, 0.78, 0.35, 1.0), 52.0, "Repair", "Damaged mech")
+	_repair_btn              = repair_pkg.btn
+	_repair_btn_normal_style = repair_pkg.normal
+	_repair_action_lbl       = repair_pkg.action_lbl
+	_repair_sub_lbl          = repair_pkg.sub_lbl
+	_repair_btn.visible      = false
 	_repair_btn.pressed.connect(_on_repair_pressed)
 	_repair_btn.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
 	vbox.add_child(_repair_btn)
@@ -213,6 +103,81 @@ func _build_ui() -> void:
 	_line.end_cap_mode   = Line2D.LINE_CAP_ROUND
 	_line.visible        = false
 	add_child(_line)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Builds the ult/repair action button: dark-fill Button with hover/pressed
+# styles, a square key chip on the left, and an action+subtitle text column on
+# the right. Returns a Dictionary so callers can grab whichever refs they need
+# (caller stores `normal`/`hover` only when _process needs to recolour them).
+func _build_action_button(badge_text: String, badge_color: Color, height: float, action_text: String, sub_text: String) -> Dictionary:
+	var btn := Button.new()
+	btn.text                = ""        # custom content drawn below
+	btn.flat                = false
+	btn.clip_contents       = true      # keeps charge fill inside bounds
+	btn.custom_minimum_size = Vector2(0.0, height)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.05, 0.04, 0.09, 0.86)
+	normal.set_border_width_all(0)
+	normal.set_corner_radius_all(6)
+	btn.add_theme_stylebox_override("normal", normal)
+
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.12, 0.10, 0.22, 0.92)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	var pressed_style := normal.duplicate() as StyleBoxFlat
+	pressed_style.bg_color = Color(0.03, 0.02, 0.06, 0.96)
+	btn.add_theme_stylebox_override("pressed", pressed_style)
+
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hbox.add_theme_constant_override("separation", 0)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(hbox)
+
+	var badge := _make_key_badge(badge_text, badge_color, height)
+	hbox.add_child(badge)
+	var badge_lbl := badge.get_child(0) as Label
+
+	var text_col := VBoxContainer.new()
+	text_col.set_v_size_flags(Control.SIZE_SHRINK_CENTER)
+	text_col.add_theme_constant_override("separation", 1)
+	text_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left",  14)
+	margin.add_theme_constant_override("margin_right",  8)
+	margin.add_theme_constant_override("margin_top",    0)
+	margin.add_theme_constant_override("margin_bottom", 0)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.set_h_size_flags(Control.SIZE_EXPAND_FILL)
+	hbox.add_child(margin)
+	margin.add_child(text_col)
+
+	var action_lbl := Label.new()
+	action_lbl.text = action_text
+	action_lbl.add_theme_font_size_override("font_size", 20)
+	action_lbl.add_theme_color_override("font_color",      Color(1.0, 1.0, 1.0, 0.95))
+	action_lbl.add_theme_constant_override("outline_size", 0)
+	action_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_col.add_child(action_lbl)
+
+	var sub_lbl := Label.new()
+	sub_lbl.text = sub_text
+	sub_lbl.add_theme_font_size_override("font_size", 13)
+	sub_lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.60, 0.85))
+	sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_col.add_child(sub_lbl)
+
+	return {
+		"btn":        btn,
+		"normal":     normal,
+		"hover":      hover,
+		"action_lbl": action_lbl,
+		"sub_lbl":    sub_lbl,
+		"badge_lbl":  badge_lbl,
+	}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Builds a square key chip: coloured bg + bold letter, matching the reference UI
@@ -283,10 +248,8 @@ func _refresh_btn_text() -> void:
 	var name_str := "Ultimate"
 	var is_rocket := false
 	if w != null:
-		var raw_name: Variant = w.get("weapon_name")
-		if raw_name != null:
-			name_str = str(raw_name)
-			is_rocket = (str(raw_name) == "ROCKET")
+		name_str = w.weapon_name
+		is_rocket = (name_str == "ROCKET")
 	_ult_action_lbl.text = name_str
 	# ROCKET fires globally on R, so the proximity prompt advertises that in
 	# both ready and cooling states instead of the standard "press E here"
@@ -322,7 +285,7 @@ func _input(event: InputEvent) -> void:
 			# global R key, so don't double-bind E to it here.
 			if _target_mech != null:
 				var w := _target_mech.get("weapon") as Node3D
-				if w != null and str(w.get("weapon_name")) == "ROCKET":
+				if w != null and w.weapon_name == "ROCKET":
 					return
 			_fire_ult()
 		elif event.keycode == KEY_F:
