@@ -36,10 +36,13 @@ const RESOLUTION_OPTIONS := [
 # window commits, otherwise it reverts.
 const RESET_CONFIRM_WINDOW := 3.0
 
+const BindingCaptureModalScript := preload("res://scenes/ui/BindingCaptureModal.gd")
+
 var _reset_btn:        Button = null
 var _back_btn:         Button = null
 var _reset_armed:      bool   = false
 var _reset_armed_until: float = 0.0
+var _binding_chips:    Dictionary = {}   # action -> Label showing current user binding
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -93,6 +96,24 @@ func _build() -> void:
 		func(v: float) -> void: SaveData.set_music_volume(v)))
 	rows.add_child(_make_volume_row("SFX", SaveData.sfx_volume,
 		func(v: float) -> void: SaveData.set_sfx_volume(v)))
+
+	col.add_child(_divider())
+
+	var controls_heading := Label.new()
+	controls_heading.text = "CONTROLS"
+	UITheme.style_label_caps(controls_heading, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_SECONDARY)
+	controls_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(controls_heading)
+
+	var rebind_rows := VBoxContainer.new()
+	rebind_rows.add_theme_constant_override("separation", STAT_GAP)
+	col.add_child(rebind_rows)
+	for action: String in InputBindings.REBINDABLE:
+		rebind_rows.add_child(_make_rebind_row(action))
+
+	var reset_controls := _make_warn_button("RESET CONTROLS")
+	reset_controls.pressed.connect(_on_reset_controls_pressed)
+	col.add_child(reset_controls)
 
 	col.add_child(_divider())
 
@@ -241,6 +262,70 @@ func _input(event: InputEvent) -> void:
 		return
 	closed.emit()
 	get_viewport().set_input_as_handled()
+
+# ── Rebind rows ──────────────────────────────────────────────────────────────
+
+func _make_rebind_row(action: String) -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.custom_minimum_size = Vector2(STAT_ROW_W, 0.0)
+	hbox.add_theme_constant_override("separation", UITheme.PAD_M)
+
+	var lbl := Label.new()
+	lbl.text = String(InputBindings.ACTION_LABELS.get(action, action))
+	UITheme.style_label_caps(lbl, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_TEXT_SECONDARY)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(lbl)
+
+	var chip := Label.new()
+	chip.text = InputBindings.event_label(InputBindings.user_binding(action))
+	UITheme.style_label_caps(chip, UITheme.FONT_LABEL_CAPS, UITheme.COLOR_ACCENT_LIME)
+	chip.custom_minimum_size = Vector2(120.0, 0.0)
+	chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	hbox.add_child(chip)
+	_binding_chips[action] = chip
+
+	var btn := Button.new()
+	btn.text = "REBIND"
+	btn.custom_minimum_size = Vector2(120.0, 36.0)
+	btn.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
+	btn.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_LIME)
+	btn.add_theme_constant_override("outline_size", 0)
+	btn.add_theme_stylebox_override("focus", UITheme.focus_outline_box(8))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = UITheme.COLOR_PANEL
+	sb.border_color = UITheme.COLOR_ACCENT_LIME
+	sb.set_border_width_all(int(UITheme.PANEL_BORDER_W))
+	sb.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("normal", sb)
+	var hover := sb.duplicate()
+	var wash := UITheme.COLOR_ACCENT_LIME
+	wash.a = 0.10
+	hover.bg_color = wash
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.pressed.connect(func() -> void: _open_capture_modal(action))
+	hbox.add_child(btn)
+	return hbox
+
+func _open_capture_modal(action: String) -> void:
+	AudioManager.play("ui_click")
+	var modal := BindingCaptureModalScript.new()
+	get_tree().root.add_child(modal)
+	modal.open("REBIND %s" % String(InputBindings.ACTION_LABELS.get(action, action)))
+	modal.captured.connect(func(event: InputEvent) -> void:
+		InputBindings.set_user_binding(action, event)
+		_refresh_binding_chip(action))
+	modal.cancelled.connect(func() -> void: pass)
+
+func _refresh_binding_chip(action: String) -> void:
+	var chip: Label = _binding_chips.get(action)
+	if chip != null and is_instance_valid(chip):
+		chip.text = InputBindings.event_label(InputBindings.user_binding(action))
+
+func _on_reset_controls_pressed() -> void:
+	AudioManager.play("ui_click")
+	InputBindings.reset_all()
+	for action: String in _binding_chips.keys():
+		_refresh_binding_chip(action)
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
