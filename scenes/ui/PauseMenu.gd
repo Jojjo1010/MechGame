@@ -134,6 +134,7 @@ func _build_main_view() -> Control:
 	btns.add_child(debug)
 	btns.add_child(quit)
 
+	resume.call_deferred("grab_focus")
 	return center
 
 func _build_debug_view() -> Control:
@@ -349,6 +350,7 @@ func _show_main() -> void:
 	_main_view.visible     = true
 	_debug_view.visible    = false
 	_settings_view.visible = false
+	_focus_first_button(_main_view)
 
 func _show_debug() -> void:
 	AudioManager.play("ui_click")
@@ -356,12 +358,34 @@ func _show_debug() -> void:
 	_settings_view.visible = false
 	_debug_view.visible    = true
 	_refresh_stats()
+	_focus_first_button(_debug_view)
 
 func _show_settings() -> void:
 	AudioManager.play("ui_click")
 	_main_view.visible     = false
 	_debug_view.visible    = false
 	_settings_view.visible = true
+	_focus_first_button(_settings_view)
+
+# Walk a panel's tree depth-first and grab_focus on the first focusable Control
+# we find. Used after view switches so gamepad/keyboard users always have a
+# selection to navigate from. Deferred so the view is visible by the time the
+# focus call runs.
+func _focus_first_button(view: Control) -> void:
+	var target := _find_focusable(view)
+	if target != null:
+		target.call_deferred("grab_focus")
+
+func _find_focusable(node: Node) -> Control:
+	for child in node.get_children():
+		if child is Control:
+			var ctrl := child as Control
+			if ctrl.focus_mode == Control.FOCUS_ALL and not ctrl.is_set_as_top_level():
+				return ctrl
+		var nested := _find_focusable(child)
+		if nested != null:
+			return nested
+	return null
 
 func _resume() -> void:
 	AudioManager.play("ui_click")
@@ -809,29 +833,32 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 	btn.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
 	btn.add_theme_color_override("font_color",      font_color)
 	btn.add_theme_constant_override("outline_size", 0)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus", UITheme.focus_outline_box(PANEL_CORNER_R))
 	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
 	return btn
 
 func _wire_button_motion(btn: Button) -> void:
 	# Mouse signals can fire while the menu is tearing down (PauseMenu close →
 	# btn queued for free); guard each tween creation so the captured `btn`
-	# isn't dereferenced after free.
-	btn.mouse_entered.connect(func() -> void:
+	# isn't dereferenced after free. focus_entered / focus_exited mirror mouse
+	# hover so gamepad and keyboard navigation get the same affordance.
+	var hover_in := func() -> void:
 		if not is_instance_valid(btn):
 			return
 		AudioManager.play("ui_hover")
 		var t := btn.create_tween()
 		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DUR)
-	)
-	btn.mouse_exited.connect(func() -> void:
+	var hover_out := func() -> void:
 		if not is_instance_valid(btn):
 			return
 		var t := btn.create_tween()
 		t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		t.tween_property(btn, "scale", Vector2.ONE, HOVER_DUR)
-	)
+	btn.mouse_entered.connect(hover_in)
+	btn.focus_entered.connect(hover_in)
+	btn.mouse_exited.connect(hover_out)
+	btn.focus_exited.connect(hover_out)
 	btn.button_down.connect(func() -> void:
 		if not is_instance_valid(btn):
 			return

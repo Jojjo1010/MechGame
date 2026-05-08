@@ -111,6 +111,17 @@ static func style_body(label: Label, color: Color = COLOR_TEXT_SECONDARY) -> voi
 	label.add_theme_color_override("font_color",    color)
 	label.add_theme_constant_override("outline_size", 0)
 
+# Focus outline — transparent fill, 2 px bright-lime border. Bound to the
+# `focus` slot on every interactive Button so gamepad / keyboard users can
+# see the current selection. Mouse users only see it briefly after click.
+static func focus_outline_box(corner_radius: int = PANEL_CORNER_R) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0, 0, 0, 0)
+	box.border_color = COLOR_BORDER_BRIGHT
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(corner_radius)
+	return box
+
 # Primary button styling — solid hot-pink fill, no border, darker on hover.
 # Uppercase white caps label. The caller owns sizing, pivot, and motion wiring.
 static func apply_primary_button(btn: Button, label_text: String,
@@ -119,7 +130,7 @@ static func apply_primary_button(btn: Button, label_text: String,
 	btn.add_theme_font_size_override("font_size", FONT_LABEL_CAPS)
 	btn.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
 	btn.add_theme_constant_override("outline_size", 0)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus", focus_outline_box(corner_radius))
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = COLOR_ACCENT_HOT
