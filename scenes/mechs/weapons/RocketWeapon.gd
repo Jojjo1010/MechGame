@@ -110,13 +110,12 @@ func _fire_strike(target: Vector3) -> void:
 func _input(event: InputEvent) -> void:
 	if not _marking:
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			_commit_strike()
-			get_viewport().set_input_as_handled()
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_cancel_marking()
-			get_viewport().set_input_as_handled()
+	if event.is_action_pressed("aim_confirm"):
+		_commit_strike()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("aim_cancel"):
+		_cancel_marking()
+		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	super._process(delta)

@@ -41,7 +41,7 @@ var _dash_iframe:    float = 0.0              # daze-immune window — covers da
 var _dash_ghost_t:   float = 0.0
 var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
 var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
-var _shift_was_down: bool = false              # edge-detect for polled Shift key
+var _dash_was_held: bool = false               # rising-edge detect for polled dash action
 
 func _ready() -> void:
 	add_to_group("drones")
@@ -124,15 +124,13 @@ func _process(delta: float) -> void:
 	if not player_controlled:
 		return
 
-	# Poll Shift for dash on the rising edge. Polling instead of using the _input
-	# event callback avoids cases where the engine/keyboard drops the Shift-down
-	# event when WASD is already held — the original symptom was "dash only fires
-	# when standing still". Input.is_key_pressed reads the live key state, so it
-	# works regardless of event-stream quirks.
-	var shift_now := Input.is_key_pressed(KEY_SHIFT)
-	if shift_now and not _shift_was_down and not repair_locked:
+	# Poll the dash action on the rising edge. Polling instead of _input events
+	# avoids cases where the engine drops the dash press when WASD is already
+	# held — the original symptom was "dash only fires when standing still".
+	var dash_now := Input.is_action_pressed("dash")
+	if dash_now and not _dash_was_held and not repair_locked:
 		_try_dash()
-	_shift_was_down = shift_now
+	_dash_was_held = dash_now
 
 	if repair_locked:
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta   # keep marching with mechs, block player input
@@ -341,17 +339,12 @@ func _set_daze_visual(on: bool) -> void:
 		if is_instance_valid(mi):
 			mi.material_overlay = _daze_mat if on else null
 
-# Camera-relative movement input. WASD and arrow keys are interchangeable —
-# either set produces the same vector, so left-handed players or those who
-# prefer arrows aren't penalized. Used by passive movement, dash steering,
-# and the dash-launch direction read.
+# Camera-relative movement input. WASD, arrow keys, D-pad, and left stick all
+# feed the same `move_*` actions, so any input device produces the same vector.
+# Stick deflection magnitude flows through naturally via Input.get_vector.
 func _read_movement_input(cam_fwd: Vector3, cam_right: Vector3) -> Vector3:
-	var v := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    v += cam_fwd
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  v -= cam_fwd
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):  v -= cam_right
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): v += cam_right
-	return v
+	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	return cam_right * input.x - cam_fwd * input.y
 
 # Camera's -Z axis projected onto XZ = screen-forward in world space
 func _cam_forward() -> Vector3:

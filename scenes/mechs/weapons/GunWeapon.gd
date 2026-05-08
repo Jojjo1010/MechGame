@@ -152,17 +152,16 @@ func _fire_ult_wave(dir: Vector3) -> void:
 	_mech.trigger_flash()
 	AudioManager.play("gun_ult", muzzle, -2.0)
 
-# ── Input: mouse aim + click to fire ─────────────────────────────────────────
+# ── Input: aim + confirm to fire ─────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
 	if not _aiming:
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			_confirm_and_fire()
-			get_viewport().set_input_as_handled()
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_cancel_aiming()
-			get_viewport().set_input_as_handled()
+	if event.is_action_pressed("aim_confirm"):
+		_confirm_and_fire()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("aim_cancel"):
+		_cancel_aiming()
+		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	super._process(delta)

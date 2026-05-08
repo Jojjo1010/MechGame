@@ -279,17 +279,16 @@ func _on_repair_pressed() -> void:
 func _input(event: InputEvent) -> void:
 	if not _enabled or not _panel.visible:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_E:
-			# ROCKET's prompt advertises R, not E — Game._input handles the
-			# global R key, so don't double-bind E to it here.
-			if _target_mech != null:
-				var w := _target_mech.get("weapon") as Node3D
-				if w != null and w.weapon_name == "ROCKET":
-					return
-			_fire_ult()
-		elif event.keycode == KEY_F:
-			_fire_repair()
+	if event.is_action_pressed("ult"):
+		# ROCKET's prompt advertises rocket_strike (R), not ult — Game._input
+		# handles that globally, so don't double-bind the ult action to it.
+		if _target_mech != null:
+			var w := _target_mech.get("weapon") as Node3D
+			if w != null and w.weapon_name == "ROCKET":
+				return
+		_fire_ult()
+	elif event.is_action_pressed("repair"):
+		_fire_repair()
 
 func _fire_ult() -> void:
 	if _target_mech == null:

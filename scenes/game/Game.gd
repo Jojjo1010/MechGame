@@ -241,26 +241,23 @@ func _find_rocket_weapon() -> Node3D:
 	return null
 
 func _input(event: InputEvent) -> void:
-	# Zoom with scroll wheel
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_cam_zoom = clampf(_cam_zoom - CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_cam_zoom = clampf(_cam_zoom + CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ESCAPE:
-			# Game._input only fires while unpaused (PROCESS_MODE_INHERIT) — so
-			# this path can't open a pause menu over the upgrade picker / death
-			# screen / repair minigame, all of which already pause the tree.
-			_open_pause_menu()
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_R:
-			# Global rocket strike — works from anywhere, no proximity gate. The
-			# rocket weapon's activate_ult is "press once to enter marking mode,
-			# press again (or left-click) to commit", so re-pressing R finishes
-			# the strike too.
-			_trigger_rocket_strike()
-			get_viewport().set_input_as_handled()
+	if event.is_action_pressed("zoom_in"):
+		_cam_zoom = clampf(_cam_zoom - CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
+	elif event.is_action_pressed("zoom_out"):
+		_cam_zoom = clampf(_cam_zoom + CAM_ZOOM_STEP, CAM_ZOOM_MIN, CAM_ZOOM_MAX)
+	if event.is_action_pressed("pause"):
+		# Game._input only fires while unpaused (PROCESS_MODE_INHERIT) — so
+		# this path can't open a pause menu over the upgrade picker / death
+		# screen / repair minigame, all of which already pause the tree.
+		_open_pause_menu()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("rocket_strike"):
+		# Global rocket strike — works from anywhere, no proximity gate. The
+		# rocket weapon's activate_ult is "press once to enter marking mode,
+		# press again (or aim_confirm) to commit", so re-pressing also finishes
+		# the strike.
+		_trigger_rocket_strike()
+		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	_follow_camera(delta)

@@ -227,12 +227,9 @@ func _on_back_pressed() -> void:
 	closed.emit()
 
 func _input(event: InputEvent) -> void:
-	# ESC closes the overlay too — mirrors PauseMenu's convention.
 	if not visible:
 		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
-	if event.keycode != KEY_ESCAPE:
+	if not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
 		return
 	closed.emit()
 	get_viewport().set_input_as_handled()

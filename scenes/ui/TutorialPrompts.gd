@@ -431,7 +431,7 @@ func _process(delta: float) -> void:
 			if _state_timer >= PRACTICE_DUR:
 				_enter_state(State.SHIFT_SHOWING)
 		State.SHIFT_SHOWING:
-			if _state_timer >= MIN_PROMPT_TIME and Input.is_key_pressed(KEY_SHIFT):
+			if _state_timer >= MIN_PROMPT_TIME and Input.is_action_pressed("dash"):
 				_enter_state(State.SHIFT_FADING)
 		State.SHIFT_FADING:
 			if _state_timer >= PRACTICE_DUR:
@@ -459,24 +459,20 @@ func _process(delta: float) -> void:
 		State.DONE:
 			pass
 
-# Tap-style inputs (E, LMB) go through events rather than per-frame polling.
-# Polling can drop a quick press if it lands between frames; events fire on the
-# pressed edge regardless of frame timing. The MIN_PROMPT_TIME gate still
-# applies so the prompt has time to render before the input counts.
+# Tap-style inputs (ult, aim_confirm) go through events rather than per-frame
+# polling. Polling can drop a quick press if it lands between frames; events
+# fire on the pressed edge regardless of frame timing. The MIN_PROMPT_TIME gate
+# still applies so the prompt has time to render before the input counts.
 func _input(event: InputEvent) -> void:
 	if _state_timer < MIN_PROMPT_TIME:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		match _state:
-			State.ULT_SHOWING_E:
-				if event.keycode == KEY_E and _drone_near_target_mech():
-					if _target_uses_aim_mode():
-						_enter_state(State.ULT_SHOWING_LMB)
-					else:
-						_enter_state(State.ULT_FADING)
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT and _state == State.ULT_SHOWING_LMB:
+	if _state == State.ULT_SHOWING_E and event.is_action_pressed("ult") and _drone_near_target_mech():
+		if _target_uses_aim_mode():
+			_enter_state(State.ULT_SHOWING_LMB)
+		else:
 			_enter_state(State.ULT_FADING)
+	elif _state == State.ULT_SHOWING_LMB and event.is_action_pressed("aim_confirm"):
+		_enter_state(State.ULT_FADING)
 
 # ── Target / marker ──────────────────────────────────────────────────────────
 
@@ -759,10 +755,10 @@ func _force_damage_for_repair() -> Node3D:
 # tutorial with arrow keys, WASD, or any mix. Using string keys so dict size
 # directly tracks how many directions have been touched.
 func _track_wasd_seen() -> void:
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    _wasd_seen["up"]    = true
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):  _wasd_seen["left"]  = true
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  _wasd_seen["down"]  = true
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): _wasd_seen["right"] = true
+	if Input.is_action_pressed("move_up"):    _wasd_seen["up"]    = true
+	if Input.is_action_pressed("move_left"):  _wasd_seen["left"]  = true
+	if Input.is_action_pressed("move_down"):  _wasd_seen["down"]  = true
+	if Input.is_action_pressed("move_right"): _wasd_seen["right"] = true
 
 func _wasd_all_seen() -> bool:
 	return _wasd_seen.size() >= 4

@@ -71,22 +71,21 @@ func _cancel_aiming() -> void:
 func _input(event: InputEvent) -> void:
 	if not _aiming:
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if not _aim_has_start:
-				_aim_start = _ground_cursor
-				_aim_has_start = true
-			else:
-				var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
-				_aiming = false
-				_aim_has_start = false
-				_reset_cooldown()
-				_destroy_preview()
-				_spawn_trace(_aim_start, endpt)
-			get_viewport().set_input_as_handled()
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_cancel_aiming()
-			get_viewport().set_input_as_handled()
+	if event.is_action_pressed("aim_confirm"):
+		if not _aim_has_start:
+			_aim_start = _ground_cursor
+			_aim_has_start = true
+		else:
+			var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
+			_aiming = false
+			_aim_has_start = false
+			_reset_cooldown()
+			_destroy_preview()
+			_spawn_trace(_aim_start, endpt)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("aim_cancel"):
+		_cancel_aiming()
+		get_viewport().set_input_as_handled()
 
 # Compute the second-click endpoint at fixed beam length from the start point,
 # in the cursor direction. Length is constant; cursor only chooses direction.
