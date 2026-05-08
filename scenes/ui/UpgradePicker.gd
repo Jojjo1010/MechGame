@@ -631,6 +631,9 @@ func _make_card(upgrade: Dictionary) -> Control:
 
 	return card
 
+func _input(event: InputEvent) -> void:
+	UITheme.ui_accept_focused(event, get_viewport())
+
 # ── Selection / close ─────────────────────────────────────────────────────────
 func _on_card_pressed(upgrade: Dictionary) -> void:
 	AudioManager.play("ui_click")

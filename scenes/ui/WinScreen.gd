@@ -254,6 +254,9 @@ func _animate_entrance(title_block: Control, stat_rows: Array[Control], btn_row:
 	t.parallel().tween_property(btn_row, "modulate:a", 1.0, FADE_BTN_DUR) \
 		.set_delay(btn_delay)
 
+func _input(event: InputEvent) -> void:
+	UITheme.ui_accept_focused(event, get_viewport())
+
 func _on_play_again_pressed() -> void:
 	AudioManager.play("ui_click")
 	get_tree().paused = false

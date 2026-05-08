@@ -335,6 +335,8 @@ func _make_volume_row(label_text: String, initial: float, on_change: Callable) -
 # ── ESC handling ─────────────────────────────────────────────────────────────
 
 func _input(event: InputEvent) -> void:
+	if UITheme.ui_accept_focused(event, get_viewport()):
+		return
 	if not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
 		return
 	if _debug_view.visible or _settings_view.visible:

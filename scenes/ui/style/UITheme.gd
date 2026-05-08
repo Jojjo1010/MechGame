@@ -111,6 +111,20 @@ static func style_body(label: Label, color: Color = COLOR_TEXT_SECONDARY) -> voi
 	label.add_theme_color_override("font_color",    color)
 	label.add_theme_constant_override("outline_size", 0)
 
+# Workaround: gamepad ui_accept (A button) doesn't always reach Button._gui_input
+# even with proper focus. Wire this from a menu's _input to fire `pressed` on
+# whichever BaseButton currently owns focus. Returns true if it consumed the
+# event (so the caller can early-out).
+static func ui_accept_focused(event: InputEvent, viewport: Viewport) -> bool:
+	if not event.is_action_pressed("ui_accept"):
+		return false
+	var focused := viewport.gui_get_focus_owner()
+	if focused is BaseButton:
+		(focused as BaseButton).pressed.emit()
+		viewport.set_input_as_handled()
+		return true
+	return false
+
 static func focus_outline_box(corner_radius: int = PANEL_CORNER_R) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(0, 0, 0, 0)

@@ -235,6 +235,8 @@ func _on_visibility_changed() -> void:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if UITheme.ui_accept_focused(event, get_viewport()):
+		return
 	if not (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
 		return
 	closed.emit()

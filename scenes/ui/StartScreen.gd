@@ -75,15 +75,13 @@ func _ready() -> void:
 		_play_btn.grab_focus()
 
 func _input(event: InputEvent) -> void:
-	# Safety net: if focus has somehow drifted off the button column (or never
-	# landed), ui_accept still triggers PLAY. Stick navigation re-focuses
-	# normally afterward.
-	if event.is_action_pressed("ui_accept"):
-		var focused := get_viewport().gui_get_focus_owner()
-		if focused == null and _play_btn != null and is_instance_valid(_play_btn):
-			_play_btn.grab_focus()
-			_on_play_pressed()
-			get_viewport().set_input_as_handled()
+	if UITheme.ui_accept_focused(event, get_viewport()):
+		return
+	# Safety net: ui_accept with no focus owner — re-focus PLAY and trigger it.
+	if event.is_action_pressed("ui_accept") and _play_btn != null and is_instance_valid(_play_btn):
+		_play_btn.grab_focus()
+		_on_play_pressed()
+		get_viewport().set_input_as_handled()
 
 func _build() -> void:
 	var root := Control.new()
