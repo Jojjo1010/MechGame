@@ -47,13 +47,22 @@ const GAMEPAD_GLYPHS := {
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	for joy_id in Input.get_connected_joypads():
+		print("[InputHints] joypad ", joy_id, " name=\"", Input.get_joy_name(joy_id), "\" guid=", Input.get_joy_guid(joy_id))
+	Input.joy_connection_changed.connect(func(id: int, connected: bool) -> void:
+		print("[InputHints] joy ", id, " connected=", connected, " name=\"", Input.get_joy_name(id), "\""))
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_last_mouse_motion_t = _now()
 		return
 	var new_device := device
-	if event is InputEventKey or event is InputEventMouseButton:
+	if event is InputEventKey:
+		var k := event as InputEventKey
+		if k.pressed and not k.echo:
+			print("[InputHints] key keycode=", k.keycode, " physical=", k.physical_keycode, " label=", k.key_label)
+		new_device = DEVICE_KBM
+	elif event is InputEventMouseButton:
 		new_device = DEVICE_KBM
 	elif event is InputEventJoypadButton:
 		var b := event as InputEventJoypadButton
