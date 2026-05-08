@@ -339,12 +339,23 @@ func _set_daze_visual(on: bool) -> void:
 		if is_instance_valid(mi):
 			mi.material_overlay = _daze_mat if on else null
 
-# Camera-relative movement input. WASD, arrow keys, D-pad, and left stick all
-# feed the same `move_*` actions, so any input device produces the same vector.
-# Stick deflection magnitude flows through naturally via Input.get_vector.
+# Camera-relative movement input. Keyboard goes through Input.is_key_pressed
+# (direct OS state) — the action-state path drops events when Shift+WASD are
+# all held, same bug that motivated the dash polling workaround. Gamepad stick
+# is read via get_joy_axis so analog deflection magnitude flows through.
 func _read_movement_input(cam_fwd: Vector3, cam_right: Vector3) -> Vector3:
-	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	return cam_right * input.x - cam_fwd * input.y
+	var v := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    v += cam_fwd
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  v -= cam_fwd
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):  v -= cam_right
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): v += cam_right
+	var stick_x := Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+	var stick_y := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	if absf(stick_x) > 0.2:
+		v += cam_right * stick_x
+	if absf(stick_y) > 0.2:
+		v -= cam_fwd * stick_y
+	return v
 
 # Camera's -Z axis projected onto XZ = screen-forward in world space
 func _cam_forward() -> Vector3:
