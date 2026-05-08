@@ -236,7 +236,7 @@ func _trigger_rocket_strike() -> void:
 
 func _find_rocket_weapon() -> Node3D:
 	for w in _weapons:
-		if w != null and is_instance_valid(w) and str(w.get("weapon_name")) == "ROCKET":
+		if w != null and is_instance_valid(w) and w.weapon_name == "ROCKET":
 			return w
 	return null
 

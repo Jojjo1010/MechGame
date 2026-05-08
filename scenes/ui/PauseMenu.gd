@@ -595,7 +595,14 @@ func _populate_upgrade_choices() -> void:
 		var stacks: int = RunManager.upgrade_stack_count(target_weapon, id)
 		var label: String = title
 		if is_unique:
-			label = "%s [%s]" % [title, "TAKEN" if stacks > 0 else "RARE" if int(d.rarity) == 2 else "UNCOMMON"]
+			var tag: String
+			if stacks > 0:
+				tag = "TAKEN"
+			elif int(d.rarity) == 2:
+				tag = "RARE"
+			else:
+				tag = "UNCOMMON"
+			label = "%s [%s]" % [title, tag]
 		else:
 			if stacks >= RunManager.MAX_STACKS_COMMON:
 				label = "%s [MAX]" % title

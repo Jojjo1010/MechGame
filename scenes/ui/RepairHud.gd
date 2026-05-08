@@ -36,6 +36,10 @@ var _sub_lbl:    Label     = null
 var _bar_bg:     ColorRect = null
 var _bar_fill:   ColorRect = null
 var _game:       Node      = null
+# Tracks last applied status-label colour so _process can skip the theme override
+# when the cooldown→ready transition hasn't actually flipped — re-applying a
+# theme override every frame mutates Godot's theme cache and triggers redraws.
+var _was_cooling: bool     = false
 
 func _ready() -> void:
 	layer = 5
@@ -76,8 +80,6 @@ func _build() -> void:
 	panel.add_theme_stylebox_override("panel", sb)
 	_root.add_child(panel)
 
-	# Layout mirrors a single UltBar slot:
-	#   [drone portrait] [ name (top) | bar ──── F chip (right) ]
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 14)
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -95,8 +97,6 @@ func _build() -> void:
 	text_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(text_col)
 
-	# Name row — REPAIR in amber (mirrors archetype-tinted name in UltBar)
-	# and the status text right-aligned in the same row.
 	var label_row := HBoxContainer.new()
 	label_row.add_theme_constant_override("separation", 8)
 	label_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -121,8 +121,6 @@ func _build() -> void:
 	_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label_row.add_child(_sub_lbl)
 
-	# Bar row — bar fills, F key chip pinned to the right end at bar level
-	# (matches UltBar's per-slot E/R chip placement).
 	var bar_row := HBoxContainer.new()
 	bar_row.add_theme_constant_override("separation", 12)
 	bar_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -147,10 +145,6 @@ func _build() -> void:
 # Live 3D drone bust — uses the same scene as the in-game drone so the HUD
 # portrait stays in sync if the model changes. The script is stripped from
 # the instance so player-control logic doesn't run inside the viewport.
-#
-# Layout footprint is DRONE_ICON_SIZE square, but the rendered viewport is
-# larger and bottom-anchored so the drone visually extends above and a bit
-# to the sides — same hero-shot pop as MechPortrait's pop_out=true.
 func _make_drone_portrait() -> Control:
 	var outer := Control.new()
 	outer.custom_minimum_size = Vector2(DRONE_ICON_SIZE, DRONE_ICON_SIZE)
@@ -174,7 +168,9 @@ func _make_drone_portrait() -> Control:
 	vp.size = Vector2i(int(pop_w), int(pop_h))
 	vp.transparent_bg = true
 	vp.handle_input_locally = false
-	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Drone scene has no AnimationPlayer and the script is stripped below, so the
+	# bust is fully static — UPDATE_ONCE renders the first frame then never again.
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	vp.own_world_3d = true
 	container.add_child(vp)
 
@@ -242,7 +238,11 @@ func _process(_delta: float) -> void:
 
 	if cd > 0.0:
 		_sub_lbl.text = "%.1fs" % cd
-		_sub_lbl.add_theme_color_override("font_color", COOLING_LABEL_COLOR)
+		if not _was_cooling:
+			_sub_lbl.add_theme_color_override("font_color", COOLING_LABEL_COLOR)
+			_was_cooling = true
 	else:
-		_sub_lbl.text = "READY"
-		_sub_lbl.add_theme_color_override("font_color", READY_LABEL_COLOR)
+		if _was_cooling or _sub_lbl.text != "READY":
+			_sub_lbl.text = "READY"
+			_sub_lbl.add_theme_color_override("font_color", READY_LABEL_COLOR)
+			_was_cooling = false

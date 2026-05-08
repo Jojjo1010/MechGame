@@ -17,6 +17,7 @@ var _marker_tween: Tween  = null
 
 func _on_setup() -> void:
 	weapon_name = "ROCKET"
+	uses_aim_mode_ult = true
 	# Built-in splash so every rocket explodes — Bigger Boom upgrade scales this.
 	splash_radius = INNATE_SPLASH
 
