@@ -284,10 +284,8 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 
 func _wire_button_motion(btn: Button) -> void:
 	# Mouse signals can fire while the scene is tearing down (PLAY/HOW TO PLAY
-	# pressed → change_scene → btn queued for free). The captured `btn` reads
-	# as freed inside the lambda, so guard each tween creation. focus_entered
-	# / focus_exited mirror the mouse hover so gamepad and keyboard navigation
-	# get the same audio + scale-up affordance.
+	# pressed → change_scene → btn queued for free); guard each tween creation
+	# so the captured `btn` isn't dereferenced after free.
 	var hover_in := func() -> void:
 		if not is_instance_valid(btn):
 			return

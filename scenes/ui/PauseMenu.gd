@@ -367,10 +367,7 @@ func _show_settings() -> void:
 	_settings_view.visible = true
 	_focus_first_button(_settings_view)
 
-# Walk a panel's tree depth-first and grab_focus on the first focusable Control
-# we find. Used after view switches so gamepad/keyboard users always have a
-# selection to navigate from. Deferred so the view is visible by the time the
-# focus call runs.
+# Deferred so the view is visible by the time the focus call runs.
 func _focus_first_button(view: Control) -> void:
 	var target := _find_focusable(view)
 	if target != null:
@@ -840,8 +837,7 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 func _wire_button_motion(btn: Button) -> void:
 	# Mouse signals can fire while the menu is tearing down (PauseMenu close →
 	# btn queued for free); guard each tween creation so the captured `btn`
-	# isn't dereferenced after free. focus_entered / focus_exited mirror mouse
-	# hover so gamepad and keyboard navigation get the same affordance.
+	# isn't dereferenced after free.
 	var hover_in := func() -> void:
 		if not is_instance_valid(btn):
 			return

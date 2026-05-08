@@ -372,9 +372,6 @@ func _make_lmb_chip() -> Control:
 	m.custom_minimum_size = Vector2(56.0, KeyChip.KEY_SIZE * 2.0 + KeyChip.KEY_GAP)
 	return m
 
-# Chip for an action's primary binding on the active device — keyboard caps
-# stay in their existing sizing tier; gamepad chips use the same cap shape with
-# the face-button / shoulder label so the prompt rhythm doesn't shift.
 func _chip_for_action(action: String) -> Control:
 	var label := InputHints.glyph_for(action)
 	var w: float = KeyChip.SHIFT_W if label.length() > 1 else KeyChip.KEY_SIZE
@@ -382,14 +379,11 @@ func _chip_for_action(action: String) -> Control:
 	var font: int = SHIFT_FONT if label.length() > 1 else KEY_FONT
 	return KeyChip.make_key_cap(label, w, h, font)
 
-# Movement: keyboard shows the dual WASD/arrows cluster, gamepad collapses to
-# a single "L STICK" wide cap so the prompt row stays balanced.
 func _chip_for_movement() -> Control:
 	if InputHints.device == InputHints.DEVICE_GAMEPAD:
 		return KeyChip.make_key_cap("L STICK", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
 	return KeyChip.make_movement_cluster(KEY_FONT)
 
-# AIM & FIRE step: keyboard shows the LMB mouse glyph, gamepad shows the A cap.
 func _chip_for_aim_confirm() -> Control:
 	if InputHints.device == InputHints.DEVICE_GAMEPAD:
 		return KeyChip.make_key_cap("A", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)

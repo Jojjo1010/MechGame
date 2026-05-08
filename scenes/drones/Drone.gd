@@ -126,7 +126,7 @@ func _process(delta: float) -> void:
 
 	# Poll the dash action on the rising edge. Polling instead of _input events
 	# avoids cases where the engine drops the dash press when WASD is already
-	# held — the original symptom was "dash only fires when standing still".
+	# held — original symptom was "dash only fires when standing still".
 	var dash_now := Input.is_action_pressed("dash")
 	if dash_now and not _dash_was_held and not repair_locked:
 		_try_dash()

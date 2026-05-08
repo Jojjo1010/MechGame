@@ -169,23 +169,30 @@ func _process(delta: float) -> void:
 	if not _aiming or _mech == null:
 		return
 
-	# Project mouse cursor onto the ground plane at mech height
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
-		return
-	var mouse  := get_viewport().get_mouse_position()
-	var ray_o  := camera.project_ray_origin(mouse)
-	var ray_d  := camera.project_ray_normal(mouse)
-	var plane_y := _mech.global_position.y
-	if abs(ray_d.y) > 0.001:
-		var t      := (plane_y - ray_o.y) / ray_d.y
-		var target := ray_o + ray_d * t
-		var diff   := target - _mech.global_position
-		diff.y = 0.0
-		if diff.length_squared() > 0.1:
-			_aim_dir = diff.normalized()
+	var target := _aim_target_pos()
+	var diff   := target - _mech.global_position
+	diff.y = 0.0
+	if diff.length_squared() > 0.1:
+		_aim_dir = diff.normalized()
 
 	_update_cone()
+
+# Mouse-cursor projection when the player is steering with a mouse; drone
+# position otherwise (gamepad, keyboard-only).
+func _aim_target_pos() -> Vector3:
+	var camera := get_viewport().get_camera_3d()
+	if camera != null and InputHints.mouse_active():
+		var mouse  := get_viewport().get_mouse_position()
+		var ray_o  := camera.project_ray_origin(mouse)
+		var ray_d  := camera.project_ray_normal(mouse)
+		var plane_y := _mech.global_position.y
+		if abs(ray_d.y) > 0.001:
+			var t := (plane_y - ray_o.y) / ray_d.y
+			return ray_o + ray_d * t
+	var drone := get_tree().get_first_node_in_group("drones") as Node3D
+	if drone != null and is_instance_valid(drone):
+		return Vector3(drone.global_position.x, _mech.global_position.y, drone.global_position.z)
+	return _mech.global_position - Vector3(0, 0, CONE_LEN)
 
 # ── Cone mesh ─────────────────────────────────────────────────────────────────
 func _build_cone() -> void:

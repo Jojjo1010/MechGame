@@ -1,22 +1,25 @@
 extends Node
 
-# Tracks which input device the player most recently used so UI can swap
-# prompts (key caps vs gamepad face buttons). Emits `device_changed` whenever
-# a different device kind is detected; reads via `device` and `glyph_for(action)`.
-#
-# Watching _input rather than polling: the autoload sits at the top of the
-# scene tree at PROCESS_MODE_ALWAYS so events route through it before any
-# game/UI input handler runs. Joystick noise is filtered with a 0.5 deflection
-# threshold so a slightly-off-center stick at boot doesn't register.
+# Tracks the player's most-recently-used input device so UI can swap key caps
+# for gamepad face buttons.
 
 signal device_changed(new_device: int)
 
 const DEVICE_KBM     := 0
 const DEVICE_GAMEPAD := 1
 
+# Filter resting-stick noise so a slightly-off-center pad at boot doesn't
+# register as gamepad input.
 const STICK_DEFLECTION_MIN := 0.5
 
 var device: int = DEVICE_KBM
+
+# Mouse-active gate for aim-mode fallbacks. Aim ults (Gun, Beam) project the
+# cursor onto the ground; a player without a mouse needs a substitute (we use
+# the drone's position). Counts the mouse as "active" while it's been moved
+# within MOUSE_ACTIVE_WINDOW seconds.
+const MOUSE_ACTIVE_WINDOW := 2.0
+var _last_mouse_motion_t: float = -INF
 
 const KBM_GLYPHS := {
 	"dash":          "SHIFT",
@@ -46,6 +49,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_last_mouse_motion_t = _now()
+		return
 	var new_device := device
 	if event is InputEventKey or event is InputEventMouseButton:
 		new_device = DEVICE_KBM
@@ -60,8 +66,16 @@ func _input(event: InputEvent) -> void:
 		device = new_device
 		device_changed.emit(device)
 
-# Short caps label for an action's primary binding on the current device.
-# Falls back to the action name in caps if the action isn't registered.
 func glyph_for(action: String) -> String:
 	var table: Dictionary = GAMEPAD_GLYPHS if device == DEVICE_GAMEPAD else KBM_GLYPHS
 	return table.get(action, action.to_upper())
+
+# True if the player is steering with a mouse right now (mouse moved within
+# MOUSE_ACTIVE_WINDOW seconds). Aim weapons fall back to drone-tracked aim
+# when this returns false, so keyboard-only and gamepad players still get a
+# meaningful aim direction.
+func mouse_active() -> bool:
+	return _now() - _last_mouse_motion_t < MOUSE_ACTIVE_WINDOW
+
+func _now() -> float:
+	return Time.get_ticks_msec() / 1000.0

@@ -84,7 +84,6 @@ func _build_ui() -> void:
 	_repair_btn.pressed.connect(_on_repair_pressed)
 	_repair_btn.mouse_entered.connect(func() -> void: AudioManager.play("ui_hover"))
 	vbox.add_child(_repair_btn)
-	# Initial glyph + subscribe so badges flip when the player switches devices.
 	_apply_input_glyphs()
 	InputHints.device_changed.connect(func(_d: int) -> void: _apply_input_glyphs())
 
@@ -274,8 +273,7 @@ func _on_ult_pressed() -> void:
 	AudioManager.play("ui_click")
 	_fire_ult()
 
-# Set both badges to the active device's prompt label. ROCKET uses the global
-# rocket_strike action (R / RB) instead of the per-mech ult.
+# ROCKET ults fire globally on rocket_strike (R/RB), not the per-mech ult action.
 func _apply_input_glyphs() -> void:
 	if _ult_badge_lbl != null:
 		var is_rocket := false

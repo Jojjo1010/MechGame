@@ -403,8 +403,6 @@ func _reveal_real_cards(half_dur: float, stagger: float) -> void:
 		tw.tween_interval(i * stagger)
 		tw.tween_property(card, "scale:x", 1.0, half_dur) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	# Grab focus on the leftmost card once all three are present so gamepad /
-	# keyboard players can navigate with ui_left/right and confirm with ui_accept.
 	if first_click != null:
 		first_click.call_deferred("grab_focus")
 
@@ -521,8 +519,6 @@ func _make_card(upgrade: Dictionary) -> Control:
 	click.pressed.connect(_on_card_pressed.bind(upgrade))
 	# Hover keeps the archetype hue — a small lighten + the scale lift carry
 	# the affordance, so the card doesn't snap to a different color entirely.
-	# focus_entered / focus_exited mirror mouse hover so gamepad / keyboard
-	# navigation gets the same lift + audio cue.
 	var idle_border: Color = bg.border_color
 	var hover_border: Color = idle_border.lightened(0.25)
 	var hover_in := func() -> void:

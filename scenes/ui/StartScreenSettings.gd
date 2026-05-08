@@ -105,8 +105,6 @@ func _build() -> void:
 	_back_btn = _make_primary_button("BACK")
 	_back_btn.pressed.connect(_on_back_pressed)
 	col.add_child(_back_btn)
-	# Re-grab focus every time the overlay opens — gamepad/keyboard users land
-	# on BACK by default. Settings rows take over via ui_down navigation.
 	visibility_changed.connect(_on_visibility_changed)
 
 # ── Rows ─────────────────────────────────────────────────────────────────────
@@ -286,8 +284,6 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 	return btn
 
 func _wire_button_motion(btn: Button) -> void:
-	# focus_entered / focus_exited mirror the mouse hover so gamepad and
-	# keyboard navigation get the same audio + scale-up affordance.
 	var hover_in := func() -> void:
 		if not is_instance_valid(btn):
 			return

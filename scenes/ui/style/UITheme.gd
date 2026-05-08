@@ -111,9 +111,6 @@ static func style_body(label: Label, color: Color = COLOR_TEXT_SECONDARY) -> voi
 	label.add_theme_color_override("font_color",    color)
 	label.add_theme_constant_override("outline_size", 0)
 
-# Focus outline — transparent fill, 2 px bright-lime border. Bound to the
-# `focus` slot on every interactive Button so gamepad / keyboard users can
-# see the current selection. Mouse users only see it briefly after click.
 static func focus_outline_box(corner_radius: int = PANEL_CORNER_R) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(0, 0, 0, 0)

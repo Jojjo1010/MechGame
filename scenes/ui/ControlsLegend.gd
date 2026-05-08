@@ -11,9 +11,8 @@ const ENTRIES := [
 	{key = "Scroll",   icon = "zoom",   action = "Zoom"},
 ]
 
-# Gamepad equivalents — same row order so the legend's vertical rhythm doesn't
-# jump when the player switches devices. MOVEMENT collapses to a single L
-# stick cap, Shift becomes A, Scroll becomes the trigger pair.
+# Same row order as ENTRIES so the legend's vertical rhythm doesn't jump when
+# the player switches devices.
 const GAMEPAD_ENTRIES := [
 	{key = "L_STICK",   icon = "move", action = "Move drone"},
 	{key = "BTN_A",     icon = "dash", action = "Dash"},
