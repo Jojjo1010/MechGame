@@ -92,6 +92,7 @@ var _row:          HBoxContainer = null
 var _chip_holder:  CenterContainer = null   # swapped each prompt — holds the key chip
 var _action_icon:  ActionIcon = null
 var _action_label: Label    = null
+var _action_subtitle: Label = null
 # Big lime check that pops in over the modal on every step completion. Lives
 # outside the modal panel so its scale punch isn't constrained by the panel
 # layout.
@@ -184,11 +185,24 @@ func _build() -> void:
 	_action_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_row.add_child(_action_icon)
 
+	var label_col := VBoxContainer.new()
+	label_col.add_theme_constant_override("separation", UITheme.PAD_S)
+	label_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	label_col.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_row.add_child(label_col)
+
 	_action_label = Label.new()
 	UITheme.style_label_caps(_action_label, UITheme.FONT_HEADING_M, UITheme.COLOR_TEXT_PRIMARY)
 	_action_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_action_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_row.add_child(_action_label)
+	label_col.add_child(_action_label)
+
+	_action_subtitle = Label.new()
+	UITheme.style_label_caps(_action_subtitle, UITheme.FONT_BODY, UITheme.COLOR_TEXT_SECONDARY)
+	_action_subtitle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_action_subtitle.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_action_subtitle.visible             = false
+	label_col.add_child(_action_subtitle)
 
 	# Check overlay — sibling to top_row so it can grow past the modal's edges
 	# when its scale punches above 1.0. Anchored to the panel area.
@@ -214,6 +228,12 @@ func _enter_state(new_state: State) -> void:
 	_state       = new_state
 	_state_timer = 0.0
 	_apply_tutorial_mute(new_state)
+	if _action_subtitle != null:
+		if new_state == State.ULT_SHOWING_LMB:
+			_action_subtitle.text = "NO MOUSE → AIMS AT DRONE"
+			_action_subtitle.visible = true
+		else:
+			_action_subtitle.visible = false
 	# Surface ContextUI (MechOptionsPanel + ControlsLegend + UltBar) once we're
 	# actually teaching ult/repair. Hiding it during WASD/CAMERA/SHIFT keeps the
 	# screen focused on the prompt being taught; revealing it on ULT_INTRO gives
@@ -235,7 +255,10 @@ func _enter_state(new_state: State) -> void:
 			_force_target_ult_ready()
 			_show_intro_for(_target_mech)
 		State.ULT_SHOWING_E:
-			_show_prompt(KeyChip.make_key_cap("E", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
+			# ROCKET ult is the global R-key strike; E still works near the mech
+			# but R is the primary flow players will use in real combat.
+			var key_letter := "R" if _weapon_name_for(_target_mech) == "ROCKET" else "E"
+			_show_prompt(KeyChip.make_key_cap(key_letter, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
 		State.ULT_SHOWING_LMB:
 			# Inline swap — modal stays visible. Reads as the second beat of
 			# one ult-firing action instead of a fresh prompt that surprises
@@ -363,15 +386,29 @@ func _on_done_button_pressed() -> void:
 	t.tween_callback(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/StartScreen.tscn"))
 
-# Mouse silhouette with the left button highlighted in lime — sized to match
-# the WASD cluster height so the prompt row stays visually balanced.
+# Mouse silhouette + SPACE cap side-by-side — aim-mode ults can be confirmed
+# with LMB OR Space/Enter (see GunWeapon/BouncyBeamWeapon/RocketWeapon), so the
+# chip surfaces both options for keyboard-only players.
 func _make_lmb_chip() -> Control:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", UITheme.PAD_S)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.custom_minimum_size = Vector2(0.0, KeyChip.KEY_SIZE * 2.0 + KeyChip.KEY_GAP)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	var m := MouseIcon.new()
 	m.highlight           = MouseIcon.Highlight.LEFT
 	m.body_color          = UITheme.COLOR_TEXT_PRIMARY
 	m.accent              = UITheme.COLOR_ACCENT_LIME
 	m.custom_minimum_size = Vector2(56.0, KeyChip.KEY_SIZE * 2.0 + KeyChip.KEY_GAP)
-	return m
+	m.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(m)
+
+	var space := KeyChip.make_key_cap("SPACE", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
+	space.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(space)
+
+	return box
 
 
 # ── Per-frame ────────────────────────────────────────────────────────────────
