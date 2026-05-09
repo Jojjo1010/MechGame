@@ -113,7 +113,7 @@ static func _flush_xp() -> void:
 static func _spawn_xp_pile(p_value: int, center: Vector3, parent: Node) -> void:
 	if p_value <= 0:
 		return
-	var huge_count: int = p_value / XP_HUGE_VAL
+	var huge_count: int = int(p_value / float(XP_HUGE_VAL))
 	var rem: int        = p_value - huge_count * XP_HUGE_VAL
 	var big_count: int  = rem / XP_BIG_VAL
 	rem                -= big_count * XP_BIG_VAL
