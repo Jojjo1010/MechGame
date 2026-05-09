@@ -61,6 +61,8 @@ func activate_ult() -> bool:
 var passive_spread_per_bullet: float = 4.0
 
 func _passive_fire() -> void:
+	if tutorial_muted:
+		return
 	if _aiming:
 		return   # pause passive fire while player aims
 	# Drone-as-spotter: every other passive shot fires straight through the

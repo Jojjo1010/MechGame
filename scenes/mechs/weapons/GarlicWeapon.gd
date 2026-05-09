@@ -50,6 +50,8 @@ func get_ult_cooldown() -> float:
 	return ULT_COOLDOWN
 
 func _passive_fire() -> void:
+	if tutorial_muted:
+		return
 	var radius := AURA_RADIUS * range_mult
 	var enemies := _enemies_in_radius(_mech.global_position, radius)
 	_update_aura_ring_scale()

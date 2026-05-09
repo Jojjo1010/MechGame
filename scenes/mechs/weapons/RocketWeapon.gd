@@ -36,6 +36,8 @@ func get_ult_cooldown() -> float:
 # ── Passive ───────────────────────────────────────────────────────────────────
 
 func _passive_fire() -> void:
+	if tutorial_muted:
+		return
 	var nearest := _nearest_enemy()
 	if nearest == null:
 		return

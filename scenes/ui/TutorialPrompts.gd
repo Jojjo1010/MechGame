@@ -213,6 +213,7 @@ func _build() -> void:
 func _enter_state(new_state: State) -> void:
 	_state       = new_state
 	_state_timer = 0.0
+	_apply_tutorial_mute(new_state)
 	# Surface ContextUI (MechOptionsPanel + ControlsLegend + UltBar) once we're
 	# actually teaching ult/repair. Hiding it during WASD/CAMERA/SHIFT keeps the
 	# screen focused on the prompt being taught; revealing it on ULT_INTRO gives
@@ -390,7 +391,11 @@ func _process(delta: float) -> void:
 	# to the success path. ULT_FADING is judged on its own resolve timer
 	# below so the success/fail branch is deterministic.
 	if not _ult_resolving and (_state == State.ULT_SHOWING_E or _state == State.ULT_SHOWING_LMB):
-		if not _dummies.is_empty() and _alive_dummy_count() == 0:
+		# Require the target mech's ult to actually be on cooldown before
+		# accepting an empty-dummy state as success — otherwise stray fire
+		# from non-target mechs can trip the shortcut without the player
+		# pressing E.
+		if not _dummies.is_empty() and _alive_dummy_count() == 0 and _target_mech_ult_on_cooldown():
 			_resolve_ult_success()
 			return
 	# Poll the target mech's weapon directly — the tutorial's own E listener
@@ -795,6 +800,28 @@ func _drone_near_target_mech() -> bool:
 
 func _drone_near_repair_target() -> bool:
 	return _drone_near_mech_xz(_repair_mech)
+
+# Silence non-target mechs during the ult tour so their auto-fire can't kill
+# the lesson dummies before the player demonstrates the ult. REPAIR mutes
+# everyone (combat is paused; player just needs to press F). DONE unmutes.
+func _apply_tutorial_mute(s: State) -> void:
+	var mute_target_only: bool = s == State.ULT_INTRO \
+		or s == State.ULT_SHOWING_E \
+		or s == State.ULT_SHOWING_LMB \
+		or s == State.ULT_FADING
+	var mute_all: bool = s == State.REPAIR_SHOWING
+	for mech in _mechs:
+		if mech == null or not is_instance_valid(mech):
+			continue
+		var w := _weapon_for(mech as Node3D)
+		if w == null:
+			continue
+		if mute_all:
+			w.set("tutorial_muted", true)
+		elif mute_target_only:
+			w.set("tutorial_muted", mech != _target_mech)
+		else:
+			w.set("tutorial_muted", false)
 
 # Match Game.gd's `_check_drone_proximity` — XZ distance only, no Y. The drone
 # hovers ~2.2 units off the floor while mechs sit at y=0; including Y here

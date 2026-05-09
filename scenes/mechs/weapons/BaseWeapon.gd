@@ -23,6 +23,10 @@ var _drone_nearby:  bool   = false
 # Activating the ult (activate_ult) still fires regardless — it doesn't go
 # through this branch.
 var tutorial_passive_disabled: bool = false
+# Per-state tutorial mute toggled by TutorialPrompts: silences this weapon's
+# regular auto-fire so a non-target mech can't kill the lesson dummies before
+# the player demonstrates the ult.
+var tutorial_muted: bool = false
 
 # ── Upgrade multipliers (modified by level-up cards) ─────────────────────────
 var damage_mult:            float = 1.0

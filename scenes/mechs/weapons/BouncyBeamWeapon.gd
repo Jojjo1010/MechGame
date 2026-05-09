@@ -47,6 +47,8 @@ func aim_action_text() -> String:
 	return "FIRE LASER" if _aim_has_start else "PLACE START"
 
 func _passive_fire() -> void:
+	if tutorial_muted:
+		return
 	_fire_beam(BOUNCES_PASSIVE + projectile_count_bonus, 1.0)
 
 # Override base activate_ult: enter aim mode instead of firing immediately.
