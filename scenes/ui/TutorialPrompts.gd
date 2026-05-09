@@ -481,6 +481,7 @@ func _process(delta: float) -> void:
 			# Wait ULT_RESOLVE_DELAY for projectiles/splash to land, then
 			# branch on success vs miss.
 			if not _ult_resolving and _state_timer >= ULT_RESOLVE_DELAY:
+				_log_dummy_state("ULT_FADING resolve")
 				if _all_dummies_engaged():
 					_resolve_ult_success()
 				else:
@@ -762,6 +763,26 @@ func _alive_dummy_count() -> int:
 # damage. A clean miss leaves dummies alive at full HP — without this, anything
 # that quietly freed a dummy (drone dash, off-screen cleanup, parent reparent)
 # could green-light a lesson the ult never touched.
+# TEMP diagnostic — remove once the "miss → still advances" / "second-attempt
+# bullets don't hit" reports stop reproducing. Logs each dummy's HP and
+# whether it's still in the scene tree.
+func _log_dummy_state(label: String) -> void:
+	var lines: Array[String] = []
+	lines.append("[TUTORIAL " + label + "] dummies=" + str(_dummies.size()))
+	for i in _dummies.size():
+		var d: Node3D = _dummies[i]
+		if not is_instance_valid(d):
+			lines.append("  [%d] FREED" % i)
+			continue
+		var hp: float = float(d.get("health"))
+		var max_hp: float = float(d.get("max_health"))
+		var pos: Vector3 = d.global_position
+		lines.append("  [%d] hp=%.1f/%.1f pos=(%.1f,%.1f,%.1f)" % [i, hp, max_hp, pos.x, pos.y, pos.z])
+	if _target_mech != null and is_instance_valid(_target_mech):
+		var mp: Vector3 = _target_mech.global_position
+		lines.append("  target_mech pos=(%.1f,%.1f,%.1f)" % [mp.x, mp.y, mp.z])
+	print("\n".join(lines))
+
 func _all_dummies_engaged() -> bool:
 	if _dummies.is_empty():
 		return false
