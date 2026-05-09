@@ -481,7 +481,6 @@ func _process(delta: float) -> void:
 			# Wait ULT_RESOLVE_DELAY for projectiles/splash to land, then
 			# branch on success vs miss.
 			if not _ult_resolving and _state_timer >= ULT_RESOLVE_DELAY:
-				_log_dummy_state("ULT_FADING resolve")
 				if _all_dummies_engaged():
 					_resolve_ult_success()
 				else:
@@ -541,16 +540,22 @@ func _resolve_ult_success() -> void:
 # formation — wipe survivors, re-attach the marker, and re-enter ULT_INTRO so
 # the same archetype's intro + ult prompt play again. _ult_mech_idx stays put.
 func _restart_current_mech() -> void:
+	# Latch _ult_resolving for the same reason _resolve_ult_success does — _state
+	# stays at ULT_FADING during the fade tween, so without this the resolve
+	# check re-fires every frame and queues a fresh tween + ULT_INTRO each time,
+	# spawning duplicate dummies on top of each other.
+	_ult_resolving = true
 	_clear_dummies()
 	if _target_mech == null or not is_instance_valid(_target_mech):
+		_ult_resolving = false
 		_advance_to_next_ult()
 		return
 	_attach_marker_to(_target_mech)
-	# Brief fade-out so the re-intro reads as a fresh attempt rather than an
-	# abrupt content swap on the still-visible panel.
 	var t := create_tween()
 	t.tween_property(_modal_root, "modulate:a", 0.0, 0.20)
-	t.tween_callback(func() -> void: _enter_state(State.ULT_INTRO))
+	t.tween_callback(func() -> void:
+		_ult_resolving = false
+		_enter_state(State.ULT_INTRO))
 
 func _advance_to_next_ult() -> void:
 	_clear_dummies()
@@ -763,26 +768,6 @@ func _alive_dummy_count() -> int:
 # damage. A clean miss leaves dummies alive at full HP — without this, anything
 # that quietly freed a dummy (drone dash, off-screen cleanup, parent reparent)
 # could green-light a lesson the ult never touched.
-# TEMP diagnostic — remove once the "miss → still advances" / "second-attempt
-# bullets don't hit" reports stop reproducing. Logs each dummy's HP and
-# whether it's still in the scene tree.
-func _log_dummy_state(label: String) -> void:
-	var lines: Array[String] = []
-	lines.append("[TUTORIAL " + label + "] dummies=" + str(_dummies.size()))
-	for i in _dummies.size():
-		var d: Node3D = _dummies[i]
-		if not is_instance_valid(d):
-			lines.append("  [%d] FREED" % i)
-			continue
-		var hp: float = float(d.get("health"))
-		var max_hp: float = float(d.get("max_health"))
-		var pos: Vector3 = d.global_position
-		lines.append("  [%d] hp=%.1f/%.1f pos=(%.1f,%.1f,%.1f)" % [i, hp, max_hp, pos.x, pos.y, pos.z])
-	if _target_mech != null and is_instance_valid(_target_mech):
-		var mp: Vector3 = _target_mech.global_position
-		lines.append("  target_mech pos=(%.1f,%.1f,%.1f)" % [mp.x, mp.y, mp.z])
-	print("\n".join(lines))
-
 func _all_dummies_engaged() -> bool:
 	if _dummies.is_empty():
 		return false
