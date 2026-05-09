@@ -56,6 +56,7 @@ var _parade_loop_w: float = 0.0 # width of the formation loop for wraparound
 # when the settings overlay is open.
 var _main_content:    Control = null
 var _settings_overlay: Control = null
+var _play_btn:        Button  = null
 
 func _ready() -> void:
 	layer = 0
@@ -66,6 +67,12 @@ func _ready() -> void:
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_build()
+	# Wait two frames so CenterContainer has finished laying out the buttons —
+	# grab_focus before layout completes can silently no-op.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if _play_btn != null and is_instance_valid(_play_btn):
+		_play_btn.grab_focus()
 
 func _build() -> void:
 	var root := Control.new()
@@ -186,18 +193,18 @@ func _build() -> void:
 	you_arrow.offset_bottom = you_arrow.offset_top + ARROW_H
 	_main_content.add_child(you_arrow)
 
-	var play_btn  := _make_primary_button("PLAY")
+	_play_btn     = _make_primary_button("PLAY")
 	var how_btn   := _make_secondary_button("HOW TO PLAY")
 	var stg_btn   := _make_secondary_button("SETTINGS")
 	var grg_btn   := _make_disabled_button("GARAGE — COMING SOON")
 	var quit_btn  := _make_secondary_button("QUIT")
 
-	play_btn.pressed.connect(_on_play_pressed)
+	_play_btn.pressed.connect(_on_play_pressed)
 	how_btn.pressed.connect(_on_how_to_play_pressed)
 	stg_btn.pressed.connect(_on_settings_pressed)
 	quit_btn.pressed.connect(_on_quit_pressed)
 
-	btn_col.add_child(play_btn)
+	btn_col.add_child(_play_btn)
 	btn_col.add_child(how_btn)
 	btn_col.add_child(stg_btn)
 	btn_col.add_child(grg_btn)
@@ -212,7 +219,7 @@ func _build() -> void:
 	_settings_overlay.closed.connect(_on_settings_closed)
 	root.add_child(_settings_overlay)
 
-	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [play_btn, how_btn, stg_btn, grg_btn, quit_btn])
+	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [_play_btn, how_btn, stg_btn, grg_btn, quit_btn])
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
@@ -275,27 +282,29 @@ func _make_button_base(text: String, font_color: Color) -> Button:
 	btn.add_theme_font_size_override("font_size", UITheme.FONT_LABEL_CAPS)
 	btn.add_theme_color_override("font_color",      font_color)
 	btn.add_theme_constant_override("outline_size", 0)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus", UITheme.focus_outline_box(PANEL_CORNER_R))
 	btn.pivot_offset = Vector2(BTN_W * 0.5, BTN_H * 0.5)
 	return btn
 
 func _wire_button_motion(btn: Button) -> void:
 	# Mouse signals can fire while the scene is tearing down (PLAY/HOW TO PLAY
-	# pressed → change_scene → btn queued for free). The captured `btn` reads
-	# as freed inside the lambda, so guard each tween creation.
-	btn.mouse_entered.connect(func() -> void:
+	# pressed → change_scene → btn queued for free); guard each tween creation
+	# so the captured `btn` isn't dereferenced after free.
+	var hover_in := func() -> void:
 		if not is_instance_valid(btn):
 			return
 		AudioManager.play("ui_hover")
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DUR)
-	)
-	btn.mouse_exited.connect(func() -> void:
+	var hover_out := func() -> void:
 		if not is_instance_valid(btn):
 			return
 		var t := btn.create_tween()
 		t.tween_property(btn, "scale", Vector2.ONE, HOVER_DUR)
-	)
+	btn.mouse_entered.connect(hover_in)
+	btn.focus_entered.connect(hover_in)
+	btn.mouse_exited.connect(hover_out)
+	btn.focus_exited.connect(hover_out)
 	btn.button_down.connect(func() -> void:
 		if not is_instance_valid(btn):
 			return
@@ -417,6 +426,9 @@ func _on_settings_closed() -> void:
 		return
 	_settings_overlay.visible = false
 	_main_content.visible = true
+	# Restore focus to PLAY when the overlay closes — settings stole it.
+	if _play_btn != null and is_instance_valid(_play_btn):
+		_play_btn.call_deferred("grab_focus")
 
 func _on_quit_pressed() -> void:
 	AudioManager.play("ui_click")
