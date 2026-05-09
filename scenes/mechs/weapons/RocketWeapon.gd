@@ -117,6 +117,13 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_marking()
 			get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE or event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+			_commit_strike()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_Q:
+			_cancel_marking()
+			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	super._process(delta)

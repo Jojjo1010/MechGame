@@ -21,6 +21,7 @@ var _aim_dir:          Vector3 = Vector3.ZERO
 var _aim_root:         Node3D  = null
 var _aim_im:           ImmediateMesh = null
 var _aim_mat:          StandardMaterial3D = null
+var _mouse_moved_in_aim: bool   = false   # cleared on _start_aiming, set on first mouse motion during aim — drives drone-fallback aim for keyboard-only players
 var _gun_drone_nearby: bool    = false
 var _shot_counter:     int     = 0   # ticks per passive fire; drives Headshot crit timing
 var _spotter_toggle:   bool    = false  # alternates targeting: false = nearest to mech, true = nearest to drone
@@ -113,6 +114,7 @@ func _passive_fire() -> void:
 # ── Aiming mode ──────────────────────────────────────────────────────────────
 func _start_aiming() -> void:
 	_aiming = true
+	_mouse_moved_in_aim = false
 	_hide_e_label()
 	_build_cone()
 
@@ -152,15 +154,25 @@ func _fire_ult_wave(dir: Vector3) -> void:
 	_mech.trigger_flash()
 	AudioManager.play("gun_ult", muzzle, -2.0)
 
-# ── Input: mouse aim + click to fire ─────────────────────────────────────────
+# ── Input: mouse aim + click / Space + Q to fire ─────────────────────────────
 func _input(event: InputEvent) -> void:
 	if not _aiming:
+		return
+	if event is InputEventMouseMotion:
+		_mouse_moved_in_aim = true
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_confirm_and_fire()
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_aiming()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE or event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+			_confirm_and_fire()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_Q:
 			_cancel_aiming()
 			get_viewport().set_input_as_handled()
 
@@ -170,23 +182,31 @@ func _process(delta: float) -> void:
 	if not _aiming or _mech == null:
 		return
 
-	# Project mouse cursor onto the ground plane at mech height
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
-		return
-	var mouse  := get_viewport().get_mouse_position()
-	var ray_o  := camera.project_ray_origin(mouse)
-	var ray_d  := camera.project_ray_normal(mouse)
-	var plane_y := _mech.global_position.y
-	if abs(ray_d.y) > 0.001:
-		var t      := (plane_y - ray_o.y) / ray_d.y
-		var target := ray_o + ray_d * t
-		var diff   := target - _mech.global_position
-		diff.y = 0.0
-		if diff.length_squared() > 0.1:
-			_aim_dir = diff.normalized()
+	var target := _aim_target_pos()
+	var diff   := target - _mech.global_position
+	diff.y = 0.0
+	if diff.length_squared() > 0.1:
+		_aim_dir = diff.normalized()
 
 	_update_cone()
+
+# Mouse projection while the player has been moving the mouse in this aim
+# session; drone-tracked otherwise so keyboard-only / gamepad players still
+# get a usable aim direction by steering the drone over the target.
+func _aim_target_pos() -> Vector3:
+	var camera := get_viewport().get_camera_3d()
+	if camera != null and _mouse_moved_in_aim:
+		var mouse  := get_viewport().get_mouse_position()
+		var ray_o  := camera.project_ray_origin(mouse)
+		var ray_d  := camera.project_ray_normal(mouse)
+		var plane_y := _mech.global_position.y
+		if abs(ray_d.y) > 0.001:
+			var t := (plane_y - ray_o.y) / ray_d.y
+			return ray_o + ray_d * t
+	var drone := get_tree().get_first_node_in_group("drones") as Node3D
+	if drone != null and is_instance_valid(drone):
+		return Vector3(drone.global_position.x, _mech.global_position.y, drone.global_position.z)
+	return _mech.global_position - Vector3(0, 0, CONE_LEN)
 
 # ── Cone mesh ─────────────────────────────────────────────────────────────────
 func _build_cone() -> void:

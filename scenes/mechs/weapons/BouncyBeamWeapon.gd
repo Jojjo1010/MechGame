@@ -21,6 +21,7 @@ var _aiming:        bool   = false
 var _aim_has_start: bool   = false
 var _aim_start:     Vector3 = Vector3.ZERO
 var _ground_cursor: Vector3 = Vector3.ZERO
+var _mouse_moved_in_aim: bool = false   # cleared on _start_aiming, set on first mouse motion during aim — drives drone-fallback aim for keyboard-only players
 var _aim_root:      Node3D = null
 var _aim_start_marker:  MeshInstance3D = null
 var _aim_cursor_marker: MeshInstance3D = null
@@ -61,6 +62,7 @@ func activate_ult() -> bool:
 func _start_aiming() -> void:
 	_aiming = true
 	_aim_has_start = false
+	_mouse_moved_in_aim = false
 	_build_preview()
 
 func _cancel_aiming() -> void:
@@ -71,22 +73,27 @@ func _cancel_aiming() -> void:
 func _input(event: InputEvent) -> void:
 	if not _aiming:
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if not _aim_has_start:
-				_aim_start = _ground_cursor
-				_aim_has_start = true
-			else:
-				var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
-				_aiming = false
-				_aim_has_start = false
-				_reset_cooldown()
-				_destroy_preview()
-				_spawn_trace(_aim_start, endpt)
-			get_viewport().set_input_as_handled()
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_cancel_aiming()
-			get_viewport().set_input_as_handled()
+	if event is InputEventMouseMotion:
+		_mouse_moved_in_aim = true
+		return
+	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
+			or (event is InputEventKey and event.pressed and not event.echo \
+				and (event.keycode == KEY_SPACE or event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER)):
+		if not _aim_has_start:
+			_aim_start = _ground_cursor
+			_aim_has_start = true
+		else:
+			var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
+			_aiming = false
+			_aim_has_start = false
+			_reset_cooldown()
+			_destroy_preview()
+			_spawn_trace(_aim_start, endpt)
+		get_viewport().set_input_as_handled()
+	elif (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT) \
+			or (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_Q):
+		_cancel_aiming()
+		get_viewport().set_input_as_handled()
 
 # Compute the second-click endpoint at fixed beam length from the start point,
 # in the cursor direction. Length is constant; cursor only chooses direction.
@@ -284,19 +291,28 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	if not _aiming or _mech == null or not is_instance_valid(_mech):
 		return
-	# Project mouse cursor onto ground plane at mech height
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
-		return
-	var mouse  := get_viewport().get_mouse_position()
-	var ray_o  := camera.project_ray_origin(mouse)
-	var ray_d  := camera.project_ray_normal(mouse)
-	var plane_y := _mech.global_position.y
-	if abs(ray_d.y) > 0.001:
-		var t := (plane_y - ray_o.y) / ray_d.y
-		_ground_cursor = ray_o + ray_d * t
-		_ground_cursor.y = plane_y
+	_ground_cursor = _aim_cursor_pos()
 	_update_preview()
+
+# Mouse projection while the player has been moving the mouse in this aim
+# session; drone-tracked otherwise so keyboard-only / gamepad players still
+# get a usable aim direction by steering the drone over the target.
+func _aim_cursor_pos() -> Vector3:
+	var plane_y := _mech.global_position.y
+	var camera := get_viewport().get_camera_3d()
+	if camera != null and _mouse_moved_in_aim:
+		var mouse  := get_viewport().get_mouse_position()
+		var ray_o  := camera.project_ray_origin(mouse)
+		var ray_d  := camera.project_ray_normal(mouse)
+		if abs(ray_d.y) > 0.001:
+			var t := (plane_y - ray_o.y) / ray_d.y
+			var p := ray_o + ray_d * t
+			p.y = plane_y
+			return p
+	var drone := get_tree().get_first_node_in_group("drones") as Node3D
+	if drone != null and is_instance_valid(drone):
+		return Vector3(drone.global_position.x, plane_y, drone.global_position.z)
+	return _mech.global_position
 
 func _build_preview() -> void:
 	_aim_root = Node3D.new()
