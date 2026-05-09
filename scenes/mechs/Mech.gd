@@ -9,7 +9,7 @@ const BURN_DAMAGE_PER_SEC := 2.0
 const HealthBar3D   := preload("res://scenes/ui/HealthBar3D.gd")
 const DamageNumber  := preload("res://scenes/ui/DamageNumber.gd")
 
-@export var max_health: float = 100.0
+@export var max_health: float = 150.0
 @export var is_lead: bool = false
 
 var health: float = max_health
@@ -365,9 +365,8 @@ func start_repair_grace(seconds: float) -> void:
 	_repair_grace_timer = maxf(_repair_grace_timer, seconds)
 
 func repair() -> void:
-	# Partial heal — repair clamps the mech up to 50 HP (not full restore), so
-	# stacking repairs through a long wave still costs you something.
-	var target: float = minf(50.0, max_health)
+	# Partial heal — stacking repairs through a long wave still costs you something.
+	var target: float = max_health * 0.5
 	health = maxf(health, target)
 	health_changed.emit(health, max_health)
 	if is_instance_valid(_health_bar):

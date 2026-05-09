@@ -224,7 +224,7 @@ These are useful for quick balance discussions without reading the source:
 | `BASE_ENEMIES` | 5 | `WaveSpawner.gd` |
 | Per-wave count growth | `+ (n-1) × 2` | `WaveSpawner.gd` |
 | `WIN_WAVE` | 30 | `RunManager.gd` |
-| Mech `max_health` | 100.0 | `Mech.gd` |
+| Mech `max_health` | 150.0 | `Mech.gd` |
 | Enemy `max_health` (baseline) | 40.0 | `Enemy.gd` |
 | Enemy `ATTACK_DAMAGE` | **6.0** (was 8.0 pre-tune) | `Enemy.gd` |
 | Enemy `ATTACK_INTERVAL` | 1.0 s | `Enemy.gd` |
