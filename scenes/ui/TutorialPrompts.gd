@@ -428,11 +428,7 @@ func _process(delta: float) -> void:
 	# to the success path. ULT_FADING is judged on its own resolve timer
 	# below so the success/fail branch is deterministic.
 	if not _ult_resolving and (_state == State.ULT_SHOWING_E or _state == State.ULT_SHOWING_LMB):
-		# Require the target mech's ult to actually be on cooldown before
-		# accepting an empty-dummy state as success — otherwise stray fire
-		# from non-target mechs can trip the shortcut without the player
-		# pressing E.
-		if not _dummies.is_empty() and _alive_dummy_count() == 0 and _target_mech_ult_on_cooldown():
+		if _all_dummies_engaged() and _target_mech_ult_on_cooldown():
 			_resolve_ult_success()
 			return
 	# Poll the target mech's weapon directly — the tutorial's own E listener
@@ -485,7 +481,7 @@ func _process(delta: float) -> void:
 			# Wait ULT_RESOLVE_DELAY for projectiles/splash to land, then
 			# branch on success vs miss.
 			if not _ult_resolving and _state_timer >= ULT_RESOLVE_DELAY:
-				if _alive_dummy_count() == 0:
+				if _all_dummies_engaged():
 					_resolve_ult_success()
 				else:
 					_restart_current_mech()
@@ -761,6 +757,22 @@ func _alive_dummy_count() -> int:
 		if is_instance_valid(d):
 			n += 1
 	return n
+
+# Stricter than "all dummies dead": every dummy must have been killed OR taken
+# damage. A clean miss leaves dummies alive at full HP — without this, anything
+# that quietly freed a dummy (drone dash, off-screen cleanup, parent reparent)
+# could green-light a lesson the ult never touched.
+func _all_dummies_engaged() -> bool:
+	if _dummies.is_empty():
+		return false
+	for d in _dummies:
+		if not is_instance_valid(d):
+			continue
+		var hp: float = float(d.get("health"))
+		var max_hp: float = float(d.get("max_health"))
+		if hp >= max_hp:
+			return false
+	return true
 
 # Force enough damage on a mech to push it below BURN_THRESHOLD so
 # `needs_repair()` returns true. Without this, REPAIR_SHOWING would point at
