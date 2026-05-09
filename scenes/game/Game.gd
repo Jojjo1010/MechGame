@@ -81,8 +81,12 @@ var _drone_hide_dt_accum: float = 0.0
 
 # Slow-mo applied while any mech's weapon is in aim mode (Gun cone, Rocket
 # marker). Mouse input is real-time, so aiming feels precise while enemies
-# and the conga line crawl. Restored to 1.0 the moment aim mode exits.
+# and the conga line crawl. Restored to 1.0 the moment aim mode exits, or
+# after AIM_SLOW_MO_MAX_DURATION real seconds — uncapped slow-mo lets the
+# player stall the whole game indefinitely by hovering in aim.
 const AIM_SLOW_MO_SCALE := 0.35
+const AIM_SLOW_MO_MAX_DURATION := 3.0
+var _aim_slow_mo_start_msec: int = -1
 
 const BURST_VFX = preload("res://scenes/vfx/BurstVFX.gd")
 
@@ -416,7 +420,14 @@ func _check_drone_proximity() -> void:
 		_left_click_hint.set_hint_visible(any_aiming)
 		if any_aiming:
 			_left_click_hint.set_action_text(action_text)
-	Engine.time_scale = AIM_SLOW_MO_SCALE if any_aiming else 1.0
+	if any_aiming:
+		if _aim_slow_mo_start_msec < 0:
+			_aim_slow_mo_start_msec = Time.get_ticks_msec()
+		var elapsed := (Time.get_ticks_msec() - _aim_slow_mo_start_msec) / 1000.0
+		Engine.time_scale = AIM_SLOW_MO_SCALE if elapsed < AIM_SLOW_MO_MAX_DURATION else 1.0
+	else:
+		_aim_slow_mo_start_msec = -1
+		Engine.time_scale = 1.0
 
 func _on_mech_repair_pressed(_mech: Node3D) -> void:
 	_try_start_repair()
