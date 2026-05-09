@@ -842,27 +842,24 @@ func _drone_near_target_mech() -> bool:
 func _drone_near_repair_target() -> bool:
 	return _drone_near_mech_xz(_repair_mech)
 
-# Silence non-target mechs during the ult tour so their auto-fire can't kill
-# the lesson dummies before the player demonstrates the ult. REPAIR mutes
-# everyone (combat is paused; player just needs to press F). DONE unmutes.
+# Silence ALL mechs' passive fire during the ult tour — including the target
+# mech — so only the ult itself can kill the dummies. Without this, the
+# target mech's own regular bullets clean up after a missed ult during the
+# 1.5 s resolve window and the lesson green-lights a miss. Ults route
+# through activate_ult / _fire_ult, NOT _passive_fire, so they still work.
 func _apply_tutorial_mute(s: State) -> void:
-	var mute_target_only: bool = s == State.ULT_INTRO \
+	var mute_all: bool = s == State.ULT_INTRO \
 		or s == State.ULT_SHOWING_E \
 		or s == State.ULT_SHOWING_LMB \
-		or s == State.ULT_FADING
-	var mute_all: bool = s == State.REPAIR_SHOWING
+		or s == State.ULT_FADING \
+		or s == State.REPAIR_SHOWING
 	for mech in _mechs:
 		if mech == null or not is_instance_valid(mech):
 			continue
 		var w := _weapon_for(mech as Node3D)
 		if w == null:
 			continue
-		if mute_all:
-			w.set("tutorial_muted", true)
-		elif mute_target_only:
-			w.set("tutorial_muted", mech != _target_mech)
-		else:
-			w.set("tutorial_muted", false)
+		w.set("tutorial_muted", mute_all)
 
 # Match Game.gd's `_check_drone_proximity` — XZ distance only, no Y. The drone
 # hovers ~2.2 units off the floor while mechs sit at y=0; including Y here
