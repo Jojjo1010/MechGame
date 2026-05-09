@@ -111,14 +111,23 @@ static func style_body(label: Label, color: Color = COLOR_TEXT_SECONDARY) -> voi
 	label.add_theme_color_override("font_color",    color)
 	label.add_theme_constant_override("outline_size", 0)
 
-# 2 px bright-lime border on transparent fill — drawn on top of the button's
-# normal stylebox when focused, so keyboard navigation has a visible target.
+# 4 px bright-lime ring with a soft outer glow, pushed 4 px outside the button
+# bounds so it reads even when the button is hot-pink filled. Keyboard / gamepad
+# users see a clearly distinct selection vs the mouse-hover state.
 static func focus_outline_box(corner_radius: int = PANEL_CORNER_R) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(0, 0, 0, 0)
 	box.border_color = COLOR_BORDER_BRIGHT
-	box.set_border_width_all(2)
-	box.set_corner_radius_all(corner_radius)
+	box.set_border_width_all(4)
+	box.expand_margin_left = 4
+	box.expand_margin_right = 4
+	box.expand_margin_top = 4
+	box.expand_margin_bottom = 4
+	box.set_corner_radius_all(corner_radius + 4)
+	var glow := COLOR_BORDER_BRIGHT
+	glow.a = 0.45
+	box.shadow_color = glow
+	box.shadow_size = 8
 	return box
 
 # Primary button styling — solid hot-pink fill, no border, darker on hover.
