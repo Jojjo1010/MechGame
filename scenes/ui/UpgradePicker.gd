@@ -391,15 +391,32 @@ func _flip_cards_to_real() -> void:
 func _reveal_real_cards(half_dur: float, stagger: float) -> void:
 	for child in _cards_row.get_children():
 		child.queue_free()
+	var first_click: Button = null
 	for i in _offered.size():
 		var card := _make_card(_offered[i])
 		card.pivot_offset = Vector2(CARD_W * 0.5, CARD_H * 0.5)
 		card.scale.x = 0.0
 		_cards_row.add_child(card)
+		if i == 0:
+			first_click = _find_card_button(card)
 		var tw := create_tween()
 		tw.tween_interval(i * stagger)
 		tw.tween_property(card, "scale:x", 1.0, half_dur) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# Auto-focus the leftmost card so arrow / WASD navigation starts there
+	# and Enter picks. Mouse users see the focus outline appear; clicking
+	# elsewhere works as before.
+	if first_click != null:
+		first_click.call_deferred("grab_focus")
+
+func _find_card_button(card: Node) -> Button:
+	for child in card.get_children():
+		if child is Button:
+			return child as Button
+		var nested := _find_card_button(child)
+		if nested != null:
+			return nested
+	return null
 
 func _make_placeholder_card(seed_value: int = 0) -> Control:
 	# Same PanelContainer shape as a real card so the row geometry stays
@@ -504,17 +521,22 @@ func _make_card(upgrade: Dictionary) -> Control:
 	click.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
 	click.pressed.connect(_on_card_pressed.bind(upgrade))
 	# Hover keeps the archetype hue — a small lighten + the scale lift carry
-	# the affordance, so the card doesn't snap to a different color entirely.
+	# the affordance. focus_entered / focus_exited mirror the mouse signals so
+	# keyboard navigation gets the same lift + audio.
 	var idle_border: Color = bg.border_color
 	var hover_border: Color = idle_border.lightened(0.25)
-	click.mouse_entered.connect(func() -> void:
+	var hover_in := func() -> void:
 		AudioManager.play("ui_hover")
 		bg.border_color = hover_border
 		card.scale = Vector2(1.03, 1.03)
-		card.pivot_offset = card.size * 0.5)
-	click.mouse_exited.connect(func() -> void:
+		card.pivot_offset = card.size * 0.5
+	var hover_out := func() -> void:
 		bg.border_color = idle_border
-		card.scale = Vector2.ONE)
+		card.scale = Vector2.ONE
+	click.mouse_entered.connect(hover_in)
+	click.focus_entered.connect(hover_in)
+	click.mouse_exited.connect(hover_out)
+	click.focus_exited.connect(hover_out)
 	card.add_child(click)
 
 	# Top row: rarity tag + (when fresh / unique) a NEW badge in hot pink.
