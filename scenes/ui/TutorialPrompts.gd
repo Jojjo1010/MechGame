@@ -631,13 +631,15 @@ func _spawn_shift_dummies() -> void:
 	var lead: Node3D = _mechs[0]
 	if not is_instance_valid(lead):
 		return
+	# Middle dummy is shielded so the player sees the dash break the overshield —
+	# foreshadows the shielded enemies that appear in real waves.
 	var offsets := [
 		Vector3(0.0, 0.0, -5.0),
 		Vector3(0.0, 0.0, -7.5),
 		Vector3(0.0, 0.0, -10.0),
 	]
-	for off in offsets:
-		_spawn_dummy(lead, off)
+	for i in offsets.size():
+		_spawn_dummy(lead, offsets[i], i == 1)
 
 # Per-mech formations sized to showcase each weapon's ult shape — fan for
 # GUN, aura cluster for GARLIC, line for the chained beam, tight cluster for
@@ -698,12 +700,14 @@ func _spawn_dummies_for(mech: Node3D) -> void:
 # world_offset`. Godot computes the local position once, so as the anchor
 # marches forward each frame the dummy travels with it and the world-space
 # offset stays constant — formation reads as fixed relative to the mech.
-func _spawn_dummy(anchor: Node3D, world_offset: Vector3) -> void:
+func _spawn_dummy(anchor: Node3D, world_offset: Vector3, shielded: bool = false) -> void:
 	if anchor == null or not is_instance_valid(anchor):
 		return
 	var d: Node3D = ENEMY_SCENE.instantiate()
 	d.set("is_dummy", true)
 	d.set("max_health", TUTORIAL_DUMMY_HP)
+	if shielded:
+		d.set("is_shielded", true)
 	anchor.add_child(d)
 	d.global_position = anchor.global_position + world_offset
 	_dummies.append(d)

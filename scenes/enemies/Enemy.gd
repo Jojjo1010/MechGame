@@ -134,7 +134,7 @@ func _ready() -> void:
 	_add_blob_shadow(0.5, 2.5)
 	# HP bar is lazy-created on first hit — splash/AOE often kills enemies
 	# without ever damaging them solo, so the bar stays unbuilt for those.
-	if is_shielded and not is_dummy:
+	if is_shielded:
 		_build_shield_visual()
 
 func _apply_wave_scaling() -> void:
