@@ -115,7 +115,7 @@ static func _spawn_xp_pile(p_value: int, center: Vector3, parent: Node) -> void:
 		return
 	var huge_count: int = int(p_value / float(XP_HUGE_VAL))
 	var rem: int        = p_value - huge_count * XP_HUGE_VAL
-	var big_count: int  = rem / XP_BIG_VAL
+	var big_count: int  = int(rem / float(XP_BIG_VAL))
 	rem                -= big_count * XP_BIG_VAL
 	for i in huge_count:
 		var off := Vector3(randf_range(-1.4, 1.4), 0.5, randf_range(-1.4, 1.4))
@@ -176,9 +176,9 @@ static func _flush_gold() -> void:
 static func _spawn_gold_pile(p_value: int, center: Vector3, parent: Node) -> void:
 	if p_value <= 0:
 		return
-	var huge_count: int = p_value / GOLD_HUGE_VAL
+	var huge_count: int = int(p_value / float(GOLD_HUGE_VAL))
 	var rem: int        = p_value - huge_count * GOLD_HUGE_VAL
-	var big_count: int  = rem / GOLD_BIG_VAL
+	var big_count: int  = int(rem / float(GOLD_BIG_VAL))
 	rem                -= big_count * GOLD_BIG_VAL
 	for i in huge_count:
 		var off := Vector3(randf_range(-1.4, 1.4), 0.5, randf_range(-1.4, 1.4))

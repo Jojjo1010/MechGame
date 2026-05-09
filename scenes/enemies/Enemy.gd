@@ -177,7 +177,7 @@ func _palette_for(wave: int, elite: bool) -> Dictionary:
 			emission        = Color(1.00, 0.30, 0.85),
 			emission_energy = 1.4,
 		}
-	var tier: int = clampi((wave - 1) / 10, 0, 2)
+	var tier: int = clampi(int((wave - 1) / 10.0), 0, 2)
 	match tier:
 		1:
 			return {  # mid-run: deeper red, slight purple shift
