@@ -12,7 +12,7 @@ extends CanvasLayer
 
 const APPROACH_RADIUS    := 5.0
 const FADE_DUR           := 0.30
-const PRACTICE_DUR       := 5.0    # seconds of free play after each prompt
+const PRACTICE_DUR       := 2.0    # seconds of free play after each prompt
 # How long the per-mech archetype intro lingers before swapping to the ult
 # prompt. Long enough to read the name + tagline, short enough not to drag.
 const INTRO_DUR          := 2.5
@@ -77,6 +77,10 @@ const ICON_SIZE  := 40.0
 enum State {
 	WASD_SHOWING,    WASD_FADING,
 	SHIFT_SHOWING,   SHIFT_FADING,
+	# Second beat of the dash lesson — same Shift input, but the formation is
+	# a single shielded enemy so the player sees the overshield-break behavior
+	# spelled out instead of mixed in with the normal dummies.
+	SHIFT_SHIELD_SHOWING, SHIFT_SHIELD_FADING,
 	ULT_INTRO,       # archetype name + tagline, auto-advances after INTRO_DUR
 	ULT_SHOWING_E,   ULT_SHOWING_LMB,   ULT_FADING,
 	REPAIR_SHOWING,
@@ -229,11 +233,18 @@ func _enter_state(new_state: State) -> void:
 	_state_timer = 0.0
 	_apply_tutorial_mute(new_state)
 	if _action_subtitle != null:
-		if new_state == State.ULT_SHOWING_LMB:
-			_action_subtitle.text = "NO MOUSE → AIMS AT DRONE"
-			_action_subtitle.visible = true
-		else:
-			_action_subtitle.visible = false
+		match new_state:
+			State.SHIFT_SHOWING:
+				_action_subtitle.text = "DEALS SMALL DAMAGE TO ENEMIES"
+				_action_subtitle.visible = true
+			State.SHIFT_SHIELD_SHOWING:
+				_action_subtitle.text = "BREAKS THE OVERSHIELD"
+				_action_subtitle.visible = true
+			State.ULT_SHOWING_LMB:
+				_action_subtitle.text = "NO MOUSE → AIMS AT DRONE"
+				_action_subtitle.visible = true
+			_:
+				_action_subtitle.visible = false
 	# Surface ContextUI (MechOptionsPanel + ControlsLegend + UltBar) once we're
 	# actually teaching ult/repair. Hiding it during WASD/CAMERA/SHIFT keeps the
 	# screen focused on the prompt being taught; revealing it on ULT_INTRO gives
@@ -248,6 +259,10 @@ func _enter_state(new_state: State) -> void:
 		State.SHIFT_SHOWING:
 			_spawn_shift_dummies()
 			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH THROUGH ENEMIES")
+		State.SHIFT_SHIELD_SHOWING:
+			_clear_dummies()
+			_spawn_shift_shield_dummy()
+			_show_prompt(KeyChip.make_key_cap("SHIFT", KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT), "dash", "DASH SHIELDED ENEMY")
 		State.ULT_INTRO:
 			# _target_mech / _ult_mech_idx are set by _advance_to_next_ult()
 			# before this state is entered.
@@ -268,7 +283,7 @@ func _enter_state(new_state: State) -> void:
 			_repair_mech = _force_damage_for_repair()
 			_attach_marker_to(_repair_mech)
 			_show_prompt(KeyChip.make_key_cap("F", KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "repair", "REPAIR MARKED MECH")
-		State.WASD_FADING, State.SHIFT_FADING:
+		State.WASD_FADING, State.SHIFT_FADING, State.SHIFT_SHIELD_FADING:
 			_complete_and_fade()
 		State.ULT_FADING:
 			# No celebration on entry — we don't know yet if the ult killed all
@@ -473,6 +488,16 @@ func _process(delta: float) -> void:
 				_enter_state(State.SHIFT_FADING)
 		State.SHIFT_FADING:
 			if _state_timer >= PRACTICE_DUR:
+				_enter_state(State.SHIFT_SHIELD_SHOWING)
+		State.SHIFT_SHIELD_SHOWING:
+			# Same Shift gate as the normal dash step. The shielded dummy is the
+			# visual + subtitle teaching the mechanic; advancing on Shift keeps
+			# input parity with the previous beat instead of demanding a precise
+			# dash trajectory.
+			if _state_timer >= MIN_PROMPT_TIME and Input.is_key_pressed(KEY_SHIFT):
+				_enter_state(State.SHIFT_SHIELD_FADING)
+		State.SHIFT_SHIELD_FADING:
+			if _state_timer >= PRACTICE_DUR:
 				_advance_to_next_ult()
 		State.ULT_INTRO:
 			if _state_timer >= INTRO_DUR:
@@ -661,24 +686,37 @@ func _animate_marker(delta: float) -> void:
 # ── Practice dummies ─────────────────────────────────────────────────────────
 
 # Three dummies in a forward column for the SHIFT/dash step so the player
-# punches through all of them with one dash. They're cosmetic now — dash no
-# longer damages — so they stay standing once the player passes through.
-# SHIFT_FADING clears them before the ult phase begins.
+# punches through all of them with one dash. Drone.gd's _dash_punch_through
+# deals DASH_DAMAGE to each one passed through, so the subtitle "DEALS SMALL
+# DAMAGE TO ENEMIES" reads true on screen — the player sees crit numbers pop.
+# Shield mechanic is taught in the dedicated SHIFT_SHIELD step so the two
+# behaviors don't blur together. SHIFT_FADING clears these before SHIFT_SHIELD
+# spawns its own.
 func _spawn_shift_dummies() -> void:
 	if _mechs.is_empty():
 		return
 	var lead: Node3D = _mechs[0]
 	if not is_instance_valid(lead):
 		return
-	# Middle dummy is shielded so the player sees the dash break the overshield —
-	# foreshadows the shielded enemies that appear in real waves.
 	var offsets := [
 		Vector3(0.0, 0.0, -5.0),
 		Vector3(0.0, 0.0, -7.5),
 		Vector3(0.0, 0.0, -10.0),
 	]
-	for i in offsets.size():
-		_spawn_dummy(lead, offsets[i], i == 1)
+	for off in offsets:
+		_spawn_dummy(lead, off)
+
+# Single shielded dummy for the SHIFT_SHIELD step. One target keeps the
+# overshield-break beat unambiguous — the player aims for the bubble, dashes,
+# and reads the moment the shield pops. Damage continuity is taught afterward
+# (the dash-through itself only breaks the shield; mech fire finishes them).
+func _spawn_shift_shield_dummy() -> void:
+	if _mechs.is_empty():
+		return
+	var lead: Node3D = _mechs[0]
+	if not is_instance_valid(lead):
+		return
+	_spawn_dummy(lead, Vector3(0.0, 0.0, -7.0), true)
 
 # Per-mech formations sized to showcase each weapon's ult shape — fan for
 # GUN, aura cluster for GARLIC, line for the chained beam, tight cluster for
@@ -714,15 +752,14 @@ func _spawn_dummies_for(mech: Node3D) -> void:
 				Vector3(11.0, 0.0, -3.0),
 			]
 		"ROCKET":
-			# Cluster off to the +X side so the player has to clearly aim
-			# laterally — earlier forward placement made the rocket appear
-			# to launch from the front of the conga line and crossed the
-			# other mechs on its way out.
+			# Pushed far out on the +X flank so the player learns the ult's
+			# long reach by flying the drone out into open space to mark; the
+			# lateral placement still avoids crossing the other conga mechs.
 			offsets = [
-				Vector3(7.5, 0.0, -2.0),
-				Vector3(7.5, 0.0,  0.0),
-				Vector3(7.5, 0.0,  2.0),
-				Vector3(9.0, 0.0,  0.0),
+				Vector3(16.0, 0.0, -2.0),
+				Vector3(16.0, 0.0,  0.0),
+				Vector3(16.0, 0.0,  2.0),
+				Vector3(18.0, 0.0,  0.0),
 			]
 		_:
 			# Unknown weapon — fall back to a small single-line group so the
