@@ -68,9 +68,11 @@ var _last_rocket_state: int = _ROCKET_STATE_NONE
 func _ready() -> void:
 	layer = 6
 
-func setup(weapons: Array, mech_colors: Array) -> void:
-	# Re-runnable: called once at boot, then again whenever a mech dies so
-	# the bottom strip's slot count tracks the surviving conga line.
+func setup(mechs: Array, mech_colors: Array) -> void:
+	# Re-runnable: called once at boot, then again whenever a mech dies. The
+	# bar's slot count is the run's starting line size — dead slots stay
+	# rendered (greyed out, "DEAD" label) so each surviving mech keeps the
+	# screen position and key chip it had at the start of the run.
 	if _root != null and is_instance_valid(_root):
 		_root.queue_free()
 	_charge_fills.clear()
@@ -80,8 +82,14 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 	_upgrade_grids.clear()
 	_upgrade_states.clear()
 	_upgrade_slot_panels.clear()
+	# ROCKET may be the slot that just died — drop the stale references so
+	# _process doesn't poll a freed weapon when the bar rebuilds without it.
+	_rocket_weapon = null
+	_rocket_chip_style = null
+	_rocket_chip_label = null
+	_last_rocket_state = _ROCKET_STATE_NONE
 
-	var slot_count := weapons.size()
+	var slot_count := mechs.size()
 	if slot_count == 0:
 		_root = null
 		return
@@ -103,7 +111,21 @@ func setup(weapons: Array, mech_colors: Array) -> void:
 	add_child(_root)
 
 	for i in slot_count:
-		_build_slot(_root, i, weapons[i], mech_colors[i])
+		var mech: Node3D = mechs[i] as Node3D
+		if mech == null or not is_instance_valid(mech) or not bool(mech.is_alive):
+			_build_dead_slot(_root, i, i, mech_colors[i])
+			# Push placeholders so the parallel runtime arrays stay aligned to
+			# the same idx the live slots use — the upgrade-grid handler skips
+			# any slot whose weapon_name is empty, so no live wiring fires here.
+			_charge_fills.append(null)
+			_bar_bgs.append(null)
+			_weapon_names.append("")
+			_slot_colors.append(mech_colors[i])
+			_upgrade_grids.append(null)
+			_upgrade_states.append({})
+			_upgrade_slot_panels.append([])
+			continue
+		_build_slot(_root, i, mech.weapon, mech_colors[i])
 
 	# Connect upgrade pickup → grid badge (guard against double-connect on rebuild)
 	if not RunManager.upgrade_taken.is_connected(_on_upgrade_taken):
@@ -159,12 +181,13 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var bar_y := 14.0 + NAME_FONT + 14.0
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + PORTRAIT_RIGHT_GAP) - KEY_CHIP_SIZE - 14.0 - 14.0
 
-	# Every slot's chip shows its line-position digit (1 = front … 4 = back),
-	# which is the global key Game._input routes to that mech's weapon. The
-	# ROCKET slot additionally recolours per-frame on aim / ready / cooling
-	# transitions; other slots stay static (their cone / line preview in-world
-	# carries the equivalent feedback).
-	var digit := str(idx + 1)
+	# Every slot's chip shows the player-facing key for that mech (1 = front …
+	# 4 = back at run start). Keys are sticky to the starting position, so we
+	# read the digit from the weapon's start_index meta rather than the live
+	# surviving-strip index — otherwise a mid-run death would re-letter every
+	# slot behind it. The ROCKET slot additionally recolours per-frame on aim /
+	# ready / cooling transitions; other slots stay static.
+	var digit := str(int(weapon.get_meta("start_index", idx)) + 1)
 	var chip: PanelContainer
 	if weapon.weapon_name == "ROCKET":
 		chip = _make_rocket_strike_chip(color, digit)
@@ -218,6 +241,71 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	# pull the current charge once to seed the bar — otherwise it sits empty on
 	# wave 1 even though the ult is fully charged.
 	_on_charge(slot_idx, weapon.get_charge())
+
+# ── Dead slot ─────────────────────────────────────────────────────────────────
+# Greyed placeholder shown for a mech that died this run. Same outer footprint
+# as the live slot so the surviving mechs stay anchored to their starting
+# screen positions; key chip stays visible (dimmed) so the locked binding
+# still reads at a glance even though pressing the digit will do nothing.
+func _build_dead_slot(root: Control, idx: int, start_index: int, color: Color) -> void:
+	var x := (SLOT_W + SLOT_GAP) * idx
+
+	var bg_panel := PanelContainer.new()
+	bg_panel.position = Vector2(x, 0.0)
+	bg_panel.size     = Vector2(SLOT_W, SLOT_H)
+	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(UITheme.COLOR_PANEL_ALPHA.r, UITheme.COLOR_PANEL_ALPHA.g, UITheme.COLOR_PANEL_ALPHA.b, UITheme.COLOR_PANEL_ALPHA.a * 0.55)
+	bg_style.set_corner_radius_all(16)
+	bg_style.set_border_width_all(int(UITheme.PANEL_BORDER_W))
+	# Original archetype border at low alpha — readable as the dead mech's tint
+	# without competing with the live slots' brighter borders.
+	bg_style.border_color = Color(color.r, color.g, color.b, 0.22)
+	bg_panel.add_theme_stylebox_override("panel", bg_style)
+	root.add_child(bg_panel)
+
+	var dead_lbl := Label.new()
+	dead_lbl.text = "DEAD"
+	dead_lbl.add_theme_font_size_override("font_size", UITheme.FONT_HEADING_M)
+	dead_lbl.add_theme_color_override("font_color", UITheme.COLOR_ACCENT_WARN)
+	dead_lbl.add_theme_constant_override("outline_size", 0)
+	dead_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dead_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	dead_lbl.position     = Vector2(x, 0.0)
+	dead_lbl.size         = Vector2(SLOT_W - KEY_CHIP_SIZE - 28.0, SLOT_H)
+	dead_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(dead_lbl)
+
+	var bar_y := 14.0 + NAME_FONT + 14.0
+	var chip := _make_dead_key_chip(str(start_index + 1))
+	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, bar_y + (BAR_H - KEY_CHIP_SIZE) * 0.5)
+	root.add_child(chip)
+
+func _make_dead_key_chip(text: String) -> PanelContainer:
+	var chip := PanelContainer.new()
+	chip.size = Vector2(KEY_CHIP_SIZE, KEY_CHIP_SIZE)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = UITheme.COLOR_PANEL_ALPHA
+	style.border_color = UITheme.COLOR_TEXT_MUTED
+	style.border_width_left   = 2
+	style.border_width_right  = 2
+	style.border_width_top    = 2
+	style.border_width_bottom = 4
+	style.set_corner_radius_all(4)
+	chip.add_theme_stylebox_override("panel", style)
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", UITheme.COLOR_TEXT_MUTED)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_child(lbl)
+	return chip
 
 # ── Portrait construction ─────────────────────────────────────────────────────
 # pop_out=true (default) gives the bigger hero-shot mech with head and shoulders

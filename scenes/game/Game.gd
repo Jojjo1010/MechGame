@@ -56,6 +56,15 @@ const DRONE_INTERACT_RADIUS := 5.0
 var mechs:    Array[Node3D] = []
 var drones:   Array[Node3D] = []
 var _weapons: Array[Node3D] = []
+# Fixed-length parallel array that locks keys 1–4 to starting position.
+# Index N stays bound to the mech that started in slot N for the whole run;
+# the slot becomes null when that mech dies (its key just goes inert) instead
+# of every later mech sliding forward into the lower digit.
+var _ult_slots: Array[Node3D] = []
+# Per-slot archetype tint, fixed-length and parallel to _ult_slots. Stays
+# populated after a mech dies so UltBar can render the dead slot in its
+# original team color (dimmed) instead of losing the visual binding.
+var _ult_slot_colors: Array = []
 var _ult_bar:        CanvasLayer = null
 var _upgrade_picker: CanvasLayer = null
 var _repair_active: bool = false
@@ -212,7 +221,7 @@ func _spawn_ult_bar() -> void:
 	_ult_bar.set_script(ULT_BAR_SCRIPT)
 	_ult_bar.add_to_group("tutorial_late_ui")
 	add_child(_ult_bar)
-	_ult_bar.setup(_weapons, _archetype_colors())
+	_ult_bar.setup(_ult_slots, _ult_slot_colors)
 
 func _spawn_upgrade_picker() -> void:
 	_upgrade_picker = CanvasLayer.new()
@@ -231,16 +240,16 @@ func _spawn_repair_hud() -> void:
 	hud.set_script(REPAIR_HUD_SCRIPT)
 	add_child(hud)
 
-# Front-to-back ult keys: pressing N triggers mechs[N-1].weapon.activate_ult()
-# from anywhere on the field. The mechs array stays compacted on death (see
-# _on_mech_died), so 1 always fires the front-most surviving mech regardless
-# of which archetype that is at the time.
+# Sticky ult keys: pressing N triggers _ult_slots[N-1].weapon.activate_ult()
+# from anywhere on the field. _ult_slots is fixed at the run's starting size
+# and a slot is nulled (not removed) when its mech dies, so each surviving
+# mech keeps the key it started with for the whole run.
 const ULT_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4]
 
 func _trigger_mech_ult(line_index: int) -> void:
-	if line_index < 0 or line_index >= mechs.size():
+	if line_index < 0 or line_index >= _ult_slots.size():
 		return
-	var mech: Node3D = mechs[line_index]
+	var mech: Node3D = _ult_slots[line_index]
 	if mech == null or not is_instance_valid(mech) or not mech.is_alive:
 		return
 	var weapon := mech.get("weapon") as Node3D
@@ -255,12 +264,13 @@ func _trigger_mech_ult(line_index: int) -> void:
 			w.call("cancel_ult_aim")
 	weapon.call("activate_ult")
 
-# Used by MechOptionsPanel so the panel's key chip always shows the live
-# front-to-back digit for whichever mech the drone is closest to. The "mechs"
-# group still contains corpses during the linger phase, so callers must use
-# this lookup instead of walking the group order.
+# Used by MechOptionsPanel so the panel's key chip always shows the digit
+# the player actually has to press for that mech. With sticky ult keys, that's
+# the mech's starting slot, not its current position in the conga line —
+# _ult_slots preserves the original ordering, so finding here returns the
+# bound key index even after upstream mechs have died.
 func mech_line_index(mech: Node3D) -> int:
-	return mechs.find(mech)
+	return _ult_slots.find(mech)
 
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
@@ -530,12 +540,19 @@ func _spawn_mech_line(count: int) -> void:
 		mechs_root.add_child(mech)
 		mech.mech_died.connect(_on_mech_died.bind(mech))
 		mechs.append(mech)
+		_ult_slots.append(mech)
 		var w := Node3D.new()
 		w.set_script(weapon_scripts[i % weapon_scripts.size()])
+		# Stamp the starting line position on the weapon so UltBar's digit chip
+		# reads from data, not from the surviving-array index — keeps the chip
+		# locked to the player-facing key after deaths shrink the strip.
+		w.set_meta("start_index", i)
 		mech.attach_weapon(w)
 		# Color follows weapon, so each archetype reads at a glance regardless of line position.
-		mech.set_color(MechArchetypes.color_for(String(w.weapon_name)))
+		var archetype_color := MechArchetypes.color_for(String(w.weapon_name))
+		mech.set_color(archetype_color)
 		_weapons.append(w)
+		_ult_slot_colors.append(archetype_color)
 
 func _on_mech_died(mech: Node3D) -> void:
 	# Heavy thump on each mech loss — pairs with the floating "DIED" label
@@ -557,10 +574,15 @@ func _on_mech_died(mech: Node3D) -> void:
 					m.is_lead = true
 		_weapons.remove_at(dead_idx)
 		mechs.remove_at(dead_idx)
+		# Keep _ult_slots fixed-length: null the dead mech's slot so its key
+		# goes inert without shifting any other mech's key.
+		var slot_idx := _ult_slots.find(mech)
+		if slot_idx >= 0:
+			_ult_slots[slot_idx] = null
 		# Mech queue_frees itself after the fall + corpse-linger sequence so the
 		# conga line can jump over the body. See Mech._on_died.
 		if _ult_bar != null and is_instance_valid(_ult_bar):
-			_ult_bar.setup(_weapons, _archetype_colors())
+			_ult_bar.setup(_ult_slots, _ult_slot_colors)
 		# Drop the dead mech's archetype from the upgrade picker too — no more
 		# offers for a weapon that isn't on the field.
 		if _upgrade_picker != null and is_instance_valid(_upgrade_picker):
