@@ -1,9 +1,11 @@
 extends CanvasLayer
 
-# End-of-run victory modal. Sibling of DeathScreen — same panel skeleton, same
-# stat block, same button hierarchy — but tonally celebratory: subtitle in lime
-# (not muted), positive stinger, copy that frames the run as a delivery
-# completed rather than a loss survived.
+# End-of-run victory modal. Same panel skeleton + stat block + button
+# hierarchy as DeathScreen so the data layer reads as familiar, but layered
+# with celebration cues: a falling-confetti backdrop in the archetype palette,
+# a scale-punch + hot-pink flash on the title, and a stacked audio stinger
+# (level-up + ult-ready). Together they push the screen past "death screen
+# but green" into something that actually feels like a finish.
 #
 # `show_results` is called from Game.gd after RunManager.run_won fires.
 # `_on_play_again_pressed` / `_on_garage_pressed` are referenced by the button
@@ -39,9 +41,14 @@ func show_results(waves: int, gold: int, earned_scrap: int, total_scrap: int) ->
 	layer = 60
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build(waves, gold, earned_scrap, total_scrap)
-	# Win stinger — reuse the existing positive level-up cue rather than
-	# adding a new asset.
+	# Layered stinger: level-up melody first, ult-ready confirmation chimes a
+	# beat later. Together they read as "victory + confirmed delivery", which
+	# the single level-up sound on its own didn't sell.
 	AudioManager.play("level_up", Vector3.INF, -2.0, 0.85)
+	var late := get_tree().create_timer(0.18, true, false, true)
+	late.timeout.connect(func() -> void:
+		AudioManager.play("ult_ready", Vector3.INF, -3.0, 1.10)
+	)
 	get_tree().paused = true
 
 func _build(waves: int, gold: int, earned: int, total: int) -> void:
@@ -55,6 +62,15 @@ func _build(waves: int, gold: int, earned: int, total: int) -> void:
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(backdrop)
+
+	# Falling confetti behind the panel — procedural rectangles in archetype +
+	# accent colors. Spawns once, drifts down through the viewport over a few
+	# seconds, then frees itself.
+	var confetti := _ConfettiLayer.new()
+	confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(confetti)
+	confetti.spawn(get_viewport().get_visible_rect().size)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -130,7 +146,7 @@ func _build(waves: int, gold: int, earned: int, total: int) -> void:
 	btn_row.add_child(play_again_btn)
 	btn_row.add_child(quit_btn)
 
-	_animate_entrance(title_block, stat_rows, btn_row)
+	_animate_entrance(title, subtitle, stat_rows, btn_row)
 
 func _make_divider_block() -> Control:
 	var wrapper := MarginContainer.new()
@@ -237,15 +253,33 @@ func _wire_button_motion(btn: Button) -> void:
 		t.tween_property(btn, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), PRESS_FLASH_DUR)
 	)
 
-func _animate_entrance(title_block: Control, stat_rows: Array[Control], btn_row: Control) -> void:
-	title_block.modulate.a = 0.0
+func _animate_entrance(title: Label, subtitle: Label, stat_rows: Array[Control], btn_row: Control) -> void:
+	# Title pops in with an overshoot scale + hot-pink → white flash; the rest
+	# of the panel still fades in (same staggered cadence as DeathScreen) so
+	# the punch reads as the celebratory beat against a familiar settle.
+	title.modulate = UITheme.COLOR_ACCENT_HOT
+	title.scale = Vector2(1.4, 1.4)
+	subtitle.modulate.a = 0.0
 	for row in stat_rows:
 		row.modulate.a = 0.0
 	btn_row.modulate.a = 0.0
 
+	# Pivot has to read the post-layout title size or the punch scales from
+	# the top-left and slides off-center.
+	await get_tree().process_frame
+	if not is_instance_valid(title):
+		return
+	title.pivot_offset = title.size * 0.5
+
 	var t := create_tween()
 	t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	t.tween_property(title_block, "modulate:a", 1.0, FADE_TITLE_DUR)
+	t.parallel().tween_property(title, "scale", Vector2.ONE, 0.45) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# Color settle lags the bounce slightly so the hot-pink flash is still
+	# resolving when the title hits its final size.
+	t.parallel().tween_property(title, "modulate", Color.WHITE, 0.55)
+	t.parallel().tween_property(subtitle, "modulate:a", 1.0, FADE_TITLE_DUR) \
+		.set_delay(0.22)
 	for i in stat_rows.size():
 		var row: Control = stat_rows[i]
 		t.parallel().tween_property(row, "modulate:a", 1.0, FADE_STAT_DUR) \
@@ -265,3 +299,70 @@ func _on_garage_pressed() -> void:
 	AudioManager.play("ui_click")
 	get_tree().paused = false
 	get_tree().change_scene_to_file(START_SCENE_PATH)
+
+# ── Confetti ─────────────────────────────────────────────────────────────────
+# Procedural falling-rectangle layer. Spawns a fixed pool of pieces above the
+# viewport and lets gravity + a sin-wave horizontal wobble carry them down
+# through the screen behind the panel. No assets — just draw_rect + transform.
+class _ConfettiLayer extends Control:
+	const PIECE_COUNT     := 80
+	const FALL_SPEED_MIN  := 180.0
+	const FALL_SPEED_MAX  := 320.0
+	const DRIFT_X_RANGE   := 60.0
+	const ROT_SPEED_RANGE := 4.5
+	const WOBBLE_FREQ     := 2.4
+	const WOBBLE_AMP_PX   := 55.0
+	const GRAVITY         := 35.0
+	const PIECE_W_RANGE   := Vector2(8.0, 16.0)
+	const PIECE_H_RANGE   := Vector2(4.0, 10.0)
+	const LIFETIME_S      := 7.0
+
+	# Hot pink + bright lime for the brand accents, plus the four archetype
+	# tints so the confetti reads as "all four mechs cheering".
+	const PALETTE := [
+		Color("#ff2d6e"),  # COLOR_ACCENT_HOT
+		Color("#c8ff58"),  # COLOR_BORDER_BRIGHT
+		Color("#e07338"),  # GUN  / VOLLEY
+		Color("#3acb74"),  # GARLIC / AEGIS
+		Color("#3aa6e6"),  # BEAM   / ARC
+		Color("#e6a93a"),  # ROCKET / SALVO
+	]
+
+	var _pieces: Array = []
+	var _elapsed: float = 0.0
+
+	func spawn(viewport_size: Vector2) -> void:
+		_pieces.clear()
+		# Spread initial Y across a tall band above the viewport so pieces
+		# feed in over a few seconds rather than hitting the screen all at
+		# once — gives the burst a sustained "rain" feel.
+		for i in PIECE_COUNT:
+			_pieces.append({
+				"pos":     Vector2(randf_range(0.0, viewport_size.x), randf_range(-viewport_size.y * 1.2, -20.0)),
+				"vel":     Vector2(randf_range(-DRIFT_X_RANGE, DRIFT_X_RANGE), randf_range(FALL_SPEED_MIN, FALL_SPEED_MAX)),
+				"rot":     randf_range(0.0, TAU),
+				"rot_vel": randf_range(-ROT_SPEED_RANGE, ROT_SPEED_RANGE),
+				"size":    Vector2(randf_range(PIECE_W_RANGE.x, PIECE_W_RANGE.y), randf_range(PIECE_H_RANGE.x, PIECE_H_RANGE.y)),
+				"color":   PALETTE[randi() % PALETTE.size()],
+				"phase":   randf() * TAU,
+			})
+		set_process(true)
+
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		if _elapsed >= LIFETIME_S:
+			queue_free()
+			return
+		for piece in _pieces:
+			piece.vel.y += GRAVITY * delta
+			piece.pos += piece.vel * delta
+			piece.pos.x += sin(piece.phase + _elapsed * WOBBLE_FREQ) * WOBBLE_AMP_PX * delta
+			piece.rot += piece.rot_vel * delta
+		queue_redraw()
+
+	func _draw() -> void:
+		for piece in _pieces:
+			var s: Vector2 = piece.size
+			draw_set_transform(piece.pos, piece.rot, Vector2.ONE)
+			draw_rect(Rect2(-s * 0.5, s), piece.color)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
