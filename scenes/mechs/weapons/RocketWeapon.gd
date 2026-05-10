@@ -93,6 +93,10 @@ func _cancel_marking() -> void:
 	_marking = false
 	_destroy_ring()
 
+func cancel_ult_aim() -> void:
+	if _marking:
+		_cancel_marking()
+
 func _fire_strike(target: Vector3) -> void:
 	if _mech == null or not is_instance_valid(_mech) or not _mech.is_alive:
 		return

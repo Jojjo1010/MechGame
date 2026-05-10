@@ -455,7 +455,7 @@
         <dl class="stats">
           <div><dt>WASD or ↑ ← ↓ →</dt><dd>Move drone (camera-relative; either set works, freely interchangeable)</dd></div>
           <div><dt>Space</dt><dd>Dash (1.5 s cd, force 32, 0.18 s, breaks daze)</dd></div>
-          <div><dt>E</dt><dd>Trigger ult on nearest mech in range</dd></div>
+          <div><dt>1 / 2 / 3 / 4</dt><dd>Trigger ult on the mech at that line position (1 = front, 4 = back). Fires from anywhere — no proximity gate. Re-press while in aim mode commits / advances.</dd></div>
           <div><dt>F</dt><dd>Start repair minigame on damaged mech</dd></div>
           <div><dt>Scroll</dt><dd>Zoom (CAM_ZOOM_MIN 6.0 → MAX 24.0)</dd></div>
         </dl>
@@ -467,7 +467,7 @@
           <div><dt>LMB</dt><dd>Confirm Gun ult; fires both waves (0.1 s gap)</dd></div>
           <div><dt>RMB</dt><dd>Cancel Gun ult aim</dd></div>
           <div><dt>UI: Repair</dt><dd>MechOptionsPanel — appears within 5 u of mech</dd></div>
-          <div><dt>UI: Ult</dt><dd>UltBar — shows charge per weapon, fires on E</dd></div>
+          <div><dt>UI: Ult</dt><dd>UltBar — shows charge per weapon; each slot fires on its line-position digit (1–4)</dd></div>
         </dl>
         <p style="color:var(--muted); font-size:12px; margin-top:12px;"><strong>Repair minigame</strong> — 4 random direction keys, no repeat (WASD or arrow keys both count for each direction; matched index-wise: W = ↑, A = ←, S = ↓, D = →). Wrong key flashes red and resets to step 0; correct sequence fully heals the mech and clears burn.</p>
       </div>
@@ -743,7 +743,7 @@ Mech 4 → Garlic</pre>
           <div><dt>Cooldown</dt><dd>12.0 s</dd></div>
           <div><dt>Damage</dt><dd>75 × 7.0 = 525 (× damage_mult × combo)</dd></div>
           <div><dt>Splash radius</dt><dd>7.0 u (matches the marker ring)</dd></div>
-          <div><dt>Aim mode</dt><dd>E enters marking → ring follows the drone. LMB or E-again commits, RMB cancels (no cooldown spent).</dd></div>
+          <div><dt>Aim mode</dt><dd>The line-position digit (4 by default — Rocket sits at the back of the starting line) enters marking → ring follows the drone. LMB / Space / digit-again commits, RMB cancels (no cooldown spent).</dd></div>
           <div><dt>Marker</dt><dd>saffron ground annulus + crosshair pip; alpha pulses for readability under bloom</dd></div>
           <div><dt>Behavior</dt><dd>marked spot is locked at commit; rocket drops vertically onto that XZ regardless of where the drone moves after</dd></div>
         </dl>

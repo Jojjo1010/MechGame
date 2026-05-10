@@ -2,7 +2,7 @@ extends CanvasLayer
 
 # Bottom HUD strip — one slot per mech in the conga line. Each slot has:
 #   • Mech portrait on the left (color + stylized face), Bad North style
-#   • Weapon name + [E] key chip + charge bar in the middle
+#   • Weapon name + line-position digit chip (1–4) + charge bar in the middle
 #   • Inventory grid of upgrade badges on the right (Ball x Pit style: stacks
 #     show as one slot with a count number in the corner)
 
@@ -48,13 +48,15 @@ var _upgrade_grids: Array[HBoxContainer] = []
 var _upgrade_states: Array[Dictionary]   = []   # per slot: { id → { count, slot_idx, count_lbl, count_pill } }
 var _upgrade_slot_panels: Array[Array]    = []   # per mech: array of empty/filled placeholder PanelContainers
 
-# Rocket-strike state. ROCKET fires from anywhere via the global R key, so its
-# slot uses an "R" chip that pulses to hot pink during aim mode and brightens
-# to lime when ready. _rocket_weapon is the weapon ref we poll each frame.
+# Rocket-slot recolour state. ROCKET's chip pulses hot pink during aim mode
+# and brightens to lime when ready, since its marker-then-fire flow benefits
+# from the extra at-a-glance feedback (the gun + beam slots stay on the
+# static-digit chip; their cone / line preview is the in-world feedback).
+# _rocket_weapon is the weapon ref we poll each frame.
 var _rocket_weapon:     Node3D       = null
 var _rocket_chip_style: StyleBoxFlat = null
 var _rocket_chip_label: Label        = null
-# State-keyed cache so _process only repaints the R chip on a true transition
+# State-keyed cache so _process only repaints the chip on a true transition
 # (aim ↔ ready ↔ cooling). Re-applying a theme override every frame mutates
 # Godot's theme cache and triggers redraws even when nothing changed.
 const _ROCKET_STATE_NONE    := -1
@@ -133,7 +135,7 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	portrait.position = Vector2(x + 14.0, (SLOT_H - PORTRAIT_SIZE) * 0.5)
 	root.add_child(portrait)
 
-	# ── Header row: weapon name + [E] chip + charge bar ───────────────────────
+	# ── Header row: weapon name + line-position digit chip + charge bar ───────
 	# Pop-out portrait extends ~17px past the layout footprint on the right;
 	# PORTRAIT_RIGHT_GAP (32) clears that overhang plus a 14px breathing gap
 	# before the text column.
@@ -157,15 +159,18 @@ func _build_slot(root: Control, idx: int, weapon: Node3D, color: Color) -> void:
 	var bar_y := 14.0 + NAME_FONT + 14.0
 	var bar_w := SLOT_W - (PORTRAIT_SIZE + 14.0 + PORTRAIT_RIGHT_GAP) - KEY_CHIP_SIZE - 14.0 - 14.0
 
-	# Each slot advertises its actual control: ROCKET fires globally on R, the
-	# rest fire on E from the proximity panel. The R chip recolours per-frame
-	# based on ready / aim state; the E chip is static.
+	# Every slot's chip shows its line-position digit (1 = front … 4 = back),
+	# which is the global key Game._input routes to that mech's weapon. The
+	# ROCKET slot additionally recolours per-frame on aim / ready / cooling
+	# transitions; other slots stay static (their cone / line preview in-world
+	# carries the equivalent feedback).
+	var digit := str(idx + 1)
 	var chip: PanelContainer
 	if weapon.weapon_name == "ROCKET":
-		chip = _make_rocket_strike_chip(color)
+		chip = _make_rocket_strike_chip(color, digit)
 		_rocket_weapon = weapon
 	else:
-		chip = _make_key_chip("E")
+		chip = _make_key_chip(digit)
 	chip.position = Vector2(x + SLOT_W - KEY_CHIP_SIZE - 14.0, bar_y + (BAR_H - KEY_CHIP_SIZE) * 0.5)
 	root.add_child(chip)
 
@@ -256,10 +261,10 @@ func _make_key_chip(text: String) -> PanelContainer:
 	chip.add_child(lbl)
 	return chip
 
-# Saffron-tinted "R" key chip for the ROCKET slot. The style + label refs are
-# stashed on UltBar fields so _process can repaint the border based on the
-# weapon's ready / aim state without rebuilding the chip.
-func _make_rocket_strike_chip(accent: Color) -> PanelContainer:
+# Saffron-tinted line-position chip for the ROCKET slot. The style + label
+# refs are stashed on UltBar fields so _process can repaint the border based
+# on the weapon's ready / aim state without rebuilding the chip.
+func _make_rocket_strike_chip(accent: Color, digit: String) -> PanelContainer:
 	var chip := PanelContainer.new()
 	chip.size = Vector2(KEY_CHIP_SIZE, KEY_CHIP_SIZE)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -276,7 +281,7 @@ func _make_rocket_strike_chip(accent: Color) -> PanelContainer:
 	_rocket_chip_style = style
 
 	var lbl := Label.new()
-	lbl.text = "R"
+	lbl.text = digit
 	lbl.add_theme_font_size_override("font_size", 22)
 	lbl.add_theme_color_override("font_color", accent)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -288,9 +293,9 @@ func _make_rocket_strike_chip(accent: Color) -> PanelContainer:
 	return chip
 
 # ── Per-frame ROCKET strike state ────────────────────────────────────────────
-# Polls the rocket weapon and recolours its R chip to advertise current state:
-#   AIMING  → hot pink (committed, click to fire)
-#   READY   → bright lime (press R to start aim)
+# Polls the rocket weapon and recolours its digit chip to advertise current state:
+#   AIMING  → hot pink (committed, click or re-press to fire)
+#   READY   → bright lime (press the line-position digit to start marking)
 #   COOLING → archetype saffron (charging — bar shows %)
 func _process(_delta: float) -> void:
 	if _rocket_weapon == null or not is_instance_valid(_rocket_weapon):

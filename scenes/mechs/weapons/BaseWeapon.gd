@@ -175,6 +175,14 @@ func is_aim_mode() -> bool:
 func aim_action_text() -> String:
 	return ""
 
+# Bail out of any in-flight aim/mark mode without firing or starting cooldown.
+# No-op default; aim-mode subclasses (Gun / Beam / Rocket) override to clear
+# their preview state. Game.gd calls this on every other weapon when the
+# player triggers a different mech's ult mid-aim, so we never have two ult
+# previews on screen at once.
+func cancel_ult_aim() -> void:
+	pass
+
 # ── Ready / consumed hooks ────────────────────────────────────────────────────
 
 func _on_became_ready() -> void:

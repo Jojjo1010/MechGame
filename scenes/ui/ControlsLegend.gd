@@ -6,9 +6,10 @@ extends CanvasLayer
 # input, not an abstract label.
 
 const ENTRIES := [
-	{key = "MOVEMENT", icon = "move",   action = "Move drone"},
-	{key = "Shift",    icon = "dash",   action = "Dash"},
-	{key = "Scroll",   icon = "zoom",   action = "Zoom"},
+	{key = "MOVEMENT",  icon = "move", action = "Move drone"},
+	{key = "Shift",     icon = "dash", action = "Dash"},
+	{key = "MECH_ULTS", icon = "ult",  action = "Fire mech ults (front → back)"},
+	{key = "Scroll",    icon = "zoom", action = "Zoom"},
 ]
 
 # All spacing/size values follow the 8 px design system. Type scale uses its
@@ -90,10 +91,27 @@ func _make_row(key_text: String, icon_id: String, action_text: String) -> Contro
 # Picks the chip type that matches the actual input.
 func _make_chip(key_text: String) -> Control:
 	match key_text:
-		"MOVEMENT": return KeyChip.make_movement_cluster(KEY_FONT)
-		"Shift":    return KeyChip.make_key_cap("SHIFT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
-		"Scroll":   return _make_mouse_chip()
-		_:          return KeyChip.make_key_cap(key_text, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
+		"MOVEMENT":  return KeyChip.make_movement_cluster(KEY_FONT)
+		"Shift":     return KeyChip.make_key_cap("SHIFT",   KeyChip.SHIFT_W, KeyChip.SHIFT_H, SHIFT_FONT)
+		"MECH_ULTS": return _make_mech_ult_row()
+		"Scroll":    return _make_mouse_chip()
+		_:           return KeyChip.make_key_cap(key_text, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
+
+# Horizontal row of four number caps — one per mech in line position. Built
+# inline rather than as a KeyChip helper because the legend is the only
+# surface that needs the four-up layout (the tutorial shows one digit at a
+# time via make_key_cap directly).
+func _make_mech_ult_row() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", KeyChip.KEY_GAP)
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for digit in ["1", "2", "3", "4"]:
+		var cap := KeyChip.make_key_cap(digit, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT)
+		cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hbox.add_child(cap)
+	hbox.custom_minimum_size = Vector2(4.0 * KeyChip.KEY_SIZE + 3.0 * KeyChip.KEY_GAP, KeyChip.KEY_SIZE)
+	return hbox
 
 func _make_mouse_chip() -> Control:
 	var m := MouseIcon.new()

@@ -69,11 +69,14 @@ const KEY_FONT   := UITheme.FONT_LABEL_CAPS  # 24 — single-letter caps in WASD
 const SHIFT_FONT := UITheme.FONT_BODY        # 16 — multi-letter wide caps
 const ICON_SIZE  := 40.0
 
-# Combined ult flow: ULT_SHOWING_E waits for the player to approach the
-# marked mech and press E. If the mech's ult uses aim mode (GUN/BEAM/ROCKET),
-# we slide into ULT_SHOWING_LMB by swapping the chip inline — no fade — so
-# it reads as the second half of one continuous "fire ult" beat instead of a
-# fresh prompt. ULT_FADING is the post-completion practice window.
+# Combined ult flow: ULT_SHOWING_E waits for the player to press the line-
+# position digit (1–4) for the current target mech — no proximity required,
+# the ult fires from anywhere. If the mech's ult uses aim mode (GUN/BEAM/
+# ROCKET) we slide into ULT_SHOWING_LMB by swapping the chip inline — no
+# fade — so it reads as the second half of one continuous "fire ult" beat
+# instead of a fresh prompt. ULT_FADING is the post-completion practice
+# window. (The enum name still says "_E" for stable serialization; the
+# state itself is digit-driven.)
 enum State {
 	WASD_SHOWING,    WASD_FADING,
 	SHIFT_SHOWING,   SHIFT_FADING,
@@ -270,9 +273,10 @@ func _enter_state(new_state: State) -> void:
 			_force_target_ult_ready()
 			_show_intro_for(_target_mech)
 		State.ULT_SHOWING_E:
-			# ROCKET ult is the global R-key strike; E still works near the mech
-			# but R is the primary flow players will use in real combat.
-			var key_letter := "R" if _weapon_name_for(_target_mech) == "ROCKET" else "E"
+			# Each mech's ult fires globally via its 1-based line-position digit.
+			# The tutorial cycles through every mech in line order, so the digit
+			# shown matches whichever step we're on (1 = front-most living mech).
+			var key_letter := _ult_digit_for_target()
 			_show_prompt(KeyChip.make_key_cap(key_letter, KeyChip.KEY_SIZE, KeyChip.KEY_SIZE, KEY_FONT), "ult", "FIRE " + _archetype_name_for(_target_mech) + " ULT")
 		State.ULT_SHOWING_LMB:
 			# Inline swap — modal stays visible. Reads as the second beat of
@@ -437,22 +441,17 @@ func _process(delta: float) -> void:
 	# between the first click (place) and the second (fire). Tutorial-only;
 	# the main game keeps moving during aim mode by design.
 	RunManager.line_speed_mult = 0.0 if _target_mech_in_aim_mode() else 1.0
-	# Cross-state kill-check for the showing states only — if the panel fires
-	# the ult on its own range check (looser than APPROACH_RADIUS) and the
-	# kills happen before our state polling catches the fire, jump straight
-	# to the success path. ULT_FADING is judged on its own resolve timer
-	# below so the success/fail branch is deterministic.
+	# Cross-state kill-check for the showing states only — if the dummies die
+	# (e.g. ult clip-fires before our event handler runs), jump straight to the
+	# success path. ULT_FADING is judged on its own resolve timer below so the
+	# success/fail branch is deterministic.
 	if not _ult_resolving and (_state == State.ULT_SHOWING_E or _state == State.ULT_SHOWING_LMB):
 		if _all_dummies_engaged() and _target_mech_ult_on_cooldown():
 			_resolve_ult_success()
 			return
-	# Poll the target mech's weapon directly — the tutorial's own E listener
-	# requires drone-near-target, but the panel's E binding fires on whichever
-	# mech is closest. If the player presses E while standing closer to a
-	# non-target mech, the panel triggers the *wrong* mech's ult and our
-	# state gate never trips. Watching the target weapon's aim/cooldown state
-	# advances the tutorial whenever the target mech actually fires, no matter
-	# which keystroke caused it.
+	# Poll the target mech's weapon directly so the tutorial advances the
+	# moment the target mech actually fires, no matter which input caused it
+	# (number-key press, on-panel button click, or on-screen ult button).
 	if _state == State.ULT_SHOWING_E:
 		if _target_uses_aim_mode():
 			if _target_mech_in_aim_mode():
@@ -522,17 +521,22 @@ func _process(delta: float) -> void:
 		State.DONE:
 			pass
 
-# Tap-style inputs (E, LMB) go through events rather than per-frame polling.
-# Polling can drop a quick press if it lands between frames; events fire on the
-# pressed edge regardless of frame timing. The MIN_PROMPT_TIME gate still
-# applies so the prompt has time to render before the input counts.
+# Tap-style inputs (the per-mech digit, LMB) go through events rather than
+# per-frame polling. Polling can drop a quick press if it lands between
+# frames; events fire on the pressed edge regardless of frame timing. The
+# MIN_PROMPT_TIME gate still applies so the prompt has time to render before
+# the input counts.
 func _input(event: InputEvent) -> void:
 	if _state_timer < MIN_PROMPT_TIME:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match _state:
 			State.ULT_SHOWING_E:
-				if event.keycode == KEY_E and _drone_near_target_mech():
+				# Ults fire globally now — proximity is no longer required. The
+				# per-frame poll on the target mech's cooldown is the canonical
+				# advance trigger; matching here lets the same-frame press tick
+				# the lesson forward without waiting a frame.
+				if _is_target_ult_key(event.keycode):
 					if _target_uses_aim_mode():
 						_enter_state(State.ULT_SHOWING_LMB)
 					else:
@@ -599,6 +603,20 @@ func _advance_to_next_ult() -> void:
 func _target_uses_aim_mode() -> bool:
 	var w := _weapon_for(_target_mech)
 	return w != null and w.uses_aim_mode_ult
+
+# 1-based line-position digit for the current ult-tour target. _ult_mech_idx
+# mirrors Game.gd's mechs array index, so the digit shown on the prompt
+# matches the key Game._input actually responds to.
+func _ult_digit_for_target() -> String:
+	if _ult_mech_idx < 0:
+		return "1"
+	return str(_ult_mech_idx + 1)
+
+func _is_target_ult_key(keycode: int) -> bool:
+	const ULT_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4]
+	if _ult_mech_idx < 0 or _ult_mech_idx >= ULT_KEYS.size():
+		return false
+	return keycode == ULT_KEYS[_ult_mech_idx]
 
 func _weapon_name_for(mech: Node3D) -> String:
 	if mech == null or not is_instance_valid(mech):
@@ -891,12 +909,6 @@ func _set_late_ui_visible(p_visible: bool) -> void:
 	for n in get_tree().get_nodes_in_group("tutorial_late_ui"):
 		(n as CanvasLayer).visible = p_visible
 
-func _drone_near_target_mech() -> bool:
-	return _drone_near_mech_xz(_target_mech)
-
-func _drone_near_repair_target() -> bool:
-	return _drone_near_mech_xz(_repair_mech)
-
 # Silence ALL mechs' passive fire during the ult tour — including the target
 # mech — so only the ult itself can kill the dummies. Without this, the
 # target mech's own regular bullets clean up after a missed ult during the
@@ -916,15 +928,3 @@ func _apply_tutorial_mute(s: State) -> void:
 			continue
 		w.set("tutorial_muted", mute_all)
 
-# Match Game.gd's `_check_drone_proximity` — XZ distance only, no Y. The drone
-# hovers ~2.2 units off the floor while mechs sit at y=0; including Y here
-# would reject positions where E already fires the ult in-game (panel visible,
-# ult fired) and the tutorial would never advance.
-func _drone_near_mech_xz(mech: Node3D) -> bool:
-	if _drone == null or mech == null:
-		return false
-	if not is_instance_valid(_drone) or not is_instance_valid(mech):
-		return false
-	var diff := _drone.global_position - mech.global_position
-	diff.y = 0.0
-	return diff.length() <= APPROACH_RADIUS

@@ -231,18 +231,36 @@ func _spawn_repair_hud() -> void:
 	hud.set_script(REPAIR_HUD_SCRIPT)
 	add_child(hud)
 
-# ROCKET fires from anywhere via the global R key. Surfaces to the rocket
-# weapon (which handles "if marking → commit, else → start_marking").
-func _trigger_rocket_strike() -> void:
-	var rocket := _find_rocket_weapon()
-	if rocket != null and rocket.has_method("activate_ult"):
-		rocket.call("activate_ult")
+# Front-to-back ult keys: pressing N triggers mechs[N-1].weapon.activate_ult()
+# from anywhere on the field. The mechs array stays compacted on death (see
+# _on_mech_died), so 1 always fires the front-most surviving mech regardless
+# of which archetype that is at the time.
+const ULT_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4]
 
-func _find_rocket_weapon() -> Node3D:
+func _trigger_mech_ult(line_index: int) -> void:
+	if line_index < 0 or line_index >= mechs.size():
+		return
+	var mech: Node3D = mechs[line_index]
+	if mech == null or not is_instance_valid(mech) or not mech.is_alive:
+		return
+	var weapon := mech.get("weapon") as Node3D
+	if weapon == null or not weapon.has_method("activate_ult"):
+		return
+	# Switching mid-aim: bail any other weapon currently in aim mode so we
+	# never have two ult previews on screen at once.
 	for w in _weapons:
-		if w != null and is_instance_valid(w) and w.weapon_name == "ROCKET":
-			return w
-	return null
+		if w == null or w == weapon or not is_instance_valid(w):
+			continue
+		if w.has_method("is_aim_mode") and w.is_aim_mode() and w.has_method("cancel_ult_aim"):
+			w.call("cancel_ult_aim")
+	weapon.call("activate_ult")
+
+# Used by MechOptionsPanel so the panel's key chip always shows the live
+# front-to-back digit for whichever mech the drone is closest to. The "mechs"
+# group still contains corpses during the linger phase, so callers must use
+# this lookup instead of walking the group order.
+func mech_line_index(mech: Node3D) -> int:
+	return mechs.find(mech)
 
 func _input(event: InputEvent) -> void:
 	# Zoom with scroll wheel
@@ -258,12 +276,10 @@ func _input(event: InputEvent) -> void:
 			# screen / repair minigame, all of which already pause the tree.
 			_open_pause_menu()
 			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_R:
-			# Global rocket strike — works from anywhere, no proximity gate. The
-			# rocket weapon's activate_ult is "press once to enter marking mode,
-			# press again (or left-click) to commit", so re-pressing R finishes
-			# the strike too.
-			_trigger_rocket_strike()
+			return
+		var ult_idx := ULT_KEYS.find(event.keycode)
+		if ult_idx >= 0:
+			_trigger_mech_ult(ult_idx)
 			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:

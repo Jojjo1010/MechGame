@@ -6,7 +6,7 @@ Read this first. It's the cold-start brief for any Claude session on this repo.
 
 **Conga Mechs** — Godot 4.6 roguelite. Solo dev. Repo: `Jojjo1010/MechGame`.
 
-You play a drone hovering over a marching line of four mechs. The mechs auto-fire at enemies; the drone supports them by triggering ults (E), repairing damage (F), and dashing (Space). Survive waves; level up; pick upgrades.
+You play a drone hovering over a marching line of four mechs. The mechs auto-fire at enemies; the drone supports them by triggering ults (keys **1–4**, front → back, fired from anywhere on the field), repairing damage (F), and dashing (Space). Survive waves; level up; pick upgrades.
 
 Four weapon archetypes — one per mech in the starting line:
 
@@ -111,6 +111,7 @@ Pending if asked: finish UpgradePicker labels (archetype names in subtitle/portr
 
 - **Drone dash** uses `Input.is_key_pressed(KEY_SHIFT)` polling in `_process`, not `_input` events. Events were dropping when WASD was already held. The dash also re-reads WASD each frame so the player can steer mid-dash.
 - **Gun ult** aims along a sloped vector toward `mech_pos + dir*CONE_LEN + (0, ENEMY_HIT_Y, 0)` to compensate for the muzzle being at y=2.0 vs enemies at y=0.8. Without the slope, ult bullets passed cleanly over every enemy.
+- **Per-mech ult keys 1–4** (this fork) — `Game._input` routes KEY_1..KEY_4 to `mechs[N-1].weapon.activate_ult()` from anywhere; no proximity gate. The mechs array is compacted on death, so 1 always points at the front-most surviving mech regardless of archetype. Pressing the same digit while in aim mode commits (Gun, Beam) or advances one step (Beam two-click flow), mirroring Rocket's pattern. Pressing a different digit mid-aim cancels the in-flight aim via `BaseWeapon.cancel_ult_aim()` so previews don't stack.
 
 ## Rare upgrades — IMPLEMENTED (memory file `project_rare_upgrades.md` is now obsolete)
 

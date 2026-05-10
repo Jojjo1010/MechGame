@@ -246,27 +246,30 @@ func _refresh_btn_text() -> void:
 		return
 	var w := _target_mech.get("weapon") as Node3D
 	var name_str := "Ultimate"
-	var is_rocket := false
 	if w != null:
 		name_str = w.weapon_name
-		is_rocket = (name_str == "ROCKET")
 	_ult_action_lbl.text = name_str
-	# ROCKET fires globally on R, so the proximity prompt advertises that in
-	# both ready and cooling states instead of the standard "press E here"
-	# affordance.
-	if is_rocket:
-		_ult_subtitle_idle  = "Triggers from anywhere"
-		_ult_subtitle_ready = "Ready — fires anywhere"
-		if _ult_badge_lbl != null:
-			_ult_badge_lbl.text = "R"
-	else:
-		_ult_subtitle_idle  = "Press to activate"
-		_ult_subtitle_ready = "Ready!"
-		if _ult_badge_lbl != null:
-			_ult_badge_lbl.text = "E"
+	# Every mech's ult fires globally via its line-position digit (1 = front,
+	# 4 = back). The panel just surfaces the right digit on the chip; Game._input
+	# owns the actual key press so the badge here is informational only.
+	_ult_subtitle_idle  = "Triggers from anywhere"
+	_ult_subtitle_ready = "Ready — fires anywhere"
+	if _ult_badge_lbl != null:
+		_ult_badge_lbl.text = _line_digit_for(_target_mech)
 	_ult_subtitle_lbl.text = _ult_subtitle_idle
 	if _ult_btn != null and is_instance_valid(_ult_btn):
 		_ult_btn.visible = true
+
+# The mechs group lingers dead corpses during the death-fall, so we can't
+# use group order — Game.gd's mechs array is the live ordering.
+func _line_digit_for(mech: Node3D) -> String:
+	var p := get_parent()
+	if p == null or not p.has_method("mech_line_index"):
+		return "1"
+	var idx: int = int(p.call("mech_line_index", mech))
+	if idx < 0:
+		return "1"
+	return str(idx + 1)
 
 func _on_ult_pressed() -> void:
 	AudioManager.play("ui_click")
@@ -279,16 +282,11 @@ func _on_repair_pressed() -> void:
 func _input(event: InputEvent) -> void:
 	if not _enabled or not _panel.visible:
 		return
+	# Ult firing is owned globally by Game._input via keys 1–4 (front → back),
+	# so the panel only handles the local F-repair shortcut and the ult button
+	# remains clickable via _on_ult_pressed for mouse-only players.
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_E:
-			# ROCKET's prompt advertises R, not E — Game._input handles the
-			# global R key, so don't double-bind E to it here.
-			if _target_mech != null:
-				var w := _target_mech.get("weapon") as Node3D
-				if w != null and w.weapon_name == "ROCKET":
-					return
-			_fire_ult()
-		elif event.keycode == KEY_F:
+		if event.keycode == KEY_F:
 			_fire_repair()
 
 func _fire_ult() -> void:

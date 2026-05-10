@@ -48,13 +48,20 @@ func get_ult_cooldown() -> float:
 	return ULT_COOLDOWN
 
 # ── Override to enter aiming mode instead of instant fire ────────────────────
+# Mirrors RocketWeapon: a re-press of the same ult key while already aiming
+# acts as a confirm so a player can fire the ult without leaving the keyboard.
 func activate_ult() -> bool:
-	if not is_ready():
-		return false
 	if _aiming:
+		_confirm_and_fire()
+		return true
+	if not is_ready():
 		return false
 	_start_aiming()
 	return true
+
+func cancel_ult_aim() -> void:
+	if _aiming:
+		_cancel_aiming()
 
 # ── Passive fire ─────────────────────────────────────────────────────────────
 # Cone Burst card widens this; default 4° per gap.

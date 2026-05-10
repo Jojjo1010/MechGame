@@ -53,13 +53,30 @@ func _passive_fire() -> void:
 
 # Override base activate_ult: enter aim mode instead of firing immediately.
 # The aiming + click commit IS the windup, mirroring GunWeapon's pattern.
+# Re-pressing the ult key while aiming advances through the same flow as a
+# left-click — first re-press locks the start point at the cursor, second
+# fires the beam — so the ult can be played from the keyboard alone.
 func activate_ult() -> bool:
-	if not is_ready():
-		return false
 	if _aiming:
+		if not _aim_has_start:
+			_aim_start = _ground_cursor
+			_aim_has_start = true
+		else:
+			var endpt := _fixed_endpoint(_aim_start, _ground_cursor)
+			_aiming = false
+			_aim_has_start = false
+			_reset_cooldown()
+			_destroy_preview()
+			_spawn_trace(_aim_start, endpt)
+		return true
+	if not is_ready():
 		return false
 	_start_aiming()
 	return true
+
+func cancel_ult_aim() -> void:
+	if _aiming:
+		_cancel_aiming()
 
 func _start_aiming() -> void:
 	_aiming = true
