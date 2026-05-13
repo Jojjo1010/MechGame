@@ -23,15 +23,15 @@ const COLOR_GOLD        := Color(1.00, 0.82, 0.20, 1.0)
 
 # Segmented level bar — three Overwatch-style chips per upgrade. Filled segments
 # = owned level, hairline cyan = next purchasable rung, dim = locked further out.
-const SEG_W   := 34.0
-const SEG_H   := 14.0
-const SEG_GAP := 4.0
+const SEG_W   := 46.0
+const SEG_H   := 20.0
+const SEG_GAP := 6.0
 
 # Per-row column widths in the drone upgrade section.
-const ROW_LABEL_W   := 240.0
-const ROW_LEVEL_W   := 64.0   # space for the "Lv X / Y" caption next to the bar
-const ROW_COST_W    := 60.0
-const ROW_BTN_W     := 100.0
+const ROW_LABEL_W   := 320.0
+const ROW_LEVEL_W   := 88.0   # space for the "Lv X / Y" caption next to the bar
+const ROW_COST_W    := 80.0
+const ROW_BTN_W     := 136.0
 
 var _gold_lbl:        Label   = null
 var _drone_rows:      Array[Control] = []   # one row per drone upgrade id
@@ -62,7 +62,7 @@ func _build() -> void:
 
 	var title := Label.new()
 	title.text = "UPGRADES"
-	title.add_theme_font_size_override("font_size", 56)
+	title.add_theme_font_size_override("font_size", 76)
 	title.add_theme_color_override("font_color",      COLOR_CYAN)
 	title.add_theme_constant_override("outline_size", 0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -70,7 +70,7 @@ func _build() -> void:
 
 	_gold_lbl = Label.new()
 	_gold_lbl.text = "Gold: %d" % SaveData.total_gold
-	_gold_lbl.add_theme_font_size_override("font_size", 26)
+	_gold_lbl.add_theme_font_size_override("font_size", 36)
 	_gold_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	_gold_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_gold_lbl)
@@ -80,7 +80,7 @@ func _build() -> void:
 	# ── Drone upgrades ───────────────────────────────────────────────────────
 	var drone_section := Label.new()
 	drone_section.text = "DRONE"
-	drone_section.add_theme_font_size_override("font_size", 20)
+	drone_section.add_theme_font_size_override("font_size", 28)
 	drone_section.add_theme_color_override("font_color", COLOR_CYAN_DIM)
 	col.add_child(drone_section)
 
@@ -94,12 +94,13 @@ func _build() -> void:
 	col.add_child(drone_hbox)
 
 	var drone_stack := _DroneRing.new()
-	drone_stack.custom_minimum_size = Vector2(300.0, 260.0)
+	drone_stack.custom_minimum_size = Vector2(380.0, 340.0)
 	drone_stack.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	drone_hbox.add_child(drone_stack)
 
 	var drone_visual := StartScreenDroneScript.new()
-	# Center the 280×220 viewport inside the 300×260 ring frame (10/20 px pad).
+	# Center the 280×220 viewport inside the 380×340 ring frame — extra
+	# padding around the inner viewport so the cyan ring has breathing room.
 	drone_visual.anchor_left   = 0.5
 	drone_visual.anchor_top    = 0.5
 	drone_visual.anchor_right  = 0.5
@@ -111,7 +112,7 @@ func _build() -> void:
 	drone_stack.add_child(drone_visual)
 
 	var rows_col := VBoxContainer.new()
-	rows_col.add_theme_constant_override("separation", 10)
+	rows_col.add_theme_constant_override("separation", 14)
 	drone_hbox.add_child(rows_col)
 
 	for entry in SaveData.DRONE_UPGRADES:
@@ -124,7 +125,7 @@ func _build() -> void:
 	# ── Mech-slot unlocks ────────────────────────────────────────────────────
 	var slot_section := Label.new()
 	slot_section.text = "MECH SLOTS"
-	slot_section.add_theme_font_size_override("font_size", 20)
+	slot_section.add_theme_font_size_override("font_size", 28)
 	slot_section.add_theme_color_override("font_color", COLOR_CYAN_DIM)
 	col.add_child(slot_section)
 
@@ -143,19 +144,19 @@ func _build() -> void:
 	col.add_child(btn_row)
 
 	var back_btn := _make_button("BACK", Color(0.75, 0.85, 1.0))
-	back_btn.custom_minimum_size = Vector2(180.0, 60.0)
+	back_btn.custom_minimum_size = Vector2(220.0, 72.0)
 	back_btn.pressed.connect(_on_back_pressed)
 	btn_row.add_child(back_btn)
 
 	var start_btn := _make_button("START NEW RUN", Color(0.55, 1.0, 0.55))
-	start_btn.custom_minimum_size = Vector2(280.0, 60.0)
+	start_btn.custom_minimum_size = Vector2(340.0, 72.0)
 	start_btn.pressed.connect(_on_start_run_pressed)
 	btn_row.add_child(start_btn)
 
 func _make_separator() -> Control:
 	var sep := ColorRect.new()
 	sep.color = COLOR_CYAN_FAINT
-	sep.custom_minimum_size = Vector2(680.0, 1.0)
+	sep.custom_minimum_size = Vector2(880.0, 1.0)
 	return sep
 
 # ── Drone upgrade row ─────────────────────────────────────────────────────────
@@ -174,13 +175,13 @@ func _make_drone_row(entry: Dictionary) -> Control:
 
 	var label := Label.new()
 	label.text = String(entry.get("label", ""))
-	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_font_size_override("font_size", 24)
 	label.add_theme_color_override("font_color", COLOR_TEXT_PRIM)
 	text_col.add_child(label)
 
 	var desc := Label.new()
 	desc.text = String(entry.get("desc", ""))
-	desc.add_theme_font_size_override("font_size", 13)
+	desc.add_theme_font_size_override("font_size", 17)
 	desc.add_theme_color_override("font_color", COLOR_TEXT_MUTED)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(ROW_LABEL_W, 0.0)
@@ -196,7 +197,7 @@ func _make_drone_row(entry: Dictionary) -> Control:
 
 	# ── "Lv X / Y" caption next to the bar ──────────────────────────────────
 	var level_lbl := Label.new()
-	level_lbl.add_theme_font_size_override("font_size", 14)
+	level_lbl.add_theme_font_size_override("font_size", 18)
 	level_lbl.add_theme_color_override("font_color", COLOR_CYAN)
 	level_lbl.custom_minimum_size = Vector2(ROW_LEVEL_W, 0.0)
 	level_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -206,7 +207,7 @@ func _make_drone_row(entry: Dictionary) -> Control:
 
 	# ── Cost ────────────────────────────────────────────────────────────────
 	var cost_lbl := Label.new()
-	cost_lbl.add_theme_font_size_override("font_size", 18)
+	cost_lbl.add_theme_font_size_override("font_size", 24)
 	cost_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	cost_lbl.custom_minimum_size = Vector2(ROW_COST_W, 0.0)
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -216,8 +217,8 @@ func _make_drone_row(entry: Dictionary) -> Control:
 
 	# ── BUY / MAX ───────────────────────────────────────────────────────────
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(ROW_BTN_W, 44.0)
-	btn.add_theme_font_size_override("font_size", 16)
+	btn.custom_minimum_size = Vector2(ROW_BTN_W, 56.0)
+	btn.add_theme_font_size_override("font_size", 22)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn.set_meta("role", "btn")
@@ -337,29 +338,29 @@ func _refresh_drone_rows() -> void:
 
 func _make_slot_row(slot_index: int) -> Control:
 	var hbox := HBoxContainer.new()
-	hbox.custom_minimum_size = Vector2(560.0, 0.0)
-	hbox.add_theme_constant_override("separation", 12)
+	hbox.custom_minimum_size = Vector2(720.0, 0.0)
+	hbox.add_theme_constant_override("separation", 16)
 	hbox.set_meta("slot_index", slot_index)
 
 	var label := Label.new()
 	var label_text := "Slot %d (%s mech)" % [slot_index + 1, _ordinal(slot_index + 1)]
 	label.text = label_text
-	label.add_theme_font_size_override("font_size", 20)
-	label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.95, 1.0))
+	label.add_theme_font_size_override("font_size", 26)
+	label.add_theme_color_override("font_color", COLOR_TEXT_PRIM)
 	label.set_h_size_flags(Control.SIZE_EXPAND_FILL)
 	hbox.add_child(label)
 
 	var cost_lbl := Label.new()
-	cost_lbl.add_theme_font_size_override("font_size", 18)
-	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
-	cost_lbl.custom_minimum_size = Vector2(96.0, 0.0)
+	cost_lbl.add_theme_font_size_override("font_size", 22)
+	cost_lbl.add_theme_color_override("font_color", COLOR_GOLD)
+	cost_lbl.custom_minimum_size = Vector2(120.0, 0.0)
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cost_lbl.set_meta("role", "cost")
 	hbox.add_child(cost_lbl)
 
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(120.0, 44.0)
-	btn.add_theme_font_size_override("font_size", 18)
+	btn.custom_minimum_size = Vector2(156.0, 56.0)
+	btn.add_theme_font_size_override("font_size", 22)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.set_meta("role", "btn")
 	btn.pressed.connect(_on_buy_slot_pressed.bind(slot_index))
@@ -446,7 +447,7 @@ func _style_button(btn: Button, accent: Color, disabled: bool) -> void:
 func _make_button(text: String, accent: Color) -> Button:
 	var btn := Button.new()
 	btn.text = text
-	btn.add_theme_font_size_override("font_size", 22)
+	btn.add_theme_font_size_override("font_size", 28)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", Color.WHITE)
 	btn.add_theme_constant_override("outline_size", 0)
