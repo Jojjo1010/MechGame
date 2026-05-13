@@ -72,7 +72,8 @@ func _build() -> void:
 	_gold_lbl.text = "Gold: %d" % SaveData.total_gold
 	_gold_lbl.add_theme_font_size_override("font_size", 36)
 	_gold_lbl.add_theme_color_override("font_color", COLOR_GOLD)
-	_gold_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gold_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_gold_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	col.add_child(_gold_lbl)
 
 	col.add_child(_make_separator())
