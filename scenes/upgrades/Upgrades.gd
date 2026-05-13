@@ -7,6 +7,20 @@ extends Control
 const GAME_SCENE_PATH  := "res://scenes/game/Game.tscn"
 const START_SCENE_PATH := "res://scenes/ui/StartScreen.tscn"
 
+const StartScreenDroneScript := preload("res://scenes/ui/StartScreenDrone.gd")
+
+# Pip rectangle sizing for the multi-level indicator. Each pip is a small
+# numbered rectangle; filled = owned level, hollow = locked, hairline = the
+# next purchasable rung.
+const PIP_W   := 30.0
+const PIP_H   := 28.0
+const PIP_GAP := 6.0
+
+# Per-row column widths in the drone upgrade section.
+const ROW_LABEL_W := 240.0
+const ROW_COST_W  := 60.0
+const ROW_BTN_W   := 100.0
+
 var _gold_lbl:        Label   = null
 var _drone_rows:      Array[Control] = []   # one row per drone upgrade id
 var _slot_rows:       Array[Control] = []   # one row per non-starting mech slot
@@ -58,10 +72,26 @@ func _build() -> void:
 	drone_section.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92, 0.85))
 	col.add_child(drone_section)
 
+	# Side-by-side layout: 3D drone viewport on the left, upgrade rows on the
+	# right. Reusing StartScreenDrone gives the cursor-tracking + drift "alive"
+	# read without inventing a second drone renderer.
+	var drone_hbox := HBoxContainer.new()
+	drone_hbox.add_theme_constant_override("separation", 24)
+	drone_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(drone_hbox)
+
+	var drone_visual := StartScreenDroneScript.new()
+	drone_visual.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	drone_hbox.add_child(drone_visual)
+
+	var rows_col := VBoxContainer.new()
+	rows_col.add_theme_constant_override("separation", 10)
+	drone_hbox.add_child(rows_col)
+
 	for entry in SaveData.DRONE_UPGRADES:
 		var row := _make_drone_row(entry)
 		_drone_rows.append(row)
-		col.add_child(row)
+		rows_col.add_child(row)
 
 	col.add_child(_make_separator())
 
@@ -105,41 +135,57 @@ func _make_separator() -> Control:
 # ── Drone upgrade row ─────────────────────────────────────────────────────────
 
 func _make_drone_row(entry: Dictionary) -> Control:
+	var id := String(entry.get("id", ""))
 	var hbox := HBoxContainer.new()
-	hbox.custom_minimum_size = Vector2(560.0, 0.0)
 	hbox.add_theme_constant_override("separation", 12)
-	hbox.set_meta("upgrade_id", String(entry.get("id", "")))
+	hbox.set_meta("upgrade_id", id)
+
+	# ── Label + description column ──────────────────────────────────────────
+	var text_col := VBoxContainer.new()
+	text_col.custom_minimum_size = Vector2(ROW_LABEL_W, 0.0)
+	text_col.add_theme_constant_override("separation", 2)
+	text_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var label := Label.new()
 	label.text = String(entry.get("label", ""))
-	label.add_theme_font_size_override("font_size", 20)
+	label.add_theme_font_size_override("font_size", 18)
 	label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.95, 1.0))
-	label.custom_minimum_size = Vector2(200.0, 0.0)
-	hbox.add_child(label)
+	text_col.add_child(label)
 
-	var level_lbl := Label.new()
-	level_lbl.add_theme_font_size_override("font_size", 18)
-	level_lbl.add_theme_color_override("font_color", Color(0.75, 0.95, 0.75, 1.0))
-	level_lbl.custom_minimum_size = Vector2(80.0, 0.0)
-	level_lbl.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-	level_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	level_lbl.set_meta("role", "level")
-	hbox.add_child(level_lbl)
+	var desc := Label.new()
+	desc.text = String(entry.get("desc", ""))
+	desc.add_theme_font_size_override("font_size", 13)
+	desc.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78, 1.0))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size = Vector2(ROW_LABEL_W, 0.0)
+	text_col.add_child(desc)
+	hbox.add_child(text_col)
 
+	# ── Numbered level pips ─────────────────────────────────────────────────
+	var pips := HBoxContainer.new()
+	pips.add_theme_constant_override("separation", int(PIP_GAP))
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pips.set_meta("role", "pips")
+	hbox.add_child(pips)
+
+	# ── Cost ────────────────────────────────────────────────────────────────
 	var cost_lbl := Label.new()
 	cost_lbl.add_theme_font_size_override("font_size", 18)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
-	cost_lbl.custom_minimum_size = Vector2(96.0, 0.0)
+	cost_lbl.custom_minimum_size = Vector2(ROW_COST_W, 0.0)
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.set_meta("role", "cost")
 	hbox.add_child(cost_lbl)
 
+	# ── BUY / MAX ───────────────────────────────────────────────────────────
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(120.0, 44.0)
-	btn.add_theme_font_size_override("font_size", 18)
+	btn.custom_minimum_size = Vector2(ROW_BTN_W, 44.0)
+	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn.set_meta("role", "btn")
-	btn.pressed.connect(_on_buy_drone_upgrade.bind(String(entry.get("id", ""))))
+	btn.pressed.connect(_on_buy_drone_upgrade.bind(id))
 	hbox.add_child(btn)
 
 	_apply_drone_row_state(hbox)
@@ -147,24 +193,23 @@ func _make_drone_row(entry: Dictionary) -> Control:
 
 func _apply_drone_row_state(row: Control) -> void:
 	var id: String = String(row.get_meta("upgrade_id"))
-	var level_lbl: Label = null
+	var pips: HBoxContainer = null
 	var cost_lbl: Label = null
 	var btn: Button = null
 	for child in row.get_children():
 		if child.has_meta("role"):
 			match child.get_meta("role"):
-				"level": level_lbl = child as Label
-				"cost":  cost_lbl  = child as Label
-				"btn":   btn       = child as Button
-	if level_lbl == null or cost_lbl == null or btn == null:
+				"pips": pips     = child as HBoxContainer
+				"cost": cost_lbl = child as Label
+				"btn":  btn      = child as Button
+	if pips == null or cost_lbl == null or btn == null:
 		return
 
-	var lvl  := SaveData.drone_upgrade_level(id)
-	var maxl := SaveData.drone_upgrade_max_level(id)
-	level_lbl.text = "Lv %d / %d" % [lvl, maxl]
+	_rebuild_pips(pips, id)
 
 	if SaveData.drone_upgrade_at_max(id):
-		cost_lbl.text = ""
+		cost_lbl.text = "MAX"
+		cost_lbl.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55, 1.0))
 		btn.text = "MAX"
 		btn.disabled = true
 		_style_button(btn, Color(0.55, 1.0, 0.55), true)
@@ -172,10 +217,56 @@ func _apply_drone_row_state(row: Control) -> void:
 
 	var cost := SaveData.drone_upgrade_next_cost(id)
 	cost_lbl.text = "%d" % cost
+	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30, 1.0))
 	btn.text = "BUY"
 	var affordable := SaveData.can_afford(cost)
 	btn.disabled = not affordable
 	_style_button(btn, Color(0.55, 1.0, 0.55) if affordable else Color(0.55, 0.55, 0.65), not affordable)
+
+# Wipe + repopulate the pip strip for `id`. Cheaper to recreate the 3 small
+# PanelContainers than juggle individual stylebox swaps when the level changes.
+func _rebuild_pips(container: HBoxContainer, id: String) -> void:
+	for c in container.get_children():
+		c.queue_free()
+	var lvl  := SaveData.drone_upgrade_level(id)
+	var maxl := SaveData.drone_upgrade_max_level(id)
+	for i in maxl:
+		container.add_child(_make_pip(i + 1, i < lvl, i == lvl))
+
+# A pip is a small bordered rectangle with the level number inside. Three states:
+#   filled  — owned. Solid lime fill, dark numeral.
+#   is_next — the next purchasable level. Hairline lime border, dim fill.
+#   default — locked further out. Dim grey border, near-empty fill.
+func _make_pip(level_num: int, filled: bool, is_next: bool) -> Control:
+	var box := PanelContainer.new()
+	box.custom_minimum_size = Vector2(PIP_W, PIP_H)
+
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(4)
+	sb.set_border_width_all(2)
+	var numeral_color: Color
+	if filled:
+		sb.bg_color     = Color(0.32, 0.78, 0.40, 0.92)
+		sb.border_color = Color(0.55, 1.00, 0.55, 1.00)
+		numeral_color   = Color(0.04, 0.10, 0.06, 1.0)
+	elif is_next:
+		sb.bg_color     = Color(0.08, 0.10, 0.18, 0.85)
+		sb.border_color = Color(0.55, 1.00, 0.55, 0.90)
+		numeral_color   = Color(0.85, 0.95, 0.85, 1.0)
+	else:
+		sb.bg_color     = Color(0.05, 0.05, 0.10, 0.60)
+		sb.border_color = Color(0.45, 0.45, 0.55, 0.55)
+		numeral_color   = Color(0.55, 0.55, 0.62, 1.0)
+	box.add_theme_stylebox_override("panel", sb)
+
+	var lbl := Label.new()
+	lbl.text = "%d" % level_num
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", numeral_color)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	box.add_child(lbl)
+	return box
 
 func _on_buy_drone_upgrade(id: String) -> void:
 	if SaveData.purchase_drone_upgrade(id):
