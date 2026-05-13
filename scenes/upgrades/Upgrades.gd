@@ -9,17 +9,29 @@ const START_SCENE_PATH := "res://scenes/ui/StartScreen.tscn"
 
 const StartScreenDroneScript := preload("res://scenes/ui/StartScreenDrone.gd")
 
-# Pip rectangle sizing for the multi-level indicator. Each pip is a small
-# numbered rectangle; filled = owned level, hollow = locked, hairline = the
-# next purchasable rung.
-const PIP_W   := 30.0
-const PIP_H   := 28.0
-const PIP_GAP := 6.0
+# Overwatch-HUD palette. Bright cyan accent matches Drone.BODY_COLOR so the
+# drone and its upgrade UI read as one piece. Filled segments glow; empty ones
+# show only a cyan hairline border. Numerals/level text sit beside the bar,
+# not inside it — matches the reference HUD style.
+const COLOR_BG          := Color(0.04, 0.05, 0.10, 1.0)
+const COLOR_CYAN        := Color(0.20, 0.85, 1.00, 1.0)
+const COLOR_CYAN_DIM    := Color(0.20, 0.85, 1.00, 0.55)
+const COLOR_CYAN_FAINT  := Color(0.10, 0.45, 0.65, 0.85)
+const COLOR_TEXT_PRIM   := Color(0.92, 0.97, 1.00, 1.0)
+const COLOR_TEXT_MUTED  := Color(0.62, 0.78, 0.86, 1.0)
+const COLOR_GOLD        := Color(1.00, 0.82, 0.20, 1.0)
+
+# Segmented level bar — three Overwatch-style chips per upgrade. Filled segments
+# = owned level, hairline cyan = next purchasable rung, dim = locked further out.
+const SEG_W   := 34.0
+const SEG_H   := 14.0
+const SEG_GAP := 4.0
 
 # Per-row column widths in the drone upgrade section.
-const ROW_LABEL_W := 240.0
-const ROW_COST_W  := 60.0
-const ROW_BTN_W   := 100.0
+const ROW_LABEL_W   := 240.0
+const ROW_LEVEL_W   := 64.0   # space for the "Lv X / Y" caption next to the bar
+const ROW_COST_W    := 60.0
+const ROW_BTN_W     := 100.0
 
 var _gold_lbl:        Label   = null
 var _drone_rows:      Array[Control] = []   # one row per drone upgrade id
@@ -33,7 +45,7 @@ func _ready() -> void:
 
 func _build() -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.05, 0.10, 1.0)
+	bg.color = COLOR_BG
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
@@ -51,7 +63,7 @@ func _build() -> void:
 	var title := Label.new()
 	title.text = "UPGRADES"
 	title.add_theme_font_size_override("font_size", 56)
-	title.add_theme_color_override("font_color",      Color(1.0, 0.95, 0.75, 1.0))
+	title.add_theme_color_override("font_color",      COLOR_CYAN)
 	title.add_theme_constant_override("outline_size", 0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
@@ -59,7 +71,7 @@ func _build() -> void:
 	_gold_lbl = Label.new()
 	_gold_lbl.text = "Gold: %d" % SaveData.total_gold
 	_gold_lbl.add_theme_font_size_override("font_size", 26)
-	_gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.20))
+	_gold_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	_gold_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_gold_lbl)
 
@@ -67,22 +79,36 @@ func _build() -> void:
 
 	# ── Drone upgrades ───────────────────────────────────────────────────────
 	var drone_section := Label.new()
-	drone_section.text = "Drone"
+	drone_section.text = "DRONE"
 	drone_section.add_theme_font_size_override("font_size", 20)
-	drone_section.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92, 0.85))
+	drone_section.add_theme_color_override("font_color", COLOR_CYAN_DIM)
 	col.add_child(drone_section)
 
-	# Side-by-side layout: 3D drone viewport on the left, upgrade rows on the
-	# right. Reusing StartScreenDrone gives the cursor-tracking + drift "alive"
-	# read without inventing a second drone renderer.
+	# Side-by-side layout: 3D drone viewport (wrapped in a cyan arc ring) on
+	# the left, upgrade rows on the right. Reusing StartScreenDrone gives the
+	# cursor-tracking + drift "alive" read without inventing a second drone
+	# renderer.
 	var drone_hbox := HBoxContainer.new()
 	drone_hbox.add_theme_constant_override("separation", 24)
 	drone_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(drone_hbox)
 
+	var drone_stack := _DroneRing.new()
+	drone_stack.custom_minimum_size = Vector2(300.0, 260.0)
+	drone_stack.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	drone_hbox.add_child(drone_stack)
+
 	var drone_visual := StartScreenDroneScript.new()
-	drone_visual.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	drone_hbox.add_child(drone_visual)
+	# Center the 280×220 viewport inside the 300×260 ring frame (10/20 px pad).
+	drone_visual.anchor_left   = 0.5
+	drone_visual.anchor_top    = 0.5
+	drone_visual.anchor_right  = 0.5
+	drone_visual.anchor_bottom = 0.5
+	drone_visual.offset_left   = -140.0
+	drone_visual.offset_top    = -110.0
+	drone_visual.offset_right  = 140.0
+	drone_visual.offset_bottom = 110.0
+	drone_stack.add_child(drone_visual)
 
 	var rows_col := VBoxContainer.new()
 	rows_col.add_theme_constant_override("separation", 10)
@@ -97,9 +123,9 @@ func _build() -> void:
 
 	# ── Mech-slot unlocks ────────────────────────────────────────────────────
 	var slot_section := Label.new()
-	slot_section.text = "Mech slots"
+	slot_section.text = "MECH SLOTS"
 	slot_section.add_theme_font_size_override("font_size", 20)
-	slot_section.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92, 0.85))
+	slot_section.add_theme_color_override("font_color", COLOR_CYAN_DIM)
 	col.add_child(slot_section)
 
 	for slot_index in range(SaveData.STARTING_MECH_SLOTS, SaveData.MAX_MECH_SLOTS):
@@ -128,8 +154,8 @@ func _build() -> void:
 
 func _make_separator() -> Control:
 	var sep := ColorRect.new()
-	sep.color = Color(1.0, 1.0, 1.0, 0.20)
-	sep.custom_minimum_size = Vector2(560.0, 1.0)
+	sep.color = COLOR_CYAN_FAINT
+	sep.custom_minimum_size = Vector2(680.0, 1.0)
 	return sep
 
 # ── Drone upgrade row ─────────────────────────────────────────────────────────
@@ -149,29 +175,39 @@ func _make_drone_row(entry: Dictionary) -> Control:
 	var label := Label.new()
 	label.text = String(entry.get("label", ""))
 	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.95, 1.0))
+	label.add_theme_color_override("font_color", COLOR_TEXT_PRIM)
 	text_col.add_child(label)
 
 	var desc := Label.new()
 	desc.text = String(entry.get("desc", ""))
 	desc.add_theme_font_size_override("font_size", 13)
-	desc.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78, 1.0))
+	desc.add_theme_color_override("font_color", COLOR_TEXT_MUTED)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(ROW_LABEL_W, 0.0)
 	text_col.add_child(desc)
 	hbox.add_child(text_col)
 
-	# ── Numbered level pips ─────────────────────────────────────────────────
+	# ── Segmented level bar (Overwatch-HUD style) ───────────────────────────
 	var pips := HBoxContainer.new()
-	pips.add_theme_constant_override("separation", int(PIP_GAP))
+	pips.add_theme_constant_override("separation", int(SEG_GAP))
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pips.set_meta("role", "pips")
 	hbox.add_child(pips)
 
+	# ── "Lv X / Y" caption next to the bar ──────────────────────────────────
+	var level_lbl := Label.new()
+	level_lbl.add_theme_font_size_override("font_size", 14)
+	level_lbl.add_theme_color_override("font_color", COLOR_CYAN)
+	level_lbl.custom_minimum_size = Vector2(ROW_LEVEL_W, 0.0)
+	level_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	level_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	level_lbl.set_meta("role", "level")
+	hbox.add_child(level_lbl)
+
 	# ── Cost ────────────────────────────────────────────────────────────────
 	var cost_lbl := Label.new()
 	cost_lbl.add_theme_font_size_override("font_size", 18)
-	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
+	cost_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	cost_lbl.custom_minimum_size = Vector2(ROW_COST_W, 0.0)
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -194,79 +230,98 @@ func _make_drone_row(entry: Dictionary) -> Control:
 func _apply_drone_row_state(row: Control) -> void:
 	var id: String = String(row.get_meta("upgrade_id"))
 	var pips: HBoxContainer = null
+	var level_lbl: Label = null
 	var cost_lbl: Label = null
 	var btn: Button = null
 	for child in row.get_children():
 		if child.has_meta("role"):
 			match child.get_meta("role"):
-				"pips": pips     = child as HBoxContainer
-				"cost": cost_lbl = child as Label
-				"btn":  btn      = child as Button
-	if pips == null or cost_lbl == null or btn == null:
+				"pips":  pips      = child as HBoxContainer
+				"level": level_lbl = child as Label
+				"cost":  cost_lbl  = child as Label
+				"btn":   btn       = child as Button
+	if pips == null or level_lbl == null or cost_lbl == null or btn == null:
 		return
 
 	_rebuild_pips(pips, id)
 
+	var lvl  := SaveData.drone_upgrade_level(id)
+	var maxl := SaveData.drone_upgrade_max_level(id)
+	level_lbl.text = "LV %d/%d" % [lvl, maxl]
+
 	if SaveData.drone_upgrade_at_max(id):
 		cost_lbl.text = "MAX"
-		cost_lbl.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55, 1.0))
+		cost_lbl.add_theme_color_override("font_color", COLOR_CYAN)
 		btn.text = "MAX"
 		btn.disabled = true
-		_style_button(btn, Color(0.55, 1.0, 0.55), true)
+		_style_button(btn, COLOR_CYAN, true)
 		return
 
 	var cost := SaveData.drone_upgrade_next_cost(id)
 	cost_lbl.text = "%d" % cost
-	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30, 1.0))
+	cost_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	btn.text = "BUY"
 	var affordable := SaveData.can_afford(cost)
 	btn.disabled = not affordable
-	_style_button(btn, Color(0.55, 1.0, 0.55) if affordable else Color(0.55, 0.55, 0.65), not affordable)
+	_style_button(btn, COLOR_CYAN if affordable else Color(0.40, 0.55, 0.65), not affordable)
 
-# Wipe + repopulate the pip strip for `id`. Cheaper to recreate the 3 small
-# PanelContainers than juggle individual stylebox swaps when the level changes.
+# Wipe + repopulate the segmented bar for `id`. Cheaper to recreate the small
+# PanelContainers than juggle per-segment stylebox swaps when the level changes.
 func _rebuild_pips(container: HBoxContainer, id: String) -> void:
 	for c in container.get_children():
 		c.queue_free()
 	var lvl  := SaveData.drone_upgrade_level(id)
 	var maxl := SaveData.drone_upgrade_max_level(id)
 	for i in maxl:
-		container.add_child(_make_pip(i + 1, i < lvl, i == lvl))
+		container.add_child(_make_pip(i < lvl, i == lvl))
 
-# A pip is a small bordered rectangle with the level number inside. Three states:
-#   filled  — owned. Solid lime fill, dark numeral.
-#   is_next — the next purchasable level. Hairline lime border, dim fill.
-#   default — locked further out. Dim grey border, near-empty fill.
-func _make_pip(level_num: int, filled: bool, is_next: bool) -> Control:
+# Each pip is one segment of the Overwatch-style bar. Three states:
+#   filled  — owned. Solid cyan glow.
+#   is_next — the next purchasable rung. Empty fill, bright cyan hairline.
+#   default — locked further out. Empty fill, dim cyan hairline.
+func _make_pip(filled: bool, is_next: bool) -> Control:
 	var box := PanelContainer.new()
-	box.custom_minimum_size = Vector2(PIP_W, PIP_H)
+	box.custom_minimum_size = Vector2(SEG_W, SEG_H)
 
 	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(4)
-	sb.set_border_width_all(2)
-	var numeral_color: Color
+	sb.set_corner_radius_all(2)
 	if filled:
-		sb.bg_color     = Color(0.32, 0.78, 0.40, 0.92)
-		sb.border_color = Color(0.55, 1.00, 0.55, 1.00)
-		numeral_color   = Color(0.04, 0.10, 0.06, 1.0)
+		sb.bg_color     = COLOR_CYAN
+		sb.border_color = Color(0.55, 0.95, 1.00, 1.00)
+		sb.set_border_width_all(1)
 	elif is_next:
-		sb.bg_color     = Color(0.08, 0.10, 0.18, 0.85)
-		sb.border_color = Color(0.55, 1.00, 0.55, 0.90)
-		numeral_color   = Color(0.85, 0.95, 0.85, 1.0)
+		sb.bg_color     = Color(0.05, 0.20, 0.30, 0.45)
+		sb.border_color = COLOR_CYAN
+		sb.set_border_width_all(2)
 	else:
-		sb.bg_color     = Color(0.05, 0.05, 0.10, 0.60)
-		sb.border_color = Color(0.45, 0.45, 0.55, 0.55)
-		numeral_color   = Color(0.55, 0.55, 0.62, 1.0)
+		sb.bg_color     = Color(0.04, 0.10, 0.18, 0.35)
+		sb.border_color = COLOR_CYAN_FAINT
+		sb.set_border_width_all(1)
 	box.add_theme_stylebox_override("panel", sb)
-
-	var lbl := Label.new()
-	lbl.text = "%d" % level_num
-	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.add_theme_color_override("font_color", numeral_color)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	box.add_child(lbl)
 	return box
+
+# Cyan arc ring drawn behind the drone viewport. Faint full circle with a
+# brighter active arc at the top — evokes the HUD ring around the reference
+# character without the cost of a full 3D shader pipeline.
+class _DroneRing extends Control:
+	const RING_CYAN := Color(0.20, 0.85, 1.00, 0.85)
+	const RING_DIM  := Color(0.20, 0.85, 1.00, 0.22)
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var center := size * 0.5
+		var radius: float = minf(size.x, size.y) * 0.48
+		# Faint full circle underneath.
+		draw_arc(center, radius, 0.0, TAU, 96, RING_DIM, 2.0, true)
+		# Bright active arc at the top (~140° span, slightly tilted).
+		draw_arc(center, radius, deg_to_rad(-140.0), deg_to_rad(-40.0), 48, RING_CYAN, 4.0, true)
+		# Two small tick caps at the arc endpoints.
+		var a1 := deg_to_rad(-140.0)
+		var a2 := deg_to_rad(-40.0)
+		var p1 := center + Vector2(cos(a1), sin(a1)) * radius
+		var p2 := center + Vector2(cos(a2), sin(a2)) * radius
+		draw_circle(p1, 4.0, RING_CYAN)
+		draw_circle(p2, 4.0, RING_CYAN)
 
 func _on_buy_drone_upgrade(id: String) -> void:
 	if SaveData.purchase_drone_upgrade(id):
