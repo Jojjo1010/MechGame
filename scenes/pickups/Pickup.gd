@@ -32,6 +32,10 @@ var _base_y:    float  = 0.0
 var _age:       float  = 0.0
 var _attracted: bool   = false
 
+# Effective attract radius — ATTRACT_RADIUS plus any Magnet Array meta upgrade.
+# Baked once at _ready so we don't query SaveData per-frame per-pickup.
+var _attract_radius: float = ATTRACT_RADIUS
+
 # Procedural pixel-art textures for the pickup sprites. Built once on first
 # request and reused — pickups pile up by the dozens at high waves and
 # re-baking the image per pickup is wasted work.
@@ -203,6 +207,7 @@ func _ready() -> void:
 	var drones := get_tree().get_nodes_in_group("drones")
 	if not drones.is_empty():
 		_drone = drones[0] as Node3D
+	_attract_radius = ATTRACT_RADIUS + SaveData.attract_radius_bonus()
 
 func _add_blob_shadow() -> void:
 	var disc := MeshInstance3D.new()
@@ -562,8 +567,8 @@ func _process(delta: float) -> void:
 		return
 
 	# Once a pickup is attracted it *commits* — keeps chasing the drone even
-	# if a dash carries them past ATTRACT_RADIUS, so the collect isn't dropped.
-	if not _attracted and dist < ATTRACT_RADIUS:
+	# if a dash carries them past the attract radius, so the collect isn't dropped.
+	if not _attracted and dist < _attract_radius:
 		_attracted = true
 
 	if _attracted:
@@ -572,7 +577,7 @@ func _process(delta: float) -> void:
 		dir = dir.normalized()
 		# Speed boost for close-range pickups; clamped so post-dash chase still
 		# moves at base speed instead of stalling out negative.
-		var boost: float = clampf((ATTRACT_RADIUS - dist) / ATTRACT_RADIUS, 0.0, 1.0)
+		var boost: float = clampf((_attract_radius - dist) / _attract_radius, 0.0, 1.0)
 		var speed: float = FLY_SPEED * (1.0 + boost)
 		global_position += dir * speed * delta
 		global_position.y = lerpf(global_position.y, _drone.global_position.y, 6.0 * delta)

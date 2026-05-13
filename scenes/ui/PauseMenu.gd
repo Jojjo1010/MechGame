@@ -171,12 +171,12 @@ func _build_debug_view() -> Control:
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(stats)
 	for spec in [
-		["WAVE",  "wave"],
-		["LEVEL", "level"],
-		["XP",    "xp"],
-		["GOLD",  "gold"],
-		["SCRAP", "scrap"],
-		["FPS",   "fps"],
+		["WAVE",   "wave"],
+		["LEVEL",  "level"],
+		["XP",     "xp"],
+		["GOLD",   "gold"],
+		["BANKED", "banked"],
+		["FPS",    "fps"],
 	]:
 		stats.add_child(_make_stat_row(spec[0], spec[1]))
 
@@ -757,7 +757,7 @@ func _refresh_stats() -> void:
 	_set_stat("level", "%d" % RunManager.level)
 	_set_stat("xp",    "%d / %d" % [RunManager.xp, RunManager.xp_to_next])
 	_set_stat("gold",  "%d" % RunManager.gold)
-	_set_stat("scrap", "%d" % SaveData.total_scrap)
+	_set_stat("banked", "%d" % SaveData.total_gold)
 	_set_stat("fps",   "%d" % Engine.get_frames_per_second())
 
 func _set_stat(key: String, value: String) -> void:

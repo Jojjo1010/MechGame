@@ -37,10 +37,10 @@ const HOVER_SCALE     := 1.03
 const HOVER_DUR       := 0.10
 const PRESS_FLASH_DUR := 0.08
 
-func show_results(waves: int, gold: int, earned_scrap: int, total_scrap: int) -> void:
+func show_results(waves: int, gold: int, earned_gold: int, total_gold: int) -> void:
 	layer = 60
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_build(waves, gold, earned_scrap, total_scrap)
+	_build(waves, gold, earned_gold, total_gold)
 	# Layered stinger: level-up melody first, ult-ready confirmation chimes a
 	# beat later. Together they read as "victory + confirmed delivery", which
 	# the single level-up sound on its own didn't sell.
@@ -127,8 +127,8 @@ func _build(waves: int, gold: int, earned: int, total: int) -> void:
 	var stat_rows: Array[Control] = []
 	stat_rows.append(_make_stat_row("WAVES SURVIVED", "%d" % waves))
 	stat_rows.append(_make_stat_row("GOLD COLLECTED", "%d" % gold))
-	stat_rows.append(_make_stat_row("SCRAP EARNED",   "+%d" % earned))
-	stat_rows.append(_make_stat_row("TOTAL SCRAP",    "%d" % total))
+	stat_rows.append(_make_stat_row("GOLD BANKED",    "+%d" % earned))
+	stat_rows.append(_make_stat_row("TOTAL GOLD",     "%d" % total))
 	for row in stat_rows:
 		stats.add_child(row)
 

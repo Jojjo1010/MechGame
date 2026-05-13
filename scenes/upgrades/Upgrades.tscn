@@ -1,8 +1,8 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scenes/garage/Garage.gd" id="1"]
+[ext_resource type="Script" path="res://scenes/upgrades/Upgrades.gd" id="1"]
 
-[node name="Garage" type="Control"]
+[node name="Upgrades" type="Control"]
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 0

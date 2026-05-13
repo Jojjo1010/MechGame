@@ -1,7 +1,8 @@
 extends CanvasLayer
 
-# End-of-run modal. Pauses the game, shows the run summary (wave, gold, scrap)
-# and lets the player restart or back out.
+# End-of-run modal. Pauses the game, shows the run summary (wave, gold collected
+# this run, gold banked into the meta pool) and lets the player restart or back
+# out.
 #
 # Visual language: terminal screen. Fully opaque deep panel — no see-through —
 # a hairline lime border, outlined caps title in white tinted with the warn
@@ -48,10 +49,10 @@ const HOVER_SCALE     := 1.03
 const HOVER_DUR       := 0.10
 const PRESS_FLASH_DUR := 0.08
 
-func show_results(waves: int, gold: int, earned_scrap: int, total_scrap: int) -> void:
+func show_results(waves: int, gold: int, earned_gold: int, total_gold: int) -> void:
 	layer = 60
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_build(waves, gold, earned_scrap, total_scrap)
+	_build(waves, gold, earned_gold, total_gold)
 	# Ominous low-pitched mech death as the run-end stinger.
 	AudioManager.play("mech_death", Vector3.INF, -2.0, 0.65)
 	get_tree().paused = true
@@ -123,8 +124,8 @@ func _build(waves: int, gold: int, earned: int, total: int) -> void:
 	var stat_rows: Array[Control] = []
 	stat_rows.append(_make_stat_row("WAVES SURVIVED", "%d" % waves))
 	stat_rows.append(_make_stat_row("GOLD COLLECTED", "%d" % gold))
-	stat_rows.append(_make_stat_row("SCRAP EARNED",   "+%d" % earned))
-	stat_rows.append(_make_stat_row("TOTAL SCRAP",    "%d" % total))
+	stat_rows.append(_make_stat_row("GOLD BANKED",    "+%d" % earned))
+	stat_rows.append(_make_stat_row("TOTAL GOLD",     "%d" % total))
 	for row in stat_rows:
 		stats.add_child(row)
 

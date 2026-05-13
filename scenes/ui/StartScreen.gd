@@ -2,12 +2,12 @@ extends CanvasLayer
 
 # Title screen. Black backdrop, oversized game title, lime tagline, lore
 # paragraph, and a vertical column of buttons. PLAY routes straight into the
-# game; HOW TO PLAY opens a modal panel; GARAGE is a placeholder pinned to
-# "COMING SOON" until the meta-progression flow is wired into the main loop;
-# QUIT exits the application. Visual language matches DeathScreen / WinScreen
-# so the three modal-style screens read as siblings.
+# game; HOW TO PLAY opens a modal panel; UPGRADES opens the between-runs
+# meta shop; QUIT exits the application. Visual language matches DeathScreen /
+# WinScreen so the three modal-style screens read as siblings.
 
-const GAME_SCENE_PATH := "res://scenes/game/Game.tscn"
+const GAME_SCENE_PATH     := "res://scenes/game/Game.tscn"
+const UPGRADES_SCENE_PATH := "res://scenes/upgrades/Upgrades.tscn"
 const MechPortraitScript := preload("res://scenes/ui/MechPortrait.gd")
 const StartScreenDroneScript := preload("res://scenes/ui/StartScreenDrone.gd")
 const StartScreenYouArrowScript := preload("res://scenes/ui/StartScreenYouArrow.gd")
@@ -196,18 +196,19 @@ func _build() -> void:
 	_play_btn     = _make_primary_button("PLAY")
 	var how_btn   := _make_secondary_button("HOW TO PLAY")
 	var stg_btn   := _make_secondary_button("SETTINGS")
-	var grg_btn   := _make_disabled_button("GARAGE — COMING SOON")
+	var upg_btn   := _make_secondary_button("UPGRADES")
 	var quit_btn  := _make_secondary_button("QUIT")
 
 	_play_btn.pressed.connect(_on_play_pressed)
 	how_btn.pressed.connect(_on_how_to_play_pressed)
 	stg_btn.pressed.connect(_on_settings_pressed)
+	upg_btn.pressed.connect(_on_upgrades_pressed)
 	quit_btn.pressed.connect(_on_quit_pressed)
 
 	btn_col.add_child(_play_btn)
 	btn_col.add_child(how_btn)
 	btn_col.add_child(stg_btn)
-	btn_col.add_child(grg_btn)
+	btn_col.add_child(upg_btn)
 	btn_col.add_child(quit_btn)
 
 	var parade_band := _build_mech_parade(_main_content)
@@ -219,7 +220,7 @@ func _build() -> void:
 	_settings_overlay.closed.connect(_on_settings_closed)
 	root.add_child(_settings_overlay)
 
-	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [_play_btn, how_btn, stg_btn, grg_btn, quit_btn])
+	_animate_entrance(title_block, lore, drone, you_arrow, parade_band, [_play_btn, how_btn, stg_btn, upg_btn, quit_btn])
 
 # ── Buttons ──────────────────────────────────────────────────────────────────
 
@@ -429,6 +430,10 @@ func _on_settings_closed() -> void:
 	# Restore focus to PLAY when the overlay closes — settings stole it.
 	if _play_btn != null and is_instance_valid(_play_btn):
 		_play_btn.call_deferred("grab_focus")
+
+func _on_upgrades_pressed() -> void:
+	AudioManager.play("ui_click")
+	get_tree().change_scene_to_file(UPGRADES_SCENE_PATH)
 
 func _on_quit_pressed() -> void:
 	AudioManager.play("ui_click")

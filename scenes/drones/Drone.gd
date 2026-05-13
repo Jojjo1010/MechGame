@@ -2,6 +2,7 @@ extends Node3D
 
 const BurstVFX    = preload("res://scenes/vfx/BurstVFX.gd")
 const EnemyGridCS = preload("res://scenes/enemies/EnemyGrid.gd")
+const PickupCS    = preload("res://scenes/pickups/Pickup.gd")
 
 const SPEED        := 14.0
 const HEIGHT       := 2.2
@@ -36,16 +37,39 @@ var _mesh_instances: Array[MeshInstance3D] = []
 var _blob_shadow: MeshInstance3D = null
 var _blob_shadow_mat: StandardMaterial3D = null
 var _dash_active:    float = 0.0
-var _dash_cooldown:  float = 0.0
 var _dash_iframe:    float = 0.0              # daze-immune window — covers dash + brief landing grace
 var _dash_ghost_t:   float = 0.0
 var _dash_dir:       Vector3 = Vector3.ZERO   # direction the current dash is travelling in
 var _dash_hit_set:   Dictionary = {}          # enemies already punched-through in current dash
 var _shift_was_down: bool = false              # edge-detect for polled Shift key
 
+# Charge-based dash gating. Lv0 of dash_double = 1 charge, Lv1 = 2, etc.
+# Each charge refills after _dash_recharge_period seconds; the timer starts
+# when we drop below max, so a full pool always has an instant first dash.
+var _dash_max_charges:     int   = 1
+var _dash_charges:         int   = 1
+var _dash_recharge_t:      float = 0.0
+var _dash_recharge_period: float = DASH_COOLDOWN
+
+# Cached per-run upgrade values — drone is spawned fresh each run, so these
+# capture SaveData state at run start and don't need to re-read mid-run.
+var _move_speed:        float      = SPEED
+var _dash_slow_data:    Dictionary = {}    # empty when Lv0
+var _dash_bonus_gold:   int        = 0
+var _dash_bonus_xp_hit: bool       = false
+
 func _ready() -> void:
 	add_to_group("drones")
 	position.y = HEIGHT
+
+	# Snapshot meta upgrade levels for the run.
+	_move_speed          = SPEED * SaveData.drone_speed_mult()
+	_dash_max_charges    = SaveData.dash_max_charges()
+	_dash_charges        = _dash_max_charges
+	_dash_recharge_period = DASH_COOLDOWN * SaveData.dash_cooldown_mult()
+	_dash_slow_data      = SaveData.dash_slow_data()
+	_dash_bonus_gold     = SaveData.dash_bonus_gold()
+	_dash_bonus_xp_hit   = SaveData.dash_bonus_xp_on_hit()
 
 	# Collect meshes for daze overlay
 	for child in find_children("*", "MeshInstance3D", true, false):
@@ -138,9 +162,13 @@ func _process(delta: float) -> void:
 		position.z -= MECH_SPEED * RunManager.line_speed_mult * delta   # keep marching with mechs, block player input
 		return
 
-	# Tick dash cooldown always (so it ticks down even while dazed)
-	if _dash_cooldown > 0.0:
-		_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
+	# Tick dash recharge always (so charges refill even while dazed)
+	if _dash_charges < _dash_max_charges:
+		_dash_recharge_t = maxf(0.0, _dash_recharge_t - delta)
+		if _dash_recharge_t <= 0.0:
+			_dash_charges += 1
+			# More charges to refill? Start the next interval. Otherwise sit idle.
+			_dash_recharge_t = _dash_recharge_period if _dash_charges < _dash_max_charges else 0.0
 	if _dash_iframe > 0.0:
 		_dash_iframe = maxf(0.0, _dash_iframe - delta)
 
@@ -178,7 +206,7 @@ func _process(delta: float) -> void:
 		_set_daze_visual(false)
 
 	var dazed := _daze_timer > 0.0
-	var effective_speed := SPEED * (DAZE_SPEED_MULT if dazed else 1.0)
+	var effective_speed := _move_speed * (DAZE_SPEED_MULT if dazed else 1.0)
 
 	# Always march with the mech line, but slow it during daze so knockback can push through
 	position.z -= MECH_SPEED * RunManager.line_speed_mult * (DAZE_SPEED_MULT if dazed else 1.0) * delta
@@ -216,7 +244,7 @@ func _dash_duration_for_aspect() -> float:
 	return minf(DASH_DURATION_MAX, DASH_DURATION * dur_scale)
 
 func _try_dash() -> void:
-	if _dash_cooldown > 0.0 or _dash_active > 0.0:
+	if _dash_active > 0.0 or _dash_charges <= 0:
 		return
 	# Dash direction: current movement input (camera-relative). Falls back to
 	# current movement direction; if standing still, dash forward along the line.
@@ -233,11 +261,15 @@ func _try_dash() -> void:
 	# (dash-as-fraction-of-screen) stays consistent across monitors.
 	var duration := _dash_duration_for_aspect()
 	_dash_active   = duration
-	_dash_cooldown = DASH_COOLDOWN
 	_dash_iframe   = duration + DASH_IFRAMES_GRACE
 	_dash_dir      = input.normalized()
 	_dash_ghost_t  = 0.0
 	_dash_hit_set.clear()
+	# Spend a charge; if this is the first spend off a full pool, kick off the
+	# refill timer so subsequent dashes have a clear delay before the next charge.
+	if _dash_charges == _dash_max_charges:
+		_dash_recharge_t = _dash_recharge_period
+	_dash_charges -= 1
 	# Dash breaks daze
 	if _daze_timer > 0.0:
 		_daze_timer = 0.0
@@ -282,6 +314,15 @@ func _dash_punch_through() -> void:
 			if dir.length_squared() < 0.01:
 				dir = diff.normalized()
 			e.apply_knockback(dir.normalized() * DASH_KNOCKBACK)
+		# Stasis Burst: tag enemies hit by dash with a slow.
+		if not _dash_slow_data.is_empty() and e.has_method("apply_slow"):
+			e.apply_slow(float(_dash_slow_data["mult"]), float(_dash_slow_data["duration"]))
+		# Scavenger Wake: per-hit bonus gold + Lv3 xp drop. Pickups spawn from
+		# the enemy position so the player has to chase the dash trail to collect.
+		if _dash_bonus_gold > 0:
+			PickupCS.queue_gold(_dash_bonus_gold, e.global_position, get_tree().current_scene)
+		if _dash_bonus_xp_hit:
+			PickupCS.queue_xp(1, e.global_position, get_tree().current_scene)
 		AudioManager.play("bullet_impact", e.global_position, -4.0, 1.4)
 		BurstVFX.spawn(e.global_position + Vector3(0.0, 1.0, 0.0),
 			Color(0.5, 0.9, 1.0), 18, 6.5, 0.4, get_tree().current_scene)

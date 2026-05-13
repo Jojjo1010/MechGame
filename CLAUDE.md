@@ -38,10 +38,11 @@ Identity lives in `scenes/mechs/MechArchetypes.gd` — `name_for(weapon_name)`, 
 | `scenes/mechs/weapons/{GunWeapon,GarlicWeapon,BouncyBeamWeapon}.gd` | One per archetype, extend BaseWeapon |
 | `scenes/projectiles/Bullet.gd` | Bullet with pierce mechanic (Hollow Rounds upgrade) |
 | `scenes/drones/Drone.gd` | Player-controlled. Dash uses **polled** Shift (not event), steerable with held WASD |
-| `src/RunManager.gd` | XP/level, gold, upgrade tracking, signals (`xp_changed`, `level_up`, `gold_changed`, `upgrade_taken`, `run_won`). `WIN_WAVE = 30` |
-| `src/Upgrades.gd` | Upgrade catalog (`ALL` array), weighted picker, `apply()` per-id wiring. 3 commons + 1 uncommon + 1 rare per weapon |
-| `src/SaveData.gd` | Meta progression — scrap currency, settings, mech-slot unlocks |
-| `scenes/ui/StartScreen.gd` + `.tscn` | Boot screen with title, lore paragraph, and button column. PLAY → Game. HOW TO PLAY → Game with `RunManager.tutorial_only=true` (TutorialPrompts walks the player through actions, then changes scene back here). GARAGE is "COMING SOON" placeholder |
+| `src/RunManager.gd` | XP/level, gold (run-local), upgrade tracking, signals (`xp_changed`, `level_up`, `gold_changed`, `upgrade_taken`, `run_won`). `WIN_WAVE = 30`. Run gold is banked into `SaveData.total_gold` at run end |
+| `src/Upgrades.gd` | In-run upgrade catalog (`ALL` array), weighted picker, `apply()` per-id wiring. 3 commons + 1 uncommon + 1 rare per weapon |
+| `src/SaveData.gd` | Meta progression — `total_gold` currency (banked from runs), drone upgrade catalog (`DRONE_UPGRADES` + per-id levels + effect getters), mech-slot unlocks, settings. Legacy `total_scrap` saves migrate forward on load |
+| `scenes/upgrades/Upgrades.gd` + `.tscn` | Between-runs meta shop: shows banked gold, lets the player buy drone upgrades (multi-level) and unlock extra mech slots, then START NEW RUN or BACK to StartScreen |
+| `scenes/ui/StartScreen.gd` + `.tscn` | Boot screen with title, lore paragraph, and button column. PLAY → Game. HOW TO PLAY → Game with `RunManager.tutorial_only=true` (TutorialPrompts walks the player through actions, then changes scene back here). UPGRADES → Upgrades.tscn |
 | `scenes/ui/TutorialPrompts.gd` | Modal director gated by `RunManager.tutorial_only`. Pauses the game until each of WASD / SHIFT / LMB is performed, then watches for damage to teach repair. Returns to StartScreen on DONE |
 | `scenes/ui/{DeathScreen,WinScreen}.gd` | End-of-run modals. RESTART/PLAY AGAIN → Game; QUIT → StartScreen |
 | `scenes/game/WaveSpawner.gd` | Stops spawning at `WIN_WAVE`, polls for empty field, then emits `RunManager.run_won` |

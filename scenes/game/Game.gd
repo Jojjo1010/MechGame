@@ -595,30 +595,31 @@ func _on_mech_died(mech: Node3D) -> void:
 func _trigger_run_end() -> void:
 	_run_ended = true
 	Engine.time_scale = 1.0
-	# Award scrap: 1 per wave + 1 per 3 gold collected this run
-	var earned := RunManager.wave + int(RunManager.gold / 3.0)
-	SaveData.add_scrap(earned)
+	# Bank gold: collected gold 1:1 + a wave bonus, so even a short run pays
+	# something into the meta upgrade pool.
+	var earned := RunManager.gold + RunManager.wave
+	SaveData.bank_gold(earned)
 	# Show death screen overlay (it pauses the game itself)
 	var screen := CanvasLayer.new()
 	screen.set_script(DEATH_SCREEN_SCRIPT)
 	add_child(screen)
-	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_scrap)
+	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_gold)
 
 func _on_run_won() -> void:
 	# WaveSpawner has stopped spawning and confirmed the field is empty.
-	# Award scrap on the same formula as a death — wave will be WIN_WAVE — and
+	# Bank gold on the same formula as a death — wave will be WIN_WAVE — and
 	# show the WinScreen instead of the DeathScreen. Guard with _run_ended so
 	# a final-mech death the same frame can't double up.
 	if _run_ended:
 		return
 	_run_ended = true
 	Engine.time_scale = 1.0
-	var earned := RunManager.wave + int(RunManager.gold / 3.0)
-	SaveData.add_scrap(earned)
+	var earned := RunManager.gold + RunManager.wave
+	SaveData.bank_gold(earned)
 	var screen := CanvasLayer.new()
 	screen.set_script(WIN_SCREEN_SCRIPT)
 	add_child(screen)
-	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_scrap)
+	screen.show_results(RunManager.wave, RunManager.gold, earned, SaveData.total_gold)
 
 func _spawn_drone() -> void:
 	var drone: Node3D = DRONE_SCENE.instantiate()
